@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+dist/
+.eggs/
+output/
+data/
+*.ply
+!assets/*.ply
+snapshot_fw.dump
+snapshot_bw.dump
+.DS_Store
