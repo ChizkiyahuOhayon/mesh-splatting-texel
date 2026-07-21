@@ -80,18 +80,33 @@ def main():
           f"absmax {g.abs().max().item():.3e}")
     assert nz > 0, "T3 FAILED: texel gradient is entirely zero"
 
-    # finite differences on a few visible texels
-    idx = torch.nonzero(g.abs() > 0, as_tuple=False)
-    idx = idx[torch.randperm(len(idx))[:5]]
-    eps = 1e-3
+    # Finite differences.
+    #
+    # Two precision traps here, both about the TEST rather than the kernel:
+    #  (1) the image has ~5M pixels summing to ~7e5, where one float32 ULP is 1/16.
+    #      Perturbing a single texel moves the sum by ~0.05, i.e. BELOW one ULP, so a
+    #      float32 sum quantises the difference to multiples of 0.0625 or to exactly 0.
+    #      Accumulate in float64.
+    #  (2) rendering is *linear* in a texel (the texel is added to the interpolated
+    #      colour, then alpha-blended), so there is no truncation error to worry about
+    #      and eps can be large. A large eps is what lifts the signal clear of noise.
+    def render_sum64():
+        return render_once().double().sum().item()
+
+    order_by_grad = torch.argsort(g.abs().flatten(), descending=True)
+    n_s, n_c = g.shape[1], g.shape[2]
+    picks = [(int(i) // (n_s * n_c), (int(i) // n_c) % n_s, int(i) % n_c)
+             for i in order_by_grad[:5]]
+    eps = 1e-2
     worst = 0.0
     with torch.no_grad():
-        for f, s_, c in idx.tolist():
+        for pick in picks:
+            f, s_, c = pick
             base = triangles._texels[f, s_, c].item()
             triangles._texels[f, s_, c] = base + eps
-            lp_ = render_once().sum().item()
+            lp_ = render_sum64()
             triangles._texels[f, s_, c] = base - eps
-            lm_ = render_once().sum().item()
+            lm_ = render_sum64()
             triangles._texels[f, s_, c] = base
             num = (lp_ - lm_) / (2 * eps)
             ana = g[f, s_, c].item()
