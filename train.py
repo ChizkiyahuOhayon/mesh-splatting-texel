@@ -126,6 +126,10 @@ def training(
         if need_delaunay:
             with torch.no_grad():
                 triangles.run_restricted_delaunay()
+                # The face set has just been rebuilt, so this is the first moment a
+                # per-face carrier is well defined. Zero-init keeps the model identical
+                # to the baseline here; everything before this point is untouched.
+                triangles.create_texels(opt.texel_order, opt.texel_lr)
             need_delaunay = False
 
         # Supersampling
@@ -367,6 +371,9 @@ def training(
             if iteration < opt.iterations:
                 triangles.optimizer.step()
                 triangles.optimizer.zero_grad(set_to_none = True)
+                if triangles.texel_optimizer is not None:
+                    triangles.texel_optimizer.step()
+                    triangles.texel_optimizer.zero_grad(set_to_none = True)
 
     # cleaning of triangles that we do not need
     viewpoint_stack = scene.getTrainCameras().copy()

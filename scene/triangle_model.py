@@ -152,6 +152,12 @@ class TriangleModel:
         self.max_sh_degree = sh_degree  
         self._features_dc = torch.empty(0)
         self._features_rest = torch.empty(0)
+        # Per-face texel carrier (Ptex-style). Lives in its OWN optimizer: the main
+        # optimizer's prune/densify helpers apply a single per-VERTEX mask to every
+        # param group, which would silently corrupt a per-FACE tensor.
+        self._texels = torch.empty(0)
+        self.texel_order = 0
+        self.texel_optimizer = None
         self.optimizer = None
         self.image_size = 0
         self.pixel_count = 0
@@ -753,7 +759,51 @@ class TriangleModel:
                     new_id2[kept2] = torch.arange(kept2.numel(), device=device, dtype=torch.long)
                     self._triangle_indices = new_id2[self._triangle_indices.long()].to(torch.int32).contiguous()
 
+    @property
+    def get_texels(self):
+        return self._texels if self.texel_order > 0 else None
+
+    def create_texels(self, order, lr):
+        """Allocate the per-face texel carrier, zero-initialised.
+
+        Called right after the restricted Delaunay retriangulation, for two reasons:
+        (i) that operation rebuilds the entire face set from scratch, so per-face values
+        have no correspondence across it, and (ii) densification stops before it, so the
+        face count is stable afterwards (only pruning remains, handled below).
+
+        Zero init means the model is numerically IDENTICAL to the baseline at the moment
+        the carrier is introduced, so any subsequent difference is attributable to it.
+        """
+        if order <= 0:
+            self.texel_order = 0
+            return
+        F = self._triangle_indices.shape[0]
+        self.texel_order = order
+        self._texels = nn.Parameter(
+            torch.zeros((F, order * order, 3), dtype=torch.float, device="cuda")
+            .requires_grad_(True))
+        self.texel_optimizer = torch.optim.Adam([{'params': [self._texels], 'lr': lr,
+                                                  "name": "texels"}], eps=1e-15)
+        print(f"[texel] allocated order {order} ({order*order}/face) for {F:,} faces "
+              f"= {F*order*order*3/1e6:.1f}M params, lr {lr}")
+
+    def _prune_texels(self, mask):
+        """Keep texels in sync when triangles are pruned (face-indexed, so the mask is
+        the triangle keep-mask, not a vertex mask)."""
+        if self.texel_order <= 0:
+            return
+        st = self.texel_optimizer.state.get(self._texels, None)
+        new_t = nn.Parameter(self._texels[mask].detach().requires_grad_(True))
+        if st is not None:
+            st["exp_avg"] = st["exp_avg"][mask]
+            st["exp_avg_sq"] = st["exp_avg_sq"][mask]
+            del self.texel_optimizer.state[self._texels]
+            self.texel_optimizer.state[new_t] = st
+        self.texel_optimizer.param_groups[0]["params"][0] = new_t
+        self._texels = new_t
+
     def prune_triangles(self, mask):
+        self._prune_texels(mask)
         self._triangle_indices = self._triangle_indices[mask]
         self._triangle_indices = self._triangle_indices.to(torch.int32)
         self.image_size = self.image_size[mask]

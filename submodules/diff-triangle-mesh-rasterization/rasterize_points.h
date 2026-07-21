@@ -34,6 +34,8 @@ RasterizetrianglesCUDA(
 	const torch::Tensor& vertex_weights,
 	const float sigma,
     const torch::Tensor& colors,
+	const torch::Tensor& texels,
+	const int texel_order,
 	torch::Tensor& scaling,
 	const torch::Tensor& viewmatrix,
 	const torch::Tensor& projmatrix,
@@ -47,7 +49,7 @@ RasterizetrianglesCUDA(
 	const bool prefiltered,
 	const bool debug);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizetrianglesBackwardCUDA(
  	const torch::Tensor& background,
 	const torch::Tensor& vertices,
@@ -56,6 +58,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 	const float sigma,
 	const torch::Tensor& radii,
     const torch::Tensor& colors,
+	const torch::Tensor& texels,
+	const int texel_order,
 	const torch::Tensor& viewmatrix,
     const torch::Tensor& projmatrix,
 	const float tan_fovx, 

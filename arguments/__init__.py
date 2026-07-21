@@ -84,6 +84,10 @@ class OptimizationParams(ParamGroup):
         self.position_lr_delay_mult = 0.01
         self.position_lr_max_steps = 30_000
         self.lambda_dssim = 0.2
+        # Per-face texel appearance carrier. 0 = disabled (exact original behaviour).
+        # Introduced right after the restricted Delaunay retriangulation.
+        self.texel_order = 0
+        self.texel_lr = 0.0025
 
         self.densification_interval = 500
 

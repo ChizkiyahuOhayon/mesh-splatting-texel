@@ -48,6 +48,8 @@
 		 const float2* p_image,
 		 const float* vertex_depth,
 		 const float* colors,
+		 const float* texels,
+		 const int texel_order,
 		 const float* final_Ts,
 		 const uint32_t* n_contrib,
 		 const float* dL_dpixels,
@@ -58,6 +60,7 @@
 		 float* dL_dopacity,
 		 float* dL_dnormal3D,
 		 float* dL_dcolors,
+		 float* dL_dtexels,
 		 float* dL_dpoints2D,
 		 float* dL_dvertice_depth);
 

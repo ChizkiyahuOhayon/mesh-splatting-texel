@@ -139,7 +139,8 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         sh_degree=pc.active_sh_degree,
         campos=viewpoint_camera.camera_center,
         prefiltered=False,
-        debug=pipe.debug
+        debug=pipe.debug,
+        texel_order=getattr(pc, "texel_order", 0),
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)
@@ -172,6 +173,7 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         shs = shs,
         colors_precomp = colors_precomp,
         scaling = scaling,
+        texels = pc.get_texels if hasattr(pc, "get_texels") else None,
        )
 
     radii = radii[:vertex_index]

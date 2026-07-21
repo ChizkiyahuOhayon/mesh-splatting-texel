@@ -36,6 +36,7 @@ def rasterize_triangles(
     colors_precomp,
     scaling,
     raster_settings,
+    texels=None,
 ):
     return _RasterizeTriangles.apply(
         vertices,
@@ -46,6 +47,7 @@ def rasterize_triangles(
         colors_precomp,
         scaling,
         raster_settings,
+        texels,
     )
 
 class _RasterizeTriangles(torch.autograd.Function):
@@ -60,7 +62,15 @@ class _RasterizeTriangles(torch.autograd.Function):
         colors_precomp,
         scaling,
         raster_settings,
+        texels,
     ):
+        # texel_order 0 disables the carrier entirely: the C++ side then receives a
+        # null pointer and the kernels take exactly the original code path, so the
+        # unmodified baseline remains bit-reproducible.
+        texel_order = getattr(raster_settings, "texel_order", 0) or 0
+        if texels is None:
+            texels = torch.zeros(0, device=vertices.device, dtype=vertices.dtype)
+            texel_order = 0
 
         # Restructure arguments the way that the C++ lib expects them
         args = (
@@ -70,6 +80,8 @@ class _RasterizeTriangles(torch.autograd.Function):
             vertex_weights,
             sigma,
             colors_precomp,
+            texels,
+            texel_order,
             scaling,
             raster_settings.viewmatrix,
             raster_settings.projmatrix,
@@ -101,7 +113,8 @@ class _RasterizeTriangles(torch.autograd.Function):
         ctx.raster_settings = raster_settings
         ctx.num_rendered = num_rendered
         ctx.sigma = sigma
-        ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer)
+        ctx.texel_order = texel_order
+        ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels)
         return color, radii, scaling, depth, max_blending, was_rendered
 
     @staticmethod
@@ -111,7 +124,8 @@ class _RasterizeTriangles(torch.autograd.Function):
         num_rendered = ctx.num_rendered
         raster_settings = ctx.raster_settings
         sigma = ctx.sigma
-        vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer = ctx.saved_tensors
+        texel_order = ctx.texel_order
+        vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels = ctx.saved_tensors
 
         # Restructure args as C++ method expects them
         args = (raster_settings.bg,
@@ -121,6 +135,8 @@ class _RasterizeTriangles(torch.autograd.Function):
                 sigma,
                 radii, 
                 colors_precomp, 
+                texels,
+                texel_order,
                 raster_settings.viewmatrix, 
                 raster_settings.projmatrix, 
                 raster_settings.tanfovx, 
@@ -140,13 +156,13 @@ class _RasterizeTriangles(torch.autograd.Function):
         if raster_settings.debug:
             cpu_args = cpu_deep_copy_tuple(args) # Copy them before they can be corrupted
             try:
-                grad_vertices, grad_vertice_weights, grad_sigma, grad_colors_precomp, grad_sh = _C.rasterize_triangles_backward(*args)
+                grad_vertices, grad_vertice_weights, grad_colors_precomp, grad_sh, grad_texels = _C.rasterize_triangles_backward(*args)
             except Exception as ex:
                 torch.save(cpu_args, "snapshot_bw.dump")
                 print("\nAn error occured in backward. Writing snapshot_bw.dump for debugging.\n")
                 raise ex
         else:
-             grad_vertices, grad_vertice_weights, grad_colors_precomp, grad_sh = _C.rasterize_triangles_backward(*args)
+             grad_vertices, grad_vertice_weights, grad_colors_precomp, grad_sh, grad_texels = _C.rasterize_triangles_backward(*args)
 
 
         grads = (
@@ -156,8 +172,9 @@ class _RasterizeTriangles(torch.autograd.Function):
             None, # grad_sigma
             grad_sh,
             grad_colors_precomp,
-            None,
-            None
+            None,  # scaling
+            None,  # raster_settings
+            grad_texels if texel_order > 0 else None,
         )
 
         return grads
@@ -175,6 +192,9 @@ class TriangleRasterizationSettings(NamedTuple):
     campos : torch.Tensor
     prefiltered : bool
     debug : bool
+    # 0 disables the per-face texel carrier (exact original code path). Defaulted and
+    # placed last so existing positional construction of this NamedTuple still works.
+    texel_order : int = 0
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):
@@ -192,7 +212,7 @@ class TriangleRasterizer(nn.Module):
             
         return visible
 
-    def forward(self, vertices, triangles_indices, vertex_weights, sigma, scaling,  shs = None, colors_precomp = None):
+    def forward(self, vertices, triangles_indices, vertex_weights, sigma, scaling,  shs = None, colors_precomp = None, texels = None):
         
         raster_settings = self.raster_settings
 
@@ -214,7 +234,8 @@ class TriangleRasterizer(nn.Module):
             shs,
             colors_precomp,
             scaling,
-            raster_settings, 
+            raster_settings,
+            texels,
         )
 
 

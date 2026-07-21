@@ -86,6 +86,8 @@
 		 const int* triangles_indices,
 		 const float sigma,
 		 const float* features,
+		 const float* texels,
+		 const int texel_order,
 		 const float4* conic_opacity,
 		 const float* depths,
 		 const float2* phi_center,

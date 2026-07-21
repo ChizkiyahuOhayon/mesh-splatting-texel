@@ -22,6 +22,7 @@
 
  #include "forward.h"
  #include "auxiliary.h"
+#include "texel.h"
  #include <cooperative_groups.h>
  #include <cooperative_groups/reduce.h>
  namespace cg = cooperative_groups;
@@ -429,6 +430,8 @@
 	 const int* __restrict__ triangles_indices,
 	 const float sigma,
 	 const float* __restrict__ features,
+	 const float* __restrict__ texels,
+	 const int texel_order,
 	 const float4* __restrict__ conic_opacity,
 	 const float* __restrict__ depths,
 	 const float2* __restrict__ phi_center,
@@ -608,6 +611,15 @@
 			 float wC = b1;    // vertex2
 
 			 // now blend them
+			 // Per-face texel carrier: an ADDITIVE residual on top of the
+			 // vertex-interpolated colour. Zero-initialised, so enabling it does not
+			 // perturb the model at the moment of introduction. The vertex SH keeps
+			 // carrying view-dependence; texels carry high spatial frequency.
+			 const int texel_base = (texels == nullptr)
+				 ? -1
+				 : (j_id * texelSlots(texel_order)
+					+ texelSlot(wA, wB, wC, texel_order)) * CHANNELS;
+
 			 for (int ch = 0; ch < CHANNELS; ++ch) {
 				// Access colors per vertex (not per triangle)
 				float c0 = features[vertex_idx0 * CHANNELS + ch];
@@ -615,6 +627,8 @@
 				float c2 = features[vertex_idx2 * CHANNELS + ch];
 
 				float interp = wA * c0 + wB * c1 + wC * c2;
+				if (texel_base >= 0)
+					interp += texels[texel_base + ch];
 				C[ch] += interp * alpha * T;
 			 } 
 
@@ -667,6 +681,8 @@
 	 const int* triangles_indices,
 	 const float sigma,
 	 const float* colors,
+	 const float* texels,
+	 const int texel_order,
 	 const float4* conic_opacity,
 	 const float* depths,
 	 const float2* phi_center,
@@ -690,6 +706,8 @@
 		 triangles_indices,
 		 sigma,
 		 colors,
+		 texels,
+		 texel_order,
 		 conic_opacity,
 		 depths,
 		 phi_center,

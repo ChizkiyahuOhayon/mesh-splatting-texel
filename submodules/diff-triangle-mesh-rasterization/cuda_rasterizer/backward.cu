@@ -22,6 +22,7 @@
 
  #include "backward.h"
  #include "auxiliary.h"
+#include "texel.h"
  #include <cooperative_groups.h>
  #include <cooperative_groups/reduce.h>
  namespace cg = cooperative_groups;
@@ -561,6 +562,8 @@
 	 const float2* __restrict__ p_image,
 	 const float* __restrict__ vertex_depth,
 	 const float* __restrict__ colors,
+	 const float* __restrict__ texels,
+	 const int texel_order,
 	 const float* __restrict__ final_Ts,
 	 const uint32_t* __restrict__ n_contrib,
 	 const float* __restrict__ dL_dpixels,
@@ -571,6 +574,7 @@
 	 float* __restrict__ dL_dopacity,
 	 float* __restrict__ dL_dnormal3D,
 	 float* __restrict__ dL_dcolors,
+	 float* __restrict__ dL_dtexels,
 	 float* __restrict__ dL_dpoints2D,
 	 float* __restrict__ dL_dvertice_depth)
  {
@@ -755,6 +759,17 @@
 			 float wC = b1;    // vertex2
 
 			 // now blend them
+			 // Mirror the forward pass exactly: the texel residual participates in
+			 // interp_color, so it also affects dL_dalpha and the running colour sum.
+			 // It contributes nothing to sum0/sum1/sum2 (the barycentric derivatives),
+			 // because a nearest texel lookup is piecewise constant in the barycentrics
+			 // and therefore has zero derivative w.r.t. them almost everywhere. The
+			 // geometry gradient paths are consequently untouched.
+			 const int texel_base = (texels == nullptr)
+				 ? -1
+				 : (j_id * texelSlots(texel_order)
+					+ texelSlot(wA, wB, wC, texel_order)) * C;
+
 			 float interp_color[C];
 			 float sum0 = 0, sum1 = 0, sum2 = 0;
 			 for (int ch = 0; ch < C; ++ch) {
@@ -764,6 +779,8 @@
 				float c2 = colors[vertex_idx2 * C + ch];
 
 				interp_color[ch] = wA * c0 + wB * c1 + wC * c2;
+				if (texel_base >= 0)
+					interp_color[ch] += texels[texel_base + ch];
 
 				sum0 += dL_dcolor_ch * c0; // for db2
 				sum1 += dL_dcolor_ch * c1; // for db0
@@ -793,6 +810,10 @@
 				atomicAdd(&dL_dcolors[v1*C + ch], grad1);
 				atomicAdd(&dL_dcolors[v2*C + ch], grad2);
 
+				// d(interp)/d(texel) = 1
+				if (texel_base >= 0)
+					atomicAdd(&dL_dtexels[texel_base + ch],
+							  dchannel_dcolor * dL_dchannel);
 			 } 
 
 			 float depth_interp = wA * depth_vertex_0 + wB * depth_vertex_1 + wC * depth_vertex_2;
@@ -1037,6 +1058,8 @@
 	 const float2* p_image,
 	 const float* vertex_depth,
 	 const float* colors,
+	 const float* texels,
+	 const int texel_order,
 	 const float* final_Ts,
 	 const uint32_t* n_contrib,
 	 const float* dL_dpixels,
@@ -1047,6 +1070,7 @@
 	 float* dL_dopacity,
 	 float* dL_dnormal3D,
 	 float* dL_dcolors,
+	 float* dL_dtexels,
 	 float* dL_dpoints2D,
 	 float* dL_dvertice_depth
 	)
@@ -1067,6 +1091,8 @@
 		 p_image,
 		 vertex_depth,
 		 colors,
+		 texels,
+		 texel_order,
 		 final_Ts,
 		 n_contrib,
 		 dL_dpixels,
@@ -1077,6 +1103,7 @@
 		 dL_dopacity,
 		 dL_dnormal3D,
 		 dL_dcolors,
+		 dL_dtexels,
 		 dL_dpoints2D,
 		 dL_dvertice_depth
 		 );
