@@ -40,8 +40,11 @@ def main():
     torch.manual_seed(0)
 
     triangles = TriangleModel(dataset.sh_degree)
-    scene = Scene(dataset, triangles)
-    triangles.training_setup(opt, opt.feature_lr, opt.weight_lr, opt.position_lr_init)
+    # mirror train.py's construction exactly
+    scene = Scene(dataset, triangles, opt.set_weight, opt.set_sigma)
+    triangles.training_setup(opt, opt.feature_lr, opt.weight_lr,
+                             opt.lr_triangles_points_init)
+    triangles.set_sigma(opt.set_sigma)   # sigma defaults to 0, which degenerates the window
 
     cam = scene.getTrainCameras()[0]
     bg = torch.zeros(3, device="cuda")
