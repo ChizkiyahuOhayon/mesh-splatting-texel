@@ -189,6 +189,12 @@ class TriangleModel:
         point_cloud_state_dict["importance_score"] = self.importance_score
         point_cloud_state_dict["image_size"] = self.image_size
         point_cloud_state_dict["pixel_count"] = self.pixel_count
+        # Per-face texel carrier. Without these the checkpoint silently reloads as a
+        # plain baseline model: the metrics measured during training would not be
+        # reproducible from disk, and render/export would be wrong.
+        point_cloud_state_dict["texel_order"] = self.texel_order
+        if self.texel_order > 0:
+            point_cloud_state_dict["texels"] = self._texels
 
         torch.save(point_cloud_state_dict, os.path.join(path, 'point_cloud_state_dict.pt'))
 
@@ -306,7 +312,13 @@ class TriangleModel:
         self._features_dc        = state["features_dc"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
         self._features_rest      = state["features_rest"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
         self.importance_score = state["importance_score"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
-        
+
+        self.texel_order = int(state.get("texel_order", 0))
+        if self.texel_order > 0:
+            self._texels = state["texels"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
+            print(f"[texel] restored order {self.texel_order} "
+                  f"({self.texel_order**2}/face) for {self._texels.shape[0]:,} faces")
+
         print("triangles: ", self._triangle_indices.shape)
         print("vertices: ", self.vertices.shape)
 
