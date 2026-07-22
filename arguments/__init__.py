@@ -88,6 +88,14 @@ class OptimizationParams(ParamGroup):
         # Introduced right after the restricted Delaunay retriangulation.
         self.texel_order = 0
         self.texel_lr = 0.0025
+        # Texel regularizers (pure PyTorch, no CUDA change). The texel is an additive
+        # residual over the vertex colour, so:
+        #   texel_l2  pulls it toward 0 -> only deviate from vertex colour when the data
+        #             demands it (directly targets the ~0.87 train-test gap in E4)
+        #   texel_tv  penalises within-face variance -> suppresses the high-frequency
+        #             texel variation that overfits
+        self.texel_l2 = 0.0
+        self.texel_tv = 0.0
 
         self.densification_interval = 500
 

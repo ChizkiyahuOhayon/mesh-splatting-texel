@@ -269,6 +269,16 @@ def training(
             normal_loss_super = lambda_normals_super * (normal_error).mean()
             loss += normal_loss_super
 
+        # Texel residual regularizers (only active once the carrier exists)
+        tex = triangles.get_texels
+        if tex is not None and (opt.texel_l2 > 0 or opt.texel_tv > 0):
+            if opt.texel_l2 > 0:
+                loss = loss + opt.texel_l2 * tex.pow(2).mean()
+            if opt.texel_tv > 0:
+                # within-face variance: penalise texels of one face deviating from that
+                # face's own mean -> spatial smoothness with no adjacency bookkeeping
+                loss = loss + opt.texel_tv * tex.var(dim=1, unbiased=False).mean()
+
         loss.backward()
         iter_end.record()
 
