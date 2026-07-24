@@ -28,6 +28,13 @@ GPU=${4:?usage: $0 <scene_dir> <out_dir> <sh|texel> <gpu_id>}
 export CUDA_VISIBLE_DEVICES="$GPU"
 mkdir -p "$OUT"
 
+# Fail fast if the CUDA extension is not importable (usually a forgotten
+# `micromamba activate mesh_splatting`): the runs would otherwise crash one by one.
+python -c "import diff_triangle_rasterization" 2>/dev/null || {
+  echo "ERROR: diff_triangle_rasterization not importable. Did you 'micromamba activate mesh_splatting'?" >&2
+  exit 1
+}
+
 case "$ARM" in
   sh)    EXTRA=""               ;;   # baseline carrier: per-vertex SH only
   texel) EXTRA="--texel_order 2" ;;  # decoupled carrier: + per-face texels
