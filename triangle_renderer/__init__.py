@@ -170,12 +170,14 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     texels = pc.get_texels if hasattr(pc, "get_texels") else None
     if texels is not None:
         order = getattr(pc, "texel_order", 0)
-        F = triangles_indices.shape[0]
-        if not (texels.dim() == 3 and texels.shape[0] == F
+        # NB: do NOT name this `F` -- the module imports torch.nn.functional as F, and a
+        # local `F` would shadow it for the whole function (UnboundLocalError later).
+        n_faces = triangles_indices.shape[0]
+        if not (texels.dim() == 3 and texels.shape[0] == n_faces
                 and texels.shape[1] == order * order and texels.shape[2] == 3):
             raise ValueError(
-                f"texels shape {tuple(texels.shape)} inconsistent with {F} faces / "
-                f"order {order} (expected [{F}, {order*order}, 3])")
+                f"texels shape {tuple(texels.shape)} inconsistent with {n_faces} faces / "
+                f"order {order} (expected [{n_faces}, {order*order}, 3])")
 
     # Rasterize visible triangles to image, obtain their radii (on screen).
     rendered_image, radii, scaling, allmap, max_blending, was_rendered  = rasterizer(
