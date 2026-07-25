@@ -164,7 +164,20 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     else:
         colors_precomp = override_color
 
-    # Rasterize visible triangles to image, obtain their radii (on screen). 
+    # Per-face texel carrier, validated at this boundary in Python (defence in depth
+    # alongside the C++ TORCH_CHECK: this guard is active immediately, without rebuilding
+    # the CUDA extension, and catches a face/texel desync before it reaches the kernel).
+    texels = pc.get_texels if hasattr(pc, "get_texels") else None
+    if texels is not None:
+        order = getattr(pc, "texel_order", 0)
+        F = triangles_indices.shape[0]
+        if not (texels.dim() == 3 and texels.shape[0] == F
+                and texels.shape[1] == order * order and texels.shape[2] == 3):
+            raise ValueError(
+                f"texels shape {tuple(texels.shape)} inconsistent with {F} faces / "
+                f"order {order} (expected [{F}, {order*order}, 3])")
+
+    # Rasterize visible triangles to image, obtain their radii (on screen).
     rendered_image, radii, scaling, allmap, max_blending, was_rendered  = rasterizer(
         vertices=vertices,
         triangles_indices=triangles_indices,
@@ -173,7 +186,7 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         shs = shs,
         colors_precomp = colors_precomp,
         scaling = scaling,
-        texels = pc.get_texels if hasattr(pc, "get_texels") else None,
+        texels = texels,
        )
 
     radii = radii[:vertex_index]

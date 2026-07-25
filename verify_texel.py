@@ -142,9 +142,9 @@ def main():
         triangles._texels = torch.nn.Parameter(bad)
         render(cam, triangles, pipe, bg)
         raise AssertionError("T5 FAILED: malformed texels were not rejected")
-    except (RuntimeError, AssertionError) as e:
-        if "T5 FAILED" in str(e):
-            raise
+    except AssertionError:
+        raise                                       # our own T5-FAILED assertion
+    except (RuntimeError, ValueError):
         print("T5 input validation: malformed texels correctly rejected")
 
     print("\nALL CHECKS PASSED -- carrier is safe to train.")
