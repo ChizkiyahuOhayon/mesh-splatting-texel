@@ -116,6 +116,37 @@ def main():
                   f"rel err {rel:.4f}")
     assert worst < 0.05, f"T3 FAILED: worst relative gradient error {worst:.4f}"
 
+    # ---- T4: topology mutation keeps texels aligned with faces ----
+    # Regression test for the _prune_vertices desync bug: any face-dropping path must
+    # keep texel row i aligned with face i.
+    F0 = triangles._triangle_indices.shape[0]
+    keep = torch.ones(F0, dtype=torch.bool, device="cuda")
+    keep[torch.randperm(F0, device="cuda")[: F0 // 10]] = False   # drop 10% of faces
+    triangles.prune_triangles(keep)
+    triangles.validate_face_state()                                # asserts alignment
+    assert triangles._texels.shape[0] == triangles._triangle_indices.shape[0]
+    # a face-dropping _prune_vertices must also stay aligned (this is the bug's locus)
+    V = triangles.vertices.shape[0]
+    vkeep = torch.ones(V, dtype=torch.bool, device="cuda")
+    vkeep[torch.randperm(V, device="cuda")[: V // 20]] = False
+    triangles._prune_vertices(vkeep)
+    triangles.validate_face_state()
+    print(f"T4 topology sync: faces {F0} -> {triangles._triangle_indices.shape[0]}, "
+          f"texels aligned")
+
+    # ---- T5: input validation rejects a malformed carrier ----
+    bad = torch.zeros(triangles._triangle_indices.shape[0] + 7, args.order ** 2, 3,
+                      device="cuda")
+    try:
+        render(cam, triangles, pipe, bg)  # sanity: good state still renders
+        triangles._texels = torch.nn.Parameter(bad)
+        render(cam, triangles, pipe, bg)
+        raise AssertionError("T5 FAILED: malformed texels were not rejected")
+    except (RuntimeError, AssertionError) as e:
+        if "T5 FAILED" in str(e):
+            raise
+        print("T5 input validation: malformed texels correctly rejected")
+
     print("\nALL CHECKS PASSED -- carrier is safe to train.")
 
 

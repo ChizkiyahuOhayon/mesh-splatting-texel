@@ -95,6 +95,10 @@ class OptimizationParams(ParamGroup):
         #   texel_tv  penalises within-face variance -> suppresses the high-frequency
         #             texel variation that overfits
         self.texel_l2 = 0.0
+        # NOTE: this is a within-face VARIANCE penalty (deviation of a face's texels
+        # from that face's mean), NOT true total variation: it uses no cross-cell
+        # adjacency and does not penalise cross-face seams. Named `texel_tv` for
+        # continuity with the E5 sweep; described as "within-face variance" in the paper.
         self.texel_tv = 0.0
 
         self.densification_interval = 500

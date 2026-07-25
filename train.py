@@ -410,7 +410,16 @@ def training(
     vertex_mask = used_vertex_mask
     triangles._prune_vertices(vertex_mask)
 
-    scene.save(iteration)          
+    # Fail loudly if a texel carrier was requested but never actually created (e.g. the
+    # run ended before the Delaunay retriangulation, or resumed past it): otherwise
+    # --texel_order would silently train a plain baseline and mislabel the result.
+    if opt.texel_order > 0 and triangles.texel_order == 0:
+        raise RuntimeError(
+            f"--texel_order {opt.texel_order} was requested but the carrier was never "
+            f"initialized (run_restricted_delaunay at iter "
+            f"{opt.densify_until_iter + 1000} may not have executed).")
+
+    scene.save(iteration)
     print("Training is done")
 
 def prepare_output_and_logger(args):    

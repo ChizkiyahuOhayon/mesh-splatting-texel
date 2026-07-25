@@ -366,15 +366,32 @@ class TriangleModel:
             self._features_dc,
             self._features_rest,
             self.optimizer.state_dict(),
+            # texel carrier: order, parameter and its own optimizer state, so a
+            # --checkpoint_iterations resume continues an identical run instead of
+            # silently dropping to the baseline
+            self.texel_order,
+            self._texels if self.texel_order > 0 else None,
+            self.texel_optimizer.state_dict() if self.texel_optimizer is not None else None,
         )
-    
+
     def restore(self, model_args, training_args):
-        (self.active_sh_degree, 
-        self._features_dc, 
-        self._features_rest,
-        opt_dict) = model_args
+        # backward compatible with pre-texel 4-tuple checkpoints
+        self.active_sh_degree = model_args[0]
+        self._features_dc = model_args[1]
+        self._features_rest = model_args[2]
+        opt_dict = model_args[3]
         self.training_setup(training_args)
         self.optimizer.load_state_dict(opt_dict)
+        if len(model_args) >= 7 and int(model_args[4]) > 0:
+            self.texel_order = int(model_args[4])
+            self._texels = nn.Parameter(model_args[5].to("cuda").detach().requires_grad_(True))
+            self.texel_optimizer = torch.optim.Adam(
+                [{'params': [self._texels], 'lr': training_args.texel_lr, "name": "texels"}],
+                eps=1e-15)
+            if model_args[6] is not None:
+                self.texel_optimizer.load_state_dict(model_args[6])
+            print(f"[texel] restored order {self.texel_order} from checkpoint "
+                  f"({self._texels.shape[0]:,} faces)")
 
     def replace_tensor_to_optimizer(self, tensor, name):
         optimizable_tensors = {}
@@ -734,6 +751,11 @@ class TriangleModel:
         if self._triangle_indices.numel() > 0:
             remapped = new_id[self._triangle_indices.long()]
             valid_tris = (remapped >= 0).all(dim=1)
+            # Per-face texels are dropped by the SAME mask as the triangles, before the
+            # triangle tensor itself shrinks, so texel row i stays aligned with face i.
+            # Without this the final training-time _prune_vertices leaves texels
+            # misaligned with faces in the saved model (silent colour corruption).
+            self._prune_texels(valid_tris)
             remapped = remapped[valid_tris]
             self._triangle_indices = remapped.to(torch.int32).contiguous()
 
@@ -801,9 +823,18 @@ class TriangleModel:
 
     def _prune_texels(self, mask):
         """Keep texels in sync when triangles are pruned (face-indexed, so the mask is
-        the triangle keep-mask, not a vertex mask)."""
+        the triangle keep-mask, not a vertex mask).
+
+        Any code path that changes the face set MUST route through here (or reset the
+        carrier) so that texel row i always corresponds to face i. A boolean keep-mask
+        of length == current face count is required.
+        """
         if self.texel_order <= 0:
             return
+        assert mask.dtype == torch.bool and mask.numel() == self._texels.shape[0], (
+            f"texel prune mask must be a bool mask over the current "
+            f"{self._texels.shape[0]} faces, got shape {tuple(mask.shape)} "
+            f"dtype {mask.dtype}")
         st = self.texel_optimizer.state.get(self._texels, None)
         new_t = nn.Parameter(self._texels[mask].detach().requires_grad_(True))
         if st is not None:
@@ -814,6 +845,19 @@ class TriangleModel:
         self.texel_optimizer.param_groups[0]["params"][0] = new_t
         self._texels = new_t
 
+    def validate_face_state(self):
+        """Assert every face-indexed tensor is aligned to the current face count.
+        Cheap; call after any topology mutation to catch desync immediately."""
+        F = self._triangle_indices.shape[0]
+        for name in ("image_size", "importance_score", "pixel_count"):
+            t = getattr(self, name)
+            if isinstance(t, torch.Tensor) and t.numel() > 0:
+                assert t.shape[0] == F, f"{name} has {t.shape[0]} rows, expected {F} faces"
+        if self.texel_order > 0:
+            assert self._texels.shape[0] == F, (
+                f"texels has {self._texels.shape[0]} rows, expected {F} faces")
+            assert self._texels.shape[1] == self.texel_order ** 2
+
     def prune_triangles(self, mask):
         self._prune_texels(mask)
         self._triangle_indices = self._triangle_indices[mask]
@@ -821,7 +865,8 @@ class TriangleModel:
         self.image_size = self.image_size[mask]
         self.importance_score = self.importance_score[mask]
         self.pixel_count = self.pixel_count[mask]
-        
+        self.validate_face_state()
+
 
     def _sample_alives(self, probs, num, alive_indices=None):
         torch.manual_seed(1)  # always same "random" indices

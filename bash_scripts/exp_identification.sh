@@ -19,7 +19,7 @@
 # Two arms, one per GPU, ~1.7 h x 5 runs ~= 8.5 h each:
 #   bash bash_scripts/exp_identification.sh <scene> output/ident sh    0
 #   bash bash_scripts/exp_identification.sh <scene> output/ident texel 1
-set -eu
+set -euo pipefail
 SCENE=${1:?usage: $0 <scene_dir> <out_dir> <sh|texel> <gpu_id>}
 OUT=${2:?usage: $0 <scene_dir> <out_dir> <sh|texel> <gpu_id>}
 ARM=${3:?usage: $0 <scene_dir> <out_dir> <sh|texel> <gpu_id>}
@@ -52,10 +52,15 @@ for MULT in 0 0.5 1 2 4; do
   LD=$(python3 -c "print(0.05*$MULT)")
   echo "=========== arm=$ARM  regularization x${MULT}  (GPU $GPU) ==========="
   echo "lambda_normals=$LN lambda_normals_super=$LNS lamba_depth=$LD ${EXTRA}"
-  python train.py -s "$SCENE" -m "$RUN" --eval \
+  if python train.py -s "$SCENE" -m "$RUN" --eval \
       --lambda_normals "$LN" --lambda_normals_super "$LNS" --lamba_depth "$LD" \
-      $EXTRA 2>&1 | tee "$RUN.log"
-  touch "$RUN/DONE"
+      $EXTRA 2>&1 | tee "$RUN.log" \
+     && test -f "$RUN/point_cloud/iteration_30000/point_cloud_state_dict.pt" \
+     && grep -q "ITER 30000\] Evaluating test" "$RUN.log"; then
+    touch "$RUN/DONE"
+  else
+    touch "$RUN/FAILED"; echo "RUN FAILED: $RUN" >&2; exit 1
+  fi
 done
 
 echo

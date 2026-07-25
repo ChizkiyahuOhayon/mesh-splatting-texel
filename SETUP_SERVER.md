@@ -126,8 +126,22 @@ color = barycentric(vertex SH colour) + texels[face_id, slot]
 - It lives in its **own optimizer**. The main optimizer's prune/densify helpers apply a
   single per-*vertex* mask to every param group, which would silently corrupt a
   per-*face* tensor. Triangle pruning syncs the texels explicitly.
-- `--texel_order 0` (the default) passes a null pointer to CUDA and takes exactly the
-  original code path, so this repo still reproduces upstream bit-for-bit.
+- `--texel_order 0` (the default) passes a null pointer to CUDA and takes the original
+  code path, so behaviour matches upstream. (Output *semantics* are preserved; the
+  modified kernel ABI means bit-for-bit / perf parity is a claim to be verified by test,
+  not assumed.)
+
+**Known limitations (honest scope):**
+- **Export.** The training checkpoint (`save/load_parameters`, `capture/restore`) fully
+  round-trips the texels. The mesh/PLY/WebGL *export* path (`create_ply.py`,
+  `export_web.py`) is **not yet texel-aware** — it writes vertex colours only, so an
+  exported asset currently loses the texel gain. A texel-aware export (per-face texture
+  atlas) is the Gate-3 deliverable; until then the "game-engine-native, plain textured
+  mesh" claim is about the *representation*, not the current exporter.
+- **Slot selection uses screen-space barycentrics.** Justified because MeshSplatting's
+  tessellation is extremely fine (~11M triangles; each covers a few pixels), so the
+  perspective distortion of barycentrics *within* one triangle is sub-pixel. A
+  perspective-correct slot is a planned refinement for coarser meshes / video.
 
 Nearest (rather than linear) lookup is deliberate for this first version: a piecewise
 constant lookup has zero derivative w.r.t. the barycentric coordinates almost everywhere,

@@ -11,7 +11,7 @@
 # Reference: order2 no texel-reg = 25.034 / 0.7732 / 0.2093 (train 25.905, gap 0.87).
 #
 #   bash bash_scripts/exp_texel_reg.sh <scene> output/texelreg <gpu>
-set -eu
+set -euo pipefail
 SCENE=${1:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
 OUT=${2:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
 GPU=${3:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
@@ -29,9 +29,14 @@ run () {  # name  extra-args...
   local name=$1; shift
   [ -f "$OUT/$name/DONE" ] && { echo "== $name done, skipping"; return; }
   echo "=================== $name (GPU $GPU) ==================="
-  python train.py -s "$SCENE" -m "$OUT/$name" --eval --texel_order 2 "$@" \
-      2>&1 | tee "$OUT/$name.log"
-  touch "$OUT/$name/DONE"
+  if python train.py -s "$SCENE" -m "$OUT/$name" --eval --texel_order 2 "$@" \
+      2>&1 | tee "$OUT/$name.log" \
+     && test -f "$OUT/$name/point_cloud/iteration_30000/point_cloud_state_dict.pt" \
+     && grep -q "ITER 30000\] Evaluating test" "$OUT/$name.log"; then
+    touch "$OUT/$name/DONE"
+  else
+    touch "$OUT/$name/FAILED"; echo "RUN FAILED: $name" >&2; exit 1
+  fi
 }
 
 run l2_0           # reference: no texel regularization

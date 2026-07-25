@@ -12,7 +12,7 @@
 # Expectation, from 20+ frozen-geometry configs in maclab/RESULTS.md: the carrier's
 # gain is concentrated in the PERCEPTUAL metrics (SSIM/LPIPS), replicated at three
 # geometry resolutions. PSNR parity would be a good outcome, not a failure.
-set -eu
+set -euo pipefail
 SCENE=${1:?usage: $0 <scene_dir> <out_dir>}
 OUT=${2:?usage: $0 <scene_dir> <out_dir>}
 mkdir -p "$OUT"
@@ -28,9 +28,14 @@ run () {  # name  extra-args...
   local name=$1; shift
   [ -f "$OUT/$name/DONE" ] && { echo "== $name already done, skipping"; return; }
   echo "=================== $name ==================="
-  /usr/bin/time -v python train.py -s "$SCENE" -m "$OUT/$name" --eval "$@" \
-      2>&1 | tee "$OUT/$name.log"
-  touch "$OUT/$name/DONE"
+  if /usr/bin/time -v python train.py -s "$SCENE" -m "$OUT/$name" --eval "$@" \
+      2>&1 | tee "$OUT/$name.log" \
+     && test -f "$OUT/$name/point_cloud/iteration_30000/point_cloud_state_dict.pt" \
+     && grep -q "ITER 30000\] Evaluating test" "$OUT/$name.log"; then
+    touch "$OUT/$name/DONE"
+  else
+    touch "$OUT/$name/FAILED"; echo "RUN FAILED: $name" >&2; exit 1
+  fi
 }
 
 run baseline                              # texel_order defaults to 0 -> original path

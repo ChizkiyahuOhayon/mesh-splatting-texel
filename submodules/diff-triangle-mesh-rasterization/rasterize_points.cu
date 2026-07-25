@@ -70,6 +70,15 @@ RasterizetrianglesCUDA(
 {
     
   const int P = triangles_indices.size(0);
+  if (texel_order > 0) {
+    TORCH_CHECK(texels.dim() == 3, "texels must be [F, order*order, 3], got dim ", texels.dim());
+    TORCH_CHECK(texels.size(0) == P, "texel face count ", texels.size(0), " != triangle count ", P);
+    TORCH_CHECK(texels.size(1) == texel_order * texel_order,
+                "texels slot dim ", texels.size(1), " != texel_order^2 ", texel_order * texel_order);
+    TORCH_CHECK(texels.size(2) == 3, "texels must have 3 channels, got ", texels.size(2));
+    TORCH_CHECK(texels.is_cuda() && texels.is_contiguous(), "texels must be contiguous CUDA");
+    TORCH_CHECK(texels.scalar_type() == torch::kFloat32, "texels must be float32");
+  }
   const int V = vertices.size(0); 
   const int H = image_height;
   const int W = image_width;
