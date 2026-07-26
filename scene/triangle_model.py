@@ -206,6 +206,11 @@ class TriangleModel:
         point_cloud_state_dict["texel_order"] = self.texel_order
         if self.texel_order > 0:
             point_cloud_state_dict["texels"] = self._texels
+        # ResidualGate per-face signal: saved so the trained model's high-g_m regions can
+        # define the stratified thin-region evaluation mask (resgate_eval.py). A
+        # baseline_probe run (floor=1 => ungated) supplies the shared reference g_m.
+        if self._g_m_ready and self._g_m.shape[0] == self._triangle_indices.shape[0]:
+            point_cloud_state_dict["g_m"] = self._g_m
 
         torch.save(point_cloud_state_dict, os.path.join(path, 'point_cloud_state_dict.pt'))
 
@@ -324,6 +329,9 @@ class TriangleModel:
         self._features_rest      = state["features_rest"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
         self.importance_score = state["importance_score"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
 
+        if "g_m" in state:
+            self._g_m = state["g_m"].to(device).to(torch.float32)
+            self._g_m_ready = True
         self.texel_order = int(state.get("texel_order", 0))
         if self.texel_order > 0:
             self._texels = state["texels"].to(device).to(torch.float32).detach().clone().requires_grad_(True)

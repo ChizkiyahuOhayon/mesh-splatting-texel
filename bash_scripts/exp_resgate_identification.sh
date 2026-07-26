@@ -12,7 +12,7 @@ set -euo pipefail
 SCENE=${1:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
 OUT=${2:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
 GPU=${3:?usage: $0 <scene_dir> <out_dir> <gpu_id> [arms]}
-ARMS=${4:-"baseline resgate_gm control_raw control_curvature"}   # which arms this worker runs
+ARMS=${4:-"baseline_probe resgate_gm control_raw control_curvature"}   # which arms this worker runs
 ARMS=${ARMS//,/ }
 export CUDA_VISIBLE_DEVICES="$GPU"
 mkdir -p "$OUT"
@@ -36,6 +36,7 @@ run () {  # name  extra-args...
 for arm in $ARMS; do
   case "$arm" in
     baseline)          run baseline ;;                                          # ungated (resgate off)
+    baseline_probe)    run baseline_probe    --resgate --resgate_floor 1.0 ;;   # ungated (phi==1) BUT computes+saves g_m -> the reference mask
     resgate_gm)        run resgate_gm        --resgate --resgate_signal gm ;;   # ours
     control_raw)       run control_raw       --resgate --resgate_signal raw ;;  # ctrl 1: no cross-view consistency
     control_curvature) run control_curvature --resgate --resgate_signal curvature ;; # ctrl 2: curvature not residual
@@ -46,7 +47,7 @@ done
 echo
 echo "=========== SUMMARY (test @ 30000) ==========="
 printf "%-18s %-8s %-8s %-8s\n" run PSNR SSIM LPIPS
-for name in baseline resgate_gm control_raw control_curvature; do
+for name in baseline_probe baseline resgate_gm control_raw control_curvature; do
   L="$OUT/$name.log"; [ -f "$L" ] || continue
   TE=$(grep "ITER 30000\] Evaluating test" "$L" | tail -1)
   printf "%-18s %-8.6s %-8.6s %-8.6s\n" "$name" \
