@@ -88,6 +88,16 @@ class OptimizationParams(ParamGroup):
         # Introduced right after the restricted Delaunay retriangulation.
         self.texel_order = 0
         self.texel_lr = 0.0025
+        # ResidualGate (RESEARCH_PLAN_v5): gate the normal-consistency regularizer per
+        # face by g_m, the appearance-saturated cross-view-consistent photometric
+        # residual (a geometric under-resolution signal). Pure PyTorch, no CUDA change.
+        # resgate=False => exact original behaviour.
+        self.resgate = False
+        self.resgate_from_iter = 12000     # after the restricted-Delaunay transition
+        self.resgate_floor = 0.1           # min phi: never fully remove smoothing (P5 mitigation)
+        self.resgate_refresh = 500         # rebuild g_m every N iters (cross-view min window)
+        self.resgate_norm_q = 0.95         # normalize the signal by this per-scene quantile
+        self.resgate_signal = "gm"         # gm | raw | curvature  (raw/curvature = falsification negative controls)
         # Texel regularizers (pure PyTorch, no CUDA change). The texel is an additive
         # residual over the vertex colour, so:
         #   texel_l2  pulls it toward 0 -> only deviate from vertex colour when the data

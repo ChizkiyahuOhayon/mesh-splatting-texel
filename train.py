@@ -251,12 +251,44 @@ def training(
         rend_normal = render_pkg['rend_normal']
         surf_normal = render_pkg['surf_normal']
 
+        # ------- ResidualGate: per-face g_m signal + normal-loss gating -------
+        # Pure PyTorch. Reuses the per-pixel dominant-face id (render_pkg['render_id'],
+        # full-res) nearest-downsampled to the loss resolution. Active only once
+        # appearance has largely converged (after the Delaunay transition), so the
+        # photometric residual is appearance-saturated (rendered with the live SH).
+        resgate_wmap = None
+        if getattr(opt, "resgate", False) and iteration >= opt.resgate_from_iter:
+            with torch.no_grad():
+                H0, W0 = image.shape[1], image.shape[2]
+                fid = torch.nn.functional.interpolate(
+                    render_pkg["rend_ids"].unsqueeze(0), size=(H0, W0),
+                    mode="nearest").squeeze(0).squeeze(0)                  # [H0,W0] float ids
+                cov = fid >= 0
+                fid_l = fid.long().clamp_min(0)
+                res_pix = (image - gt_image).abs().mean(0)                 # [H0,W0] appearance-saturated
+                Fn = triangles._triangle_indices.shape[0]
+                s = torch.zeros(Fn, device=image.device).scatter_add_(
+                    0, fid_l[cov].reshape(-1), res_pix[cov].reshape(-1))
+                n = torch.zeros(Fn, device=image.device).scatter_add_(
+                    0, fid_l[cov].reshape(-1), torch.ones_like(res_pix[cov].reshape(-1)))
+                face_res = torch.where(n > 0, s / n.clamp_min(1), torch.full((Fn,), float("inf"), device=image.device))
+                triangles.resgate_accumulate(face_res)
+                if iteration % opt.resgate_refresh == 0:
+                    triangles.resgate_refresh(opt.resgate_signal, opt.resgate_norm_q, triangles.vertices)
+                if triangles._g_m.shape[0] == Fn and triangles._g_m.abs().sum() > 0:
+                    phi = triangles.resgate_weight(opt.resgate_floor)      # [F] in [floor,1]
+                    resgate_wmap = torch.where(cov, phi[fid_l], torch.ones_like(res_pix))  # [H0,W0]
+
         # Normal regularization (2DGS)
         Lnormal_pure = 0.0
         lambda_normal = opt.lambda_normals if iteration > opt.iteration_mesh else 0
         if lambda_normal > 0:
             normal_error = (1 - (rend_normal * surf_normal).sum(dim=0))[None]
-            Lnormal_pure = normal_error.mean()
+            if resgate_wmap is not None:
+                w = resgate_wmap[None]
+                Lnormal_pure = (normal_error * w).sum() / w.sum().clamp_min(1e-8)
+            else:
+                Lnormal_pure = normal_error.mean()
             Lnormal = lambda_normal * Lnormal_pure
             loss += Lnormal
         else:

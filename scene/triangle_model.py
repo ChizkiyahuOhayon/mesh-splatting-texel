@@ -158,6 +158,14 @@ class TriangleModel:
         self._texels = torch.empty(0)
         self.texel_order = 0
         self.texel_optimizer = None
+        # ResidualGate per-face geometric-under-resolution signal (RESEARCH_PLAN_v5).
+        # Derived (not learned): g_m is refreshed periodically from the photometric
+        # residual, so on any topology change we simply re-allocate to the new face
+        # count and let it re-accumulate — no optimizer state to sync.
+        self._g_m = torch.empty(0)         # [F] normalized signal in [0,1]
+        self._g_accum = torch.empty(0)     # [F] running cross-view MIN since last refresh (gm)
+        self._g_sum = torch.empty(0)       # [F] running SUM of per-view means (for raw=mean control)
+        self._g_cnt = torch.empty(0)       # [F] number of views contributing
         self.optimizer = None
         self.image_size = 0
         self.pixel_count = 0
@@ -844,6 +852,80 @@ class TriangleModel:
             self.texel_optimizer.state[new_t] = st
         self.texel_optimizer.param_groups[0]["params"][0] = new_t
         self._texels = new_t
+
+    # ------------------------------------------------------------------
+    # ResidualGate: per-face geometric under-resolution signal g_m
+    # ------------------------------------------------------------------
+    def _resgate_ensure(self):
+        """Lazily (re)allocate the g_m buffers to the current face count. Called every
+        use, so a topology change (prune/subdivide/Delaunay) just triggers a reset and
+        the signal re-accumulates over the next refresh window — no per-op sync needed."""
+        F = self._triangle_indices.shape[0]
+        if self._g_m.shape[0] != F:
+            self._g_m = torch.zeros(F, device="cuda")
+            self._g_accum = torch.full((F,), float("inf"), device="cuda")
+            self._g_sum = torch.zeros(F, device="cuda")
+            self._g_cnt = torch.zeros(F, device="cuda")
+
+    def resgate_accumulate(self, face_res):
+        """Fold this view's per-face MEAN residual into the running statistics.
+        face_res: [F], inf/nan on faces this view did not cover. Tracks BOTH the
+        cross-view MIN (-> gm signal) and the SUM/COUNT (-> raw=mean control)."""
+        self._resgate_ensure()
+        seen = torch.isfinite(face_res) & ~torch.isnan(face_res)
+        fr_min = torch.where(seen, face_res, torch.full_like(face_res, float("inf")))
+        self._g_accum = torch.minimum(self._g_accum, fr_min)
+        self._g_sum = self._g_sum + torch.where(seen, face_res, torch.zeros_like(face_res))
+        self._g_cnt = self._g_cnt + seen.float()
+
+    def resgate_refresh(self, signal="gm", norm_q=0.95, verts=None):
+        """Rebuild the normalized signal g_m in [0,1] and reset the accumulators.
+        signal: 'gm' = cross-view-consistent (MIN) appearance-saturated residual [ours];
+                'raw' = cross-view MEAN residual (no consistency filter) [control];
+                'curvature' = per-face dihedral angle [control]."""
+        self._resgate_ensure()
+        if signal == "curvature":
+            raw = self._per_face_curvature(verts)
+        elif signal == "raw":
+            raw = torch.where(self._g_cnt > 0, self._g_sum / self._g_cnt.clamp_min(1),
+                              torch.zeros_like(self._g_sum))
+        else:  # gm
+            raw = torch.where(torch.isfinite(self._g_accum), self._g_accum,
+                              torch.zeros_like(self._g_accum))
+        pos = raw[raw > 0]
+        scale = torch.quantile(pos, norm_q) if pos.numel() > 0 else torch.tensor(1.0, device=raw.device)
+        self._g_m = (raw / scale.clamp_min(1e-8)).clamp(0, 1)
+        self._g_accum = torch.full_like(self._g_accum, float("inf"))
+        self._g_sum = torch.zeros_like(self._g_sum)
+        self._g_cnt = torch.zeros_like(self._g_cnt)
+
+    def resgate_weight(self, floor=0.1):
+        """Per-face regularization multiplier phi(g_m) in [floor, 1], monotone
+        decreasing: smoothing is suppressed (toward floor) where g_m is high."""
+        self._resgate_ensure()
+        return floor + (1.0 - floor) * (1.0 - self._g_m)
+
+    def _per_face_curvature(self, verts):
+        """Max dihedral angle (rad) to edge-adjacent faces — the curvature control."""
+        f = self._triangle_indices.long()
+        v = verts if verts is not None else self.vertices
+        fn = torch.nn.functional.normalize(
+            torch.cross(v[f[:, 1]] - v[f[:, 0]], v[f[:, 2]] - v[f[:, 0]], dim=1), dim=1)
+        F = f.shape[0]
+        edges = torch.cat([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]], 0)
+        edges, _ = torch.sort(edges, dim=1)
+        foe = torch.arange(F, device=f.device).repeat(3)
+        key = edges[:, 0] * (v.shape[0] + 1) + edges[:, 1]
+        order = torch.argsort(key)
+        e_s, f_s = edges[order], foe[order]
+        curv = torch.zeros(F, device=f.device)
+        same = (e_s[1:] == e_s[:-1]).all(1)
+        idx = torch.nonzero(same, as_tuple=True)[0]
+        fa, fb = f_s[idx], f_s[idx + 1]
+        ang = torch.acos((fn[fa] * fn[fb]).sum(1).clamp(-1, 1))
+        curv.scatter_reduce_(0, fa, ang, reduce="amax", include_self=True)
+        curv.scatter_reduce_(0, fb, ang, reduce="amax", include_self=True)
+        return curv
 
     def validate_face_state(self):
         """Assert every face-indexed tensor is aligned to the current face count.
