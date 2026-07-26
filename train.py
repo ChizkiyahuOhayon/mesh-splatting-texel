@@ -260,13 +260,16 @@ def training(
         if getattr(opt, "resgate", False) and iteration >= opt.resgate_from_iter:
             with torch.no_grad():
                 H0, W0 = image.shape[1], image.shape[2]
+                Fn = triangles._triangle_indices.shape[0]
                 fid = torch.nn.functional.interpolate(
                     render_pkg["rend_ids"].unsqueeze(0), size=(H0, W0),
                     mode="nearest").squeeze(0).squeeze(0)                  # [H0,W0] float ids
-                cov = fid >= 0
-                fid_l = fid.long().clamp_min(0)
+                # Coverage MUST bound the id to a valid face index: background pixels
+                # can carry a large sentinel id (not -1), and an out-of-range index in
+                # the scatter/gather below is an illegal CUDA access (core dump).
+                cov = (fid >= 0) & (fid < Fn)
+                fid_l = fid.long().clamp_(0, Fn - 1)
                 res_pix = (image - gt_image).abs().mean(0)                 # [H0,W0] appearance-saturated
-                Fn = triangles._triangle_indices.shape[0]
                 s = torch.zeros(Fn, device=image.device).scatter_add_(
                     0, fid_l[cov].reshape(-1), res_pix[cov].reshape(-1))
                 n = torch.zeros(Fn, device=image.device).scatter_add_(
