@@ -264,21 +264,27 @@ def training(
                 fid = torch.nn.functional.interpolate(
                     render_pkg["rend_ids"].unsqueeze(0), size=(H0, W0),
                     mode="nearest").squeeze(0).squeeze(0)                  # [H0,W0] float ids
-                # Coverage MUST bound the id to a valid face index: background pixels
-                # can carry a large sentinel id (not -1), and an out-of-range index in
-                # the scatter/gather below is an illegal CUDA access (core dump).
-                cov = (fid >= 0) & (fid < Fn)
+                # Coverage: bound the id to a valid face index (background pixels carry a
+                # large sentinel id -> an out-of-range scatter/gather is an illegal CUDA
+                # access) AND require the pixel to be actually on the surface (rendered
+                # alpha), so a face's residual is not contaminated by background pixels.
+                alpha_ds = torch.nn.functional.interpolate(
+                    render_pkg["rend_alpha"].unsqueeze(0), size=(H0, W0),
+                    mode="bilinear", align_corners=False).squeeze(0).squeeze(0)
+                cov = (fid >= 0) & (fid < Fn) & (alpha_ds > opt.resgate_alpha)
                 fid_l = fid.long().clamp_(0, Fn - 1)
                 res_pix = (image - gt_image).abs().mean(0)                 # [H0,W0] appearance-saturated
-                s = torch.zeros(Fn, device=image.device).scatter_add_(
-                    0, fid_l[cov].reshape(-1), res_pix[cov].reshape(-1))
-                n = torch.zeros(Fn, device=image.device).scatter_add_(
-                    0, fid_l[cov].reshape(-1), torch.ones_like(res_pix[cov].reshape(-1)))
+                covf = fid_l[cov].reshape(-1)
+                s = torch.zeros(Fn, device=image.device).scatter_add_(0, covf, res_pix[cov].reshape(-1))
+                n = torch.zeros(Fn, device=image.device).scatter_add_(0, covf, torch.ones_like(res_pix[cov].reshape(-1)))
                 face_res = torch.where(n > 0, s / n.clamp_min(1), torch.full((Fn,), float("inf"), device=image.device))
                 triangles.resgate_accumulate(face_res)
-                if iteration % opt.resgate_refresh == 0:
-                    triangles.resgate_refresh(opt.resgate_signal, opt.resgate_norm_q, triangles.vertices)
-                if triangles._g_m.shape[0] == Fn and triangles._g_m.abs().sum() > 0:
+                # refresh on a per-window step COUNT (not global iteration modulo), so the
+                # first window aggregates a full set of views, not a single one.
+                if triangles.resgate_should_refresh(opt.resgate_refresh):
+                    triangles.resgate_refresh(opt.resgate_signal, opt.resgate_norm_q,
+                                              triangles.vertices, opt.resgate_ema, opt.resgate_min_views)
+                if triangles._g_m_ready and triangles._g_m.shape[0] == Fn:
                     phi = triangles.resgate_weight(opt.resgate_floor)      # [F] in [floor,1]
                     resgate_wmap = torch.where(cov, phi[fid_l], torch.ones_like(res_pix))  # [H0,W0]
 

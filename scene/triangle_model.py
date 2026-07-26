@@ -165,7 +165,10 @@ class TriangleModel:
         self._g_m = torch.empty(0)         # [F] normalized signal in [0,1]
         self._g_accum = torch.empty(0)     # [F] running cross-view MIN since last refresh (gm)
         self._g_sum = torch.empty(0)       # [F] running SUM of per-view means (for raw=mean control)
-        self._g_cnt = torch.empty(0)       # [F] number of views contributing
+        self._g_cnt = torch.empty(0)       # [F] number of views contributing this window
+        self._resgate_steps = 0            # accumulations since last refresh (NOT global iter % k)
+        self._g_m_ready = False            # True once the first real refresh has run (avoids per-iter GPU sync)
+        self._curv_cache = None            # curvature is topology-only -> cache, don't recompute per refresh
         self.optimizer = None
         self.image_size = 0
         self.pixel_count = 0
@@ -866,38 +869,57 @@ class TriangleModel:
             self._g_accum = torch.full((F,), float("inf"), device="cuda")
             self._g_sum = torch.zeros(F, device="cuda")
             self._g_cnt = torch.zeros(F, device="cuda")
+            self._resgate_steps = 0
+            self._g_m_ready = False          # re-accumulate after any topology change
+            self._curv_cache = None
 
     def resgate_accumulate(self, face_res):
-        """Fold this view's per-face MEAN residual into the running statistics.
-        face_res: [F], inf/nan on faces this view did not cover. Tracks BOTH the
-        cross-view MIN (-> gm signal) and the SUM/COUNT (-> raw=mean control)."""
+        """Fold this view's per-face MEAN residual into the running statistics and count
+        it as one accumulation step. face_res: [F], inf/nan on uncovered faces."""
         self._resgate_ensure()
         seen = torch.isfinite(face_res) & ~torch.isnan(face_res)
         fr_min = torch.where(seen, face_res, torch.full_like(face_res, float("inf")))
         self._g_accum = torch.minimum(self._g_accum, fr_min)
         self._g_sum = self._g_sum + torch.where(seen, face_res, torch.zeros_like(face_res))
         self._g_cnt = self._g_cnt + seen.float()
+        self._resgate_steps += 1
 
-    def resgate_refresh(self, signal="gm", norm_q=0.95, verts=None):
+    def resgate_should_refresh(self, interval):
+        """True when enough accumulations have happened SINCE THE LAST REFRESH (not a
+        global-iteration modulo, which made the first window a single view)."""
+        return self._resgate_steps >= interval
+
+    def resgate_refresh(self, signal="gm", norm_q=0.95, verts=None, ema=0.5, min_views=3):
         """Rebuild the normalized signal g_m in [0,1] and reset the accumulators.
-        signal: 'gm' = cross-view-consistent (MIN) appearance-saturated residual [ours];
-                'raw' = cross-view MEAN residual (no consistency filter) [control];
-                'curvature' = per-face dihedral angle [control]."""
+        - min_views: a face contributing fewer than this many views in the window is set
+          to 0 (neutral) — a single-view 'min' is not cross-view consistency.
+        - ema: blend with the previous g_m (EMA) instead of a hard replace, to stop the
+          objective from jumping every window (feedback-oscillation guard).
+        signal: 'gm' cross-view MIN | 'raw' cross-view MEAN | 'curvature' (controls)."""
         self._resgate_ensure()
         if signal == "curvature":
-            raw = self._per_face_curvature(verts)
-        elif signal == "raw":
-            raw = torch.where(self._g_cnt > 0, self._g_sum / self._g_cnt.clamp_min(1),
-                              torch.zeros_like(self._g_sum))
-        else:  # gm
-            raw = torch.where(torch.isfinite(self._g_accum), self._g_accum,
-                              torch.zeros_like(self._g_accum))
-        pos = raw[raw > 0]
+            if self._curv_cache is None or self._curv_cache.shape[0] != self._g_m.shape[0]:
+                self._curv_cache = self._per_face_curvature(verts)   # topology-only -> cache
+            raw = self._curv_cache
+            enough = torch.ones_like(raw, dtype=torch.bool)
+        else:
+            enough = self._g_cnt >= min_views
+            if signal == "raw":
+                raw = torch.where(self._g_cnt > 0, self._g_sum / self._g_cnt.clamp_min(1),
+                                  torch.zeros_like(self._g_sum))
+            else:  # gm
+                raw = torch.where(torch.isfinite(self._g_accum), self._g_accum,
+                                  torch.zeros_like(self._g_accum))
+            raw = torch.where(enough, raw, torch.zeros_like(raw))    # drop under-observed faces
+        pos = raw[enough & (raw > 0)]
         scale = torch.quantile(pos, norm_q) if pos.numel() > 0 else torch.tensor(1.0, device=raw.device)
-        self._g_m = (raw / scale.clamp_min(1e-8)).clamp(0, 1)
+        new_g = (raw / scale.clamp_min(1e-8)).clamp(0, 1)
+        self._g_m = new_g if not self._g_m_ready else ema * self._g_m + (1.0 - ema) * new_g
+        self._g_m_ready = True
         self._g_accum = torch.full_like(self._g_accum, float("inf"))
         self._g_sum = torch.zeros_like(self._g_sum)
         self._g_cnt = torch.zeros_like(self._g_cnt)
+        self._resgate_steps = 0
 
     def resgate_weight(self, floor=0.1):
         """Per-face regularization multiplier phi(g_m) in [floor, 1], monotone

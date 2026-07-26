@@ -98,6 +98,9 @@ class OptimizationParams(ParamGroup):
         self.resgate_refresh = 500         # rebuild g_m every N iters (cross-view min window)
         self.resgate_norm_q = 0.95         # normalize the signal by this per-scene quantile
         self.resgate_signal = "gm"         # gm | raw | curvature  (raw/curvature = falsification negative controls)
+        self.resgate_alpha = 0.5           # a pixel counts toward a face only if rendered alpha > this
+        self.resgate_min_views = 3         # a face needs >= this many views in the window to get a non-neutral gate
+        self.resgate_ema = 0.5             # EMA blend of g_m across refreshes (0 = hard replace) — oscillation guard
         # Texel regularizers (pure PyTorch, no CUDA change). The texel is an additive
         # residual over the vertex colour, so:
         #   texel_l2  pulls it toward 0 -> only deviate from vertex colour when the data
