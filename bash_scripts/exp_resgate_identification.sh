@@ -11,7 +11,9 @@
 set -euo pipefail
 SCENE=${1:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
 OUT=${2:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
-GPU=${3:?usage: $0 <scene_dir> <out_dir> <gpu_id>}
+GPU=${3:?usage: $0 <scene_dir> <out_dir> <gpu_id> [arms]}
+ARMS=${4:-"baseline resgate_gm control_raw control_curvature"}   # which arms this worker runs
+ARMS=${ARMS//,/ }
 export CUDA_VISIBLE_DEVICES="$GPU"
 mkdir -p "$OUT"
 python -c "import diff_triangle_rasterization" 2>/dev/null || {
@@ -31,10 +33,15 @@ run () {  # name  extra-args...
   fi
 }
 
-run baseline                                              # ungated (resgate off)
-run resgate_gm        --resgate --resgate_signal gm       # ours
-run control_raw       --resgate --resgate_signal raw      # negative control 1 (no cross-view consistency)
-run control_curvature --resgate --resgate_signal curvature # negative control 2 (curvature, not residual)
+for arm in $ARMS; do
+  case "$arm" in
+    baseline)          run baseline ;;                                          # ungated (resgate off)
+    resgate_gm)        run resgate_gm        --resgate --resgate_signal gm ;;   # ours
+    control_raw)       run control_raw       --resgate --resgate_signal raw ;;  # ctrl 1: no cross-view consistency
+    control_curvature) run control_curvature --resgate --resgate_signal curvature ;; # ctrl 2: curvature not residual
+    *) echo "unknown arm: $arm" >&2; exit 1 ;;
+  esac
+done
 
 echo
 echo "=========== SUMMARY (test @ 30000) ==========="
