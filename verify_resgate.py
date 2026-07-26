@@ -60,7 +60,7 @@ def main():
         tri._g_accum = torch.full((Fn,), float("inf"), device="cuda")
         tri._g_sum = torch.zeros(Fn, device="cuda"); tri._g_cnt = torch.zeros(Fn, device="cuda")
         tri.resgate_accumulate(v1); tri.resgate_accumulate(v2)
-        tri.resgate_refresh(sig, opt.resgate_norm_q, tri.vertices)
+        tri.resgate_refresh(sig, opt.resgate_norm_q, tri.vertices, ema=0.0, min_views=1)
         g = tri._g_m; w = tri.resgate_weight(opt.resgate_floor)
         assert g.min() >= -1e-6 and g.max() <= 1 + 1e-6, f"R3 FAILED[{sig}]: g_m out of [0,1]"
         assert w.min() >= opt.resgate_floor - 1e-6 and w.max() <= 1 + 1e-6, \
@@ -83,13 +83,15 @@ def main():
     tri._g_accum = torch.full((Fn,), float("inf"), device="cuda")
     tri._g_sum = torch.zeros(Fn, device="cuda"); tri._g_cnt = torch.zeros(Fn, device="cuda")
     tri.resgate_accumulate(v1); tri.resgate_accumulate(v2)
-    tri.resgate_refresh("gm", opt.resgate_norm_q); gm = tri._g_m.clone()
+    tri.resgate_refresh("gm", opt.resgate_norm_q, min_views=1, ema=0.0); gm = tri._g_m.clone()
     tri.resgate_accumulate(v1); tri.resgate_accumulate(v2)
-    tri.resgate_refresh("raw", opt.resgate_norm_q); raw = tri._g_m.clone()
+    tri.resgate_refresh("raw", opt.resgate_norm_q, min_views=1, ema=0.0); raw = tri._g_m.clone()
     assert not torch.allclose(gm, raw), "R4 FAILED: gm and raw signals are identical"
     print(f"R4 gm vs raw differ: mean|gm-raw| = {(gm-raw).abs().mean():.4f}")
 
-    print("\nALL CHECKS PASSED -- ResidualGate is safe to train.")
+    print("\nSelected forward/shape/monotonicity checks passed. This does NOT exercise the\n"
+          "real per-pixel face-id aggregation, memory, or a full fw-bw step -- run the\n"
+          "700-iter smoke run for those before the full grid.")
 
 
 if __name__ == "__main__":
