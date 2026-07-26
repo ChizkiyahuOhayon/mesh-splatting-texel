@@ -65,9 +65,16 @@ def main():
         assert g.min() >= -1e-6 and g.max() <= 1 + 1e-6, f"R3 FAILED[{sig}]: g_m out of [0,1]"
         assert w.min() >= opt.resgate_floor - 1e-6 and w.max() <= 1 + 1e-6, \
             f"R3 FAILED[{sig}]: weight out of [floor,1]"
-        # monotone: higher g_m -> lower weight
-        assert torch.allclose(w.argsort(descending=True), g.argsort()), \
-            f"R3 FAILED[{sig}]: weight not monotone-decreasing in g_m"
+        # monotone: w is an exact affine-decreasing function of g_m by construction.
+        # Verify the functional relation directly (argsort ties spuriously on the many
+        # g_m==0 faces, so an argsort comparison is not a valid monotonicity test).
+        expect = opt.resgate_floor + (1.0 - opt.resgate_floor) * (1.0 - g)
+        assert torch.allclose(w, expect, atol=1e-5), \
+            f"R3 FAILED[{sig}]: weight != floor+(1-floor)*(1-g_m)"
+        order = torch.argsort(g)
+        w_by_g = w[order]
+        assert (w_by_g[1:] <= w_by_g[:-1] + 1e-6).all(), \
+            f"R3 FAILED[{sig}]: weight not non-increasing in g_m"
         print(f"R4 signal '{sig}': g_m in [{g.min():.3f},{g.max():.3f}], "
               f"weight in [{w.min():.3f},{w.max():.3f}], monotone OK, "
               f"hot faces={int((g>0.5).sum())}")
