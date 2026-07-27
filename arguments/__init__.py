@@ -101,6 +101,13 @@ class OptimizationParams(ParamGroup):
         self.resgate_alpha = 0.5           # a pixel counts toward a face only if rendered alpha > this
         self.resgate_min_views = 3         # a face needs >= this many views in the window to get a non-neutral gate
         self.resgate_ema = 0.5             # EMA blend of g_m across refreshes (0 = hard replace) — oscillation guard
+        # CGR diagnostic (E9). cgr_diag=False => exact original behaviour. Observes the
+        # per-vertex photometric-gradient trajectory over a fixed-topology window and
+        # dumps per-face O_i / nu_i / curvature for the offline ROC-AUC separation test.
+        self.cgr_diag = False
+        self.cgr_from = 16000              # window start; MUST be > densify_until_iter+1000 (post-Delaunay, stable topology)
+        self.cgr_window = 500              # number of steps to accumulate the trajectory EMAs before dumping
+        self.cgr_rho = 0.9                 # EMA decay for mu/nu (~10-step memory)
         # Texel regularizers (pure PyTorch, no CUDA change). The texel is an additive
         # residual over the vertex colour, so:
         #   texel_l2  pulls it toward 0 -> only deviate from vertex colour when the data

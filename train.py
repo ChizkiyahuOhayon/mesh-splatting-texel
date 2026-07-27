@@ -25,6 +25,7 @@ from utils.loss_utils import l1_loss, ssim, vertex_depth_loss_hr
 from triangle_renderer import render
 import sys
 from scene import Scene, TriangleModel
+from scene.cgr import CGRTracker, photometric_position_gradient
 from utils.general_utils import safe_state, get_expon_lr_func
 import uuid
 from tqdm import tqdm
@@ -121,7 +122,27 @@ def training(
 
     depth_l1_weight = get_expon_lr_func(opt.depth_lambda_init, opt.depth_lambda_final, max_steps=opt.iterations)
 
+    # CGR diagnostic (E9): observe the per-vertex photometric-gradient trajectory
+    # over a fixed-topology window. Off by default -> baseline is byte-identical.
+    cgr_tracker = None
+    if getattr(opt, "cgr_diag", False):
+        # The window must lie strictly after the restricted-Delaunay retriangulation
+        # (the last event that changes the vertex count): the diagnostic runs on the
+        # stable connected opaque mesh, and prune/densify are frozen for its duration.
+        assert opt.cgr_from > run_restricted_delaunay, (
+            f"cgr_from ({opt.cgr_from}) must be > run_restricted_delaunay "
+            f"({run_restricted_delaunay}) so the diagnostic window has fixed topology."
+        )
+        assert opt.cgr_from + opt.cgr_window <= opt.iterations + 1, (
+            "CGR window extends past the last training iteration."
+        )
+
     for iteration in range(first_iter, opt.iterations + 1):
+
+        # Active only inside the diagnostic window; topology is frozen there so the
+        # tracker's per-vertex buffers stay index-aligned with the vertices.
+        cgr_active = (getattr(opt, "cgr_diag", False)
+                      and opt.cgr_from <= iteration < opt.cgr_from + opt.cgr_window)
 
         if need_delaunay:
             with torch.no_grad():
@@ -199,7 +220,16 @@ def training(
             ssim_value = ssim(image, gt_image)
 
         loss_image = (1.0 - opt.lambda_dssim) * pixel_loss + opt.lambda_dssim * (1.0 - ssim_value)
-    
+
+        # CGR diagnostic: read the UNCONTAMINATED photometric position gradient at
+        # the rasterizer autograd boundary (before any regularizer joins the loss)
+        # and feed the per-vertex trajectory EMAs. retain_graph keeps the real
+        # backward below intact; .grad is never written, so there is no feedback.
+        if cgr_active:
+            if cgr_tracker is None:
+                cgr_tracker = CGRTracker(triangles.vertices.shape[0], rho=opt.cgr_rho,
+                                         device=triangles.vertices.device)
+            cgr_tracker.update(photometric_position_gradient(loss_image, triangles.vertices))
 
         # FINAL LOSS
         loss = loss_image
@@ -340,8 +370,19 @@ def training(
             
             training_report(tb_writer, scene_name, iteration, pixel_loss, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
 
-            # Handle pruning operations
-            if iteration % 500 == 0 and iteration < run_restricted_delaunay:
+            # Dump the CGR diagnostic signals at the end of the window (per-face
+            # O_i / nu_i / curvature + geometry, for the offline ROC-AUC test).
+            if cgr_active and iteration == opt.cgr_from + opt.cgr_window - 1:
+                dump_path = os.path.join(scene.model_path, f"cgr_diag_{iteration}.npz")
+                cgr_tracker.dump(dump_path, vertices=triangles.vertices,
+                                 faces=triangles._triangle_indices)
+                print(f"\n[CGR] diagnostic dumped to {dump_path} after {cgr_tracker.steps} "
+                      f"steps; stopping (diagnostic run).")
+                break
+
+            # Handle pruning operations. Frozen while the CGR diagnostic is active so
+            # the tracker's per-vertex buffers stay index-aligned with the vertices.
+            if iteration % 500 == 0 and iteration < run_restricted_delaunay and not cgr_active:
                 
                 # Building masks to delete triangles
                 triangle_vertex_weights = triangles.opacity_activation(
