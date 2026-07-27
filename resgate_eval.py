@@ -77,6 +77,10 @@ def main():
 
     # test cameras: build Scene with a THROWAWAY model (Scene re-inits the model it is
     # given when load_iteration is None; we must not let it clobber a loaded arm).
+    # Scene writes input.ply into model_path, so give it a scratch dir (we passed no -m).
+    if not getattr(dataset, "model_path", None):
+        dataset.model_path = os.path.join("/tmp", "resgate_eval_scene")
+        os.makedirs(dataset.model_path, exist_ok=True)
     throwaway = TriangleModel(dataset.sh_degree)
     scene = Scene(dataset, throwaway, 0.0, 0.0, shuffle=False)
     test_cams = scene.getTestCameras()
