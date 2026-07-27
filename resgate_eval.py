@@ -112,7 +112,10 @@ def main():
         dataset.model_path = os.path.join("/tmp", "resgate_eval_scene")
         os.makedirs(dataset.model_path, exist_ok=True)
     throwaway = TriangleModel(dataset.sh_degree)
-    scene = Scene(dataset, throwaway, 0.0, 0.0, shuffle=False)
+    # init_opacity>0, set_sigma>0: create_from_pcd does inverse_exponential_activation =
+    # log(set_sigma), so set_sigma=0 -> math domain error. The throwaway's init values are
+    # irrelevant (only its cameras are used; every evaluated model is load_parameters'd).
+    scene = Scene(dataset, throwaway, 0.1, 1.0, shuffle=False)
     test_cams = scene.getTestCameras()
     train_cams = scene.getTrainCameras()
 
