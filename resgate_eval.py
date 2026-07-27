@@ -214,6 +214,8 @@ def main():
     print("\n== STRATIFIED SUMMARY (high-g_m region is where the claim lives) ==")
     print(f"{'arm':<20} {'PSNR_high':>10} {'PSNR_low':>10} {'LPIPS_high':>11}")
     for n, r in results.items():
+        if n.startswith("_"):     # skip non-arm entries (e.g. _disagreement)
+            continue
         print(f"{n:<20} {r['psnr_high']:>10.3f} {r['psnr_low']:>10.3f} {r['lpips_high']:>11.4f}")
     print(f"\nwrote {args.out}")
     print("READ: resgate_gm should beat baseline_probe AND both controls on PSNR_high / LPIPS_high; "
