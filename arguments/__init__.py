@@ -105,9 +105,9 @@ class OptimizationParams(ParamGroup):
         # per-vertex photometric-gradient trajectory over a fixed-topology window and
         # dumps per-face O_i / nu_i / curvature for the offline ROC-AUC separation test.
         self.cgr_diag = False
-        self.cgr_from = 16000              # window start; MUST be > densify_until_iter+1000 (post-Delaunay, stable topology)
-        self.cgr_window = 500              # number of steps to accumulate the trajectory EMAs before dumping
-        self.cgr_rho = 0.9                 # EMA decay for mu/nu (~10-step memory)
+        self.cgr_dump_iters = "4000,8000,12000,16000"  # dump the signal at these iters (several convergence stages)
+        self.cgr_window = 300             # steps to accumulate the trajectory EMAs before each dump
+        self.cgr_rho = 0.9                # EMA decay for mu/nu (~10-step memory)
         # Texel regularizers (pure PyTorch, no CUDA change). The texel is an additive
         # residual over the vertex colour, so:
         #   texel_l2  pulls it toward 0 -> only deviate from vertex colour when the data

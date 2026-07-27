@@ -32,19 +32,26 @@ if [ ! -f "$SCENE/transforms_train.json" ]; then
     --n-train 100 --n-test 20 --res 400 --seed 0
 fi
 
-# 2) Train with the CGR diagnostic. White background matches the RGBA toy renders.
-#    The run early-stops right after the dump (cgr_from + cgr_window), so it costs
-#    ~16.5k iters, not the full schedule.
-DUMP_ITER=16499   # cgr_from(16000) + cgr_window(500) - 1
-DUMP="$OUT/cgr_diag_${DUMP_ITER}.npz"
-if [ ! -f "$DUMP" ]; then
+# 2) Train with the CGR diagnostic. Dumps the signal at several convergence stages
+#    (pre- and post-Delaunay) so we can see WHERE the under-resolved-thin regime
+#    exists. Early-stops after the last dump (~16k iters, not the full schedule).
+DUMP_ITERS="4000,8000,12000,16000"
+LAST_DUMP="$OUT/cgr_diag_${DUMP_ITERS##*,}.npz"
+if [ ! -f "$LAST_DUMP" ]; then
   echo "== training with --cgr_diag (GPU $GPU)"
   python train.py -s "$SCENE" -m "$OUT" -w --eval \
-    --cgr_diag --cgr_from 16000 --cgr_window 500 --cgr_rho 0.9 2>&1 | tee "$OUT/train.log"
+    --cgr_diag --cgr_dump_iters "$DUMP_ITERS" --cgr_window 300 --cgr_rho 0.9 2>&1 | tee "$OUT/train.log"
 fi
-[ -f "$DUMP" ] || { echo "ERROR: CGR dump not produced at $DUMP" >&2; exit 1; }
+[ -f "$LAST_DUMP" ] || { echo "ERROR: CGR dumps not produced (see $OUT/train.log)" >&2; exit 1; }
 
-# 3) ROC-AUC kill-shot analysis.
-echo "== E9 ROC-AUC analysis"
-python "$REPO_ROOT/cgr_auc.py" \
-  --dump "$DUMP" --gt "$SCENE/gt_labels.npz" --out "$OUT/cgr_e9_auc.json"
+# 3) ROC-AUC kill-shot analysis at each convergence stage. The self-validating
+#    verdict flags a stage UNINFORMATIVE if the regime is absent (nu_i does not
+#    separate), PASS if O_i separates and beats magnitude+curvature, else FALSIFIED.
+echo "== E9 ROC-AUC analysis (per convergence stage)"
+for it in ${DUMP_ITERS//,/ }; do
+  DUMP="$OUT/cgr_diag_${it}.npz"
+  [ -f "$DUMP" ] || { echo "  (missing $DUMP, skipping)"; continue; }
+  echo "----- iter $it -----"
+  python "$REPO_ROOT/cgr_auc.py" \
+    --dump "$DUMP" --gt "$SCENE/gt_labels.npz" --out "$OUT/cgr_e9_auc_${it}.json"
+done
