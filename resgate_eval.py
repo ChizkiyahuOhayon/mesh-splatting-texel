@@ -35,6 +35,34 @@ def load_model(model_dir, dataset, TriangleModel, device="cuda"):
     return tri
 
 
+def compute_ref_gm(ref_tri, train_cams, render, pipe, bg, alpha_thr=0.5, min_views=3, norm_q=0.95):
+    """Recompute the reference model's per-face g_m from the training views (same logic
+    as training). Done at eval time so it does not depend on g_m being saved in the
+    checkpoint, and uses the identical appearance-saturated cross-view-min definition."""
+    ref_tri._g_m = torch.empty(0)          # force a clean re-accumulation at current F
+    for cam in train_cams:
+        with torch.no_grad():
+            gt = cam.original_image.cuda()
+            H0, W0 = gt.shape[1], gt.shape[2]
+            pkg = render(cam, ref_tri, pipe, bg)
+            img = pkg["render"].clamp(0, 1)
+            Fn = ref_tri._triangle_indices.shape[0]
+            fid = torch.nn.functional.interpolate(
+                pkg["rend_ids"].unsqueeze(0), size=(H0, W0), mode="nearest").squeeze(0).squeeze(0)
+            alpha = torch.nn.functional.interpolate(
+                pkg["rend_alpha"].unsqueeze(0), size=(H0, W0), mode="bilinear",
+                align_corners=False).squeeze(0).squeeze(0)
+            cov = (fid >= 0) & (fid < Fn) & (alpha > alpha_thr)
+            fid_l = fid.long().clamp_(0, Fn - 1)
+            res = (img - gt).abs().mean(0)
+            covf = fid_l[cov].reshape(-1)
+            s = torch.zeros(Fn, device=gt.device).scatter_add_(0, covf, res[cov].reshape(-1))
+            n = torch.zeros(Fn, device=gt.device).scatter_add_(0, covf, torch.ones_like(res[cov].reshape(-1)))
+            face_res = torch.where(n > 0, s / n.clamp_min(1), torch.full((Fn,), float("inf"), device=gt.device))
+            ref_tri.resgate_accumulate(face_res)
+    ref_tri.resgate_refresh("gm", norm_q, ref_tri.vertices, ema=0.0, min_views=min_views)
+
+
 def per_view_gm_map(ref_tri, cam, render, pipe, bg, H0, W0):
     """Render the reference model at this camera and project its per-face g_m to a
     per-pixel [H0,W0] map (nearest, at the eval resolution)."""
@@ -59,13 +87,15 @@ def masked_psnr(a, b, mask):
 def main():
     parser = ArgumentParser()
     from arguments import ModelParams, PipelineParams
-    lp = ModelParams(parser, sentinel=True); pp = PipelineParams(parser)
+    lp = ModelParams(parser); pp = PipelineParams(parser)   # NOT sentinel: we need real defaults
     parser.add_argument("--arms", nargs="+", required=True)
     parser.add_argument("--ref", required=True, help="dir whose saved g_m defines the mask (baseline_probe)")
     parser.add_argument("--quantile", type=float, default=0.9, help="high-g_m = top (1-q) of reference g_m pixels")
     parser.add_argument("--out", default="resgate_eval.json")
     args = parser.parse_args(sys.argv[1:])
     dataset, pipe = lp.extract(args), pp.extract(args)
+    if getattr(dataset, "resolution", None) is None:
+        dataset.resolution = -1   # default: the training resolution heuristic
 
     from scene import Scene
     from scene.triangle_model import TriangleModel
@@ -84,12 +114,15 @@ def main():
     throwaway = TriangleModel(dataset.sh_degree)
     scene = Scene(dataset, throwaway, 0.0, 0.0, shuffle=False)
     test_cams = scene.getTestCameras()
+    train_cams = scene.getTrainCameras()
 
-    # reference model (its saved g_m defines the shared masks); loaded SEPARATELY.
+    # reference model: loaded SEPARATELY, and its per-face g_m is RECOMPUTED here from the
+    # training views (does not depend on g_m being saved in the checkpoint).
     ref_tri = load_model(args.ref, dataset, TriangleModel)
-    assert getattr(ref_tri, "_g_m_ready", False) and ref_tri._g_m.numel() > 0, \
-        f"reference {args.ref} has no saved g_m — run it as baseline_probe (--resgate --resgate_floor 1.0)"
-    print(f"{len(test_cams)} test views; reference g_m from {args.ref}")
+    print(f"{len(test_cams)} test / {len(train_cams)} train views; "
+          f"recomputing reference g_m from {args.ref} ...")
+    compute_ref_gm(ref_tri, train_cams, render, pipe, bg)
+    print(f"reference g_m: {int((ref_tri._g_m > 0).sum())} / {ref_tri._g_m.numel()} faces active")
 
     # precompute the shared high-g_m masks (from the reference), per test view
     masks = []
