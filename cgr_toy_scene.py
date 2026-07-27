@@ -149,39 +149,28 @@ def build_toy_mesh(seed=0, cube_res=14, fin_res=10, crease_band=0.08):
             cube_lab[fi] = LABEL_CREASE
     lab_list.append(cube_lab)
 
-    # --- four thin fins ---------------------------------------------------
-    # Each fin: a thin plate protruding radially from a cube side face. Thickness
-    # ~0.04 (a few grid-edge-lengths) => genuinely thin.
-    fin_specs = [
-        # (attach_center, out_dir, width_dir, width, height, thickness)
-        ([0.5, 0.0, 0.15], [1, 0, 0], [0, 1, 0], 0.55, 0.5, 0.04),
-        ([-0.5, 0.1, -0.1], [-1, 0, 0], [0, 0, 1], 0.5, 0.45, 0.04),
-        ([0.0, 0.5, 0.0], [0, 1, 0], [1, 0, 0], 0.6, 0.5, 0.035),
-        ([0.05, -0.5, 0.1], [0, -1, 0], [0, 0, 1], 0.5, 0.55, 0.045),
+    # --- thin cylindrical spokes (the under-resolved-thin regime) ---------
+    # 2D-thin tubes are far harder for an opaque connected mesh than a flat plate:
+    # the mesh must wrap around a small-radius cylinder, so sub-resolution spokes
+    # stay under-resolved (persistently driven) while the cube's creases resolve.
+    # Varying radius spans clearly-resolvable to near the pixel limit.
+    spoke_specs = [
+        # (base_on_cube, out_dir, length, radius)
+        ([0.5, 0.15, 0.1], [1, 0, 0], 0.7, 0.035),
+        ([0.5, -0.2, -0.15], [1, 0.15, 0], 0.7, 0.020),
+        ([-0.5, 0.1, 0.15], [-1, 0, 0.1], 0.7, 0.028),
+        ([-0.5, -0.15, -0.1], [-1, 0, 0], 0.7, 0.014),
+        ([0.1, 0.5, 0.1], [0, 1, 0], 0.7, 0.030),
+        ([-0.1, 0.5, -0.15], [0.1, 1, 0], 0.7, 0.017),
+        ([0.15, -0.5, 0.1], [0, -1, 0], 0.7, 0.024),
+        ([-0.1, -0.5, -0.1], [0, -1, 0.1], 0.7, 0.012),
     ]
-    for (attach, out_dir, w_dir, width, height, thick) in fin_specs:
-        attach = np.array(attach, dtype=np.float64)
-        out_dir = np.array(out_dir, dtype=np.float64)
-        out_dir = out_dir / np.linalg.norm(out_dir)
-        w_dir = np.array(w_dir, dtype=np.float64)
-        w_dir = w_dir / np.linalg.norm(w_dir)
-        # thickness direction: orthogonal to out and width
-        t_dir = np.cross(out_dir, w_dir)
-        t_dir = t_dir / np.linalg.norm(t_dir)
-        # fin box center sits a bit outside the cube face
-        fin_center = attach + out_dir * (height / 2.0)
-        half = (
-            out_dir * (height / 2.0)
-            + w_dir * (width / 2.0)
-            + t_dir * (thick / 2.0)
-        )
-        # build an oriented thin box by tessellating its 6 faces
-        fv, ff = _oriented_box(fin_center, out_dir, w_dir, t_dir,
-                               height / 2.0, width / 2.0, thick / 2.0, fin_res)
-        v_list.append(fv)
-        f_list.append(ff + off)
-        off += len(fv)
-        lab_list.append(np.full(len(ff), LABEL_THIN, dtype=np.int64))
+    for (base, out_dir, length, radius) in spoke_specs:
+        sv, sf = _spoke(base, out_dir, length, radius, sections=16)
+        v_list.append(sv)
+        f_list.append(sf + off)
+        off += len(sv)
+        lab_list.append(np.full(len(sf), LABEL_THIN, dtype=np.int64))
 
     verts = np.concatenate(v_list, 0)
     faces = np.concatenate(f_list, 0)
@@ -195,26 +184,18 @@ def build_toy_mesh(seed=0, cube_res=14, fin_res=10, crease_band=0.08):
     return ToyMesh(mesh=mesh, face_label=face_label)
 
 
-def _oriented_box(center, e0, e1, e2, h0, h1, h2, res):
-    """Thin oriented box; e0/e1 large faces tessellated ``res`` x ``res``, e2 is
-    the thin axis. Returns (verts, faces)."""
-    center = np.asarray(center, float)
-    faces_spec = [
-        (center + e2 * h2, e0 * h0, e1 * h1, res, res),    # +thin face
-        (center - e2 * h2, e0 * h0, e1 * h1, res, res),    # -thin face
-        (center + e0 * h0, e1 * h1, e2 * h2, res, 2),      # +out rim
-        (center - e0 * h0, e1 * h1, e2 * h2, res, 2),      # -out rim (base)
-        (center + e1 * h1, e0 * h0, e2 * h2, res, 2),      # +width rim
-        (center - e1 * h1, e0 * h0, e2 * h2, res, 2),      # -width rim
-    ]
-    all_v, all_f, off = [], [], 0
-    for (c, u, v, nu, nv) in faces_spec:
-        origin = c - u - v
-        vs, fs = _grid_plane(origin, 2 * u, 2 * v, nu, nv)
-        all_v.append(vs)
-        all_f.append(fs + off)
-        off += len(vs)
-    return np.concatenate(all_v, 0), np.concatenate(all_f, 0)
+def _spoke(base, direction, length, radius, sections=16):
+    """A thin cylindrical spoke of ``radius`` from ``base`` along ``direction``.
+
+    Returns (verts, faces). The base is sunk slightly into the cube so the spoke
+    joins the surface rather than floating."""
+    direction = np.asarray(direction, dtype=np.float64)
+    direction /= np.linalg.norm(direction)
+    base = np.asarray(base, dtype=np.float64) - direction * 0.05  # sink into the cube
+    cyl = trimesh.creation.cylinder(radius=radius, height=length, sections=sections)
+    cyl.apply_transform(trimesh.geometry.align_vectors([0, 0, 1], direction))
+    cyl.apply_translation(base + direction * (length / 2.0))
+    return np.asarray(cyl.vertices, dtype=np.float64), np.asarray(cyl.faces, dtype=np.int64)
 
 
 # --------------------------------------------------------------------------- #

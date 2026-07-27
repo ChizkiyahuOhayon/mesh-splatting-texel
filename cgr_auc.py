@@ -71,6 +71,9 @@ def main():
     ap.add_argument("--max-dist", type=float, default=0.05,
                     help="drop recon faces farther than this from any GT face "
                          "(world units; the toy spans ~[-1.5,1.5])")
+    ap.add_argument("--min-obs", type=int, default=0,
+                    help="if the dump carries per-face observation counts (cgr_diagnose.py), "
+                         "drop faces observed in fewer than this many views")
     args = ap.parse_args()
 
     dump = np.load(args.dump)
@@ -88,6 +91,10 @@ def main():
 
     # keep confidently-matched faces whose GT regime is crease or thin
     keep = (dist <= args.max_dist) & np.isin(label, [LABEL_CREASE, LABEL_THIN])
+    # optionally restrict to well-observed faces (full-sweep dumps carry face_obs)
+    if args.min_obs > 0 and "face_obs" in dump:
+        keep &= dump["face_obs"] >= args.min_obs
+        print(f"observation filter: keep faces with >= {args.min_obs} views")
     y = (label[keep] == LABEL_THIN).astype(int)  # 1 = under-resolved thin (positive)
     n_crease, n_thin = int((y == 0).sum()), int((y == 1).sum())
 
