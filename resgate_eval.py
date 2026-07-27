@@ -91,6 +91,10 @@ def main():
     parser.add_argument("--arms", nargs="+", required=True)
     parser.add_argument("--ref", required=True, help="dir whose saved g_m defines the mask (baseline_probe)")
     parser.add_argument("--quantile", type=float, default=0.9, help="high-g_m = top (1-q) of reference g_m pixels")
+    parser.add_argument("--disagree", action="store_true",
+                        help="also test the regime where g_m and curvature DISAGREE (the clean test of whether g_m is special)")
+    parser.add_argument("--gm-arm", default=None, help="arm dir trained with signal=gm (for --disagree)")
+    parser.add_argument("--curv-arm", default=None, help="arm dir trained with signal=curvature (for --disagree)")
     parser.add_argument("--out", default="resgate_eval.json")
     args = parser.parse_args(sys.argv[1:])
     dataset, pipe = lp.extract(args), pp.extract(args)
@@ -161,6 +165,49 @@ def main():
             lpips_high=float(np.nanmean(hi_lp)), lpips_full=float(np.nanmean(full_lp)))
         print(f"  {name}: high-g PSNR {results[name]['psnr_high']:.3f} | "
               f"low-g PSNR {results[name]['psnr_low']:.3f} | high-g LPIPS {results[name]['lpips_high']:.4f}")
+
+    # ---- disagreement diagnostic: where g_m and curvature DISAGREE ----
+    if args.disagree:
+        gm_arm = args.gm_arm or next((a for a in args.arms if "gm" in os.path.basename(a)), None)
+        cv_arm = args.curv_arm or next((a for a in args.arms if "curv" in os.path.basename(a)), None)
+        assert gm_arm and cv_arm, "need --gm-arm and --curv-arm (or arms named *gm* / *curv*)"
+        gm_n = ref_tri._g_m.clamp(0, 1)                                   # already [0,1]
+        cv = ref_tri._per_face_curvature(ref_tri.vertices)
+        cv_n = (cv / torch.quantile(cv[cv > 0], 0.95).clamp_min(1e-8)).clamp(0, 1)
+        q_hi, q_lo = 0.85, 0.5
+        setA = (cv_n > q_hi) & (gm_n < q_lo)     # high curvature, LOW residual = resolved sharp edges
+        setB = (gm_n > q_hi) & (cv_n < q_lo)     # high residual, LOW curvature = under-resolved, not sharp
+        print(f"\n-- disagreement sets: A(curv-hi,gm-lo)={int(setA.sum())} faces  "
+              f"B(gm-hi,curv-lo)={int(setB.sum())} faces --")
+        Fn = ref_tri._triangle_indices.shape[0]
+        gm_t = load_model(gm_arm, dataset, TriangleModel)
+        cv_t = load_model(cv_arm, dataset, TriangleModel)
+        dis = {"A_curvHi_gmLo": {}, "B_gmHi_curvLo": {}}
+        with torch.no_grad():
+            for setname, fset in (("A_curvHi_gmLo", setA), ("B_gmHi_curvLo", setB)):
+                gm_p, cv_p, base_p = [], [], []
+                for cam in test_cams:
+                    gt = cam.original_image.cuda(); H0, W0 = gt.shape[1], gt.shape[2]
+                    fid = torch.nn.functional.interpolate(
+                        render(cam, ref_tri, pipe, bg)["rend_ids"].unsqueeze(0),
+                        size=(H0, W0), mode="nearest").squeeze(0).squeeze(0)
+                    cov = (fid >= 0) & (fid < Fn)
+                    pm = torch.zeros_like(fid, dtype=torch.bool)
+                    pm[cov] = fset[fid[cov].long()]
+                    gm_p.append(masked_psnr(render(cam, gm_t, pipe, bg)["render"].clamp(0, 1), gt, pm))
+                    cv_p.append(masked_psnr(render(cam, cv_t, pipe, bg)["render"].clamp(0, 1), gt, pm))
+                    base_p.append(masked_psnr(render(cam, ref_tri, pipe, bg)["render"].clamp(0, 1), gt, pm))
+                dis[setname] = {"psnr_gm": float(np.nanmean(gm_p)),
+                                "psnr_curv": float(np.nanmean(cv_p)),
+                                "psnr_baseline": float(np.nanmean(base_p)),
+                                "n_faces": int(fset.sum())}
+        results["_disagreement"] = dis
+        print("\n== DISAGREEMENT DIAGNOSTIC (does g_m beat curvature where they disagree?) ==")
+        for k, d in dis.items():
+            better = "gm WINS" if d["psnr_gm"] > d["psnr_curv"] + 0.05 else \
+                     ("curv wins" if d["psnr_curv"] > d["psnr_gm"] + 0.05 else "tie (<0.05)")
+            print(f"  {k} ({d['n_faces']} faces): PSNR gm {d['psnr_gm']:.3f} | curv {d['psnr_curv']:.3f} | "
+                  f"baseline {d['psnr_baseline']:.3f}  -> {better}")
 
     json.dump({"quantile": args.quantile, "high_g_frac": hi_frac, "arms": results},
               open(args.out, "w"), indent=2)
