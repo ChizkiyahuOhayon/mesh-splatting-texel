@@ -165,6 +165,8 @@ def run(dataset, pipeline, args):
     views = sorted(scene.getTestCameras(), key=lambda view: view.image_name)
     if not views:
         raise RuntimeError("G0 requires a non-empty test split; pass --eval and the correct dataset.")
+    if args.g0_max_views > 0:
+        views = views[:args.g0_max_views]
     if triangles.texel_order != 0:
         raise RuntimeError("G0 requires an unmodified baseline checkpoint (texel_order=0).")
 
@@ -181,6 +183,7 @@ def run(dataset, pipeline, args):
         "warmup": args.g0_warmup,
         "timing_repeats": args.g0_timing_repeats,
         "timing_views": args.g0_timing_views,
+        "max_views": args.g0_max_views,
         "test_views": [view.image_name for view in views],
         "image_sizes": sorted({
             (int(view.image_height), int(view.image_width)) for view in views
@@ -190,7 +193,7 @@ def run(dataset, pipeline, args):
         "nvdiffrast": _package_version("nvdiffrast"),
         "confirmatory_settings": (
             args.g0_warmup == 5 and args.g0_timing_repeats == 20
-            and args.g0_timing_views == 5
+            and args.g0_timing_views == 5 and args.g0_max_views == 0
         ),
     }
     with open(output_root / "g0_manifest.json", "w", encoding="utf-8") as handle:
@@ -281,12 +284,15 @@ if __name__ == "__main__":
     parser.add_argument("--g0_warmup", default=5, type=int)
     parser.add_argument("--g0_timing_repeats", default=20, type=int)
     parser.add_argument("--g0_timing_views", default=5, type=int)
+    parser.add_argument("--g0_max_views", default=0, type=int,
+                        help="Exploratory smoke test only; 0 uses the full test split.")
     parsed = get_combined_args(parser)
     if not parsed.model_path or not parsed.source_path:
         parser.error("Both --model_path/-m and --source_path/-s are required.")
     if not parsed.eval:
         parser.error("G0 requires --eval so the held-out test split is loaded.")
-    if parsed.g0_warmup < 0 or parsed.g0_timing_repeats < 1 or parsed.g0_timing_views < 1:
+    if (parsed.g0_warmup < 0 or parsed.g0_timing_repeats < 1
+            or parsed.g0_timing_views < 1 or parsed.g0_max_views < 0):
         parser.error("G0 timing counts must be positive (warmup may be zero).")
     safe_state(parsed.quiet)
     run(model.extract(parsed), pipeline.extract(parsed), parsed)

@@ -32,6 +32,18 @@ The paths above illustrate the required argument order; replace them with the ac
 resolved server paths. The driver refuses non-empty per-scene output directories, so
 an interrupted run cannot silently mix old and new images.
 
+Before the full gate, run one exploratory Garden view to validate CUDA compilation,
+projection orientation, and image writing:
+
+```bash
+python g0_native_eval.py \
+  -s data/360_v2/garden -m output/baseline/garden --eval \
+  --g0_scene garden --g0_output output/fmms_g0_smoke_garden \
+  --g0_max_views 1 --g0_warmup 0 --g0_timing_repeats 1 --g0_timing_views 1
+```
+
+This smoke run is recorded as `confirmatory_settings: false` and cannot pass G0.
+
 ## Monitor and inspect
 
 ```bash
