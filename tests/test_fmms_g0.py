@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 
 from fmms_native_renderer import vertex_clip_positions, vertex_sh_colors
+from utils.image_utils import psnr
 from utils.sh_utils import C0
 from g0_decide import decide, quality_pass
 
@@ -36,6 +37,14 @@ class ProjectionTest(unittest.TestCase):
 
 
 class DecisionTest(unittest.TestCase):
+    def test_psnr_accepts_non_contiguous_render(self):
+        prediction = torch.arange(24, dtype=torch.float32).reshape(1, 3, 2, 4).transpose(-1, -2)
+        target = torch.zeros_like(prediction)
+        self.assertFalse(prediction.is_contiguous())
+        expected_mse = (prediction ** 2).reshape(1, -1).mean(1, keepdim=True)
+        expected = 20 * torch.log10(1.0 / torch.sqrt(expected_mse))
+        torch.testing.assert_close(psnr(prediction, target), expected)
+
     def test_thresholds_are_inclusive(self):
         summary = {"aa1": {"delta_vs_ssaa4": {
             "psnr": -0.10, "ssim": -0.003, "lpips_vgg": 0.005,
