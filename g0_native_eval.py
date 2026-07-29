@@ -26,6 +26,7 @@ from utils.system_utils import searchForMaxIteration
 
 
 VARIANTS = ("ssaa4", "point1", "aa1", "aa2")
+LADDER_VARIANTS = ("splat1", "splat2", "ssaa4", "point1", "aa1", "aa2", "aa4")
 
 
 def _sha256(path):
@@ -50,9 +51,10 @@ def _git_commit():
 
 
 def _render_variant(variant, view, triangles, pipeline, background, context):
-    if variant == "ssaa4":
+    baseline_scales = {"splat1": 1, "splat2": 2, "ssaa4": 4}
+    if variant in baseline_scales:
         previous_scale = triangles.scaling
-        triangles.scaling = 4
+        triangles.scaling = baseline_scales[variant]
         try:
             package = render_baseline(view, triangles, pipeline, background)
             return {"render": package["render"], "rend_alpha": package["rend_alpha"]}
@@ -64,6 +66,8 @@ def _render_variant(variant, view, triangles, pipeline, background, context):
         return render_native(view, triangles, background, context, scale=1, antialias=True)
     if variant == "aa2":
         return render_native(view, triangles, background, context, scale=2, antialias=True)
+    if variant == "aa4":
+        return render_native(view, triangles, background, context, scale=4, antialias=True)
     raise ValueError(f"Unknown G0 variant: {variant}")
 
 
@@ -84,17 +88,19 @@ def _image_metrics(prediction, target, lpips_metric):
     }
 
 
-def _summary(rows):
+def _summary(rows, variants):
     keys = ("psnr", "ssim", "lpips_vgg", "mae_vs_ssaa4", "p95_vs_ssaa4", "silhouette_mae_vs_ssaa4")
     summary = {}
-    for variant in VARIANTS:
+    for variant in variants:
         selected = [row for row in rows if row["variant"] == variant]
         summary[variant] = {
             key: float(statistics.fmean(row[key] for row in selected))
             for key in keys if all(row[key] is not None for row in selected)
         }
     reference = summary["ssaa4"]
-    for variant in VARIANTS[1:]:
+    for variant in variants:
+        if variant == "ssaa4":
+            continue
         summary[variant]["delta_vs_ssaa4"] = {
             "psnr": summary[variant]["psnr"] - reference["psnr"],
             "ssim": summary[variant]["ssim"] - reference["ssim"],
@@ -170,6 +176,7 @@ def run(dataset, pipeline, args):
     if triangles.texel_order != 0:
         raise RuntimeError("G0 requires an unmodified baseline checkpoint (texel_order=0).")
 
+    variants = LADDER_VARIANTS if args.g0_renderer_ladder else VARIANTS
     manifest = {
         "protocol": "experiments/fmms_g0/protocol.md",
         "scene": args.g0_scene,
@@ -179,7 +186,7 @@ def run(dataset, pipeline, args):
         "checkpoint_sha256": _sha256(checkpoint),
         "iteration": iteration,
         "git_commit": _git_commit(),
-        "variants": list(VARIANTS),
+        "variants": list(variants),
         "warmup": args.g0_warmup,
         "timing_repeats": args.g0_timing_repeats,
         "timing_views": args.g0_timing_views,
@@ -194,6 +201,7 @@ def run(dataset, pipeline, args):
         "confirmatory_settings": (
             args.g0_warmup == 5 and args.g0_timing_repeats == 20
             and args.g0_timing_views == 5 and args.g0_max_views == 0
+            and not args.g0_renderer_ladder
         ),
     }
     with open(output_root / "g0_manifest.json", "w", encoding="utf-8") as handle:
@@ -210,7 +218,7 @@ def run(dataset, pipeline, args):
             gt = view.original_image[:3]
             rendered = {
                 variant: _render_variant(variant, view, triangles, pipeline, background, context)
-                for variant in VARIANTS
+                for variant in variants
             }
             reference = rendered["ssaa4"]["render"].clamp(0.0, 1.0)
             band = _silhouette_band(rendered["ssaa4"]["rend_alpha"])
@@ -251,7 +259,7 @@ def run(dataset, pipeline, args):
             gt_dir.mkdir(parents=True, exist_ok=True)
             torchvision.utils.save_image(gt, gt_dir / f"{view_index:05d}.png")
 
-    results = {"scene": args.g0_scene, "per_view": rows, "summary": _summary(rows)}
+    results = {"scene": args.g0_scene, "per_view": rows, "summary": _summary(rows, variants)}
     with open(output_root / "results.json", "w", encoding="utf-8") as handle:
         json.dump(results, handle, indent=2)
 
@@ -264,7 +272,7 @@ def run(dataset, pipeline, args):
                 variant, timing_views, triangles, pipeline, background, context,
                 args.g0_warmup, args.g0_timing_repeats,
             )
-            for variant in VARIANTS
+            for variant in variants
         },
     }
     with open(output_root / "timing.json", "w", encoding="utf-8") as handle:
@@ -286,6 +294,8 @@ if __name__ == "__main__":
     parser.add_argument("--g0_timing_views", default=5, type=int)
     parser.add_argument("--g0_max_views", default=0, type=int,
                         help="Exploratory smoke test only; 0 uses the full test split.")
+    parser.add_argument("--g0_renderer_ladder", action="store_true",
+                        help="Run the preregistered exploratory 1x/2x/4x renderer ladder.")
     parsed = get_combined_args(parser)
     if not parsed.model_path or not parsed.source_path:
         parser.error("Both --model_path/-m and --source_path/-s are required.")
@@ -294,5 +304,7 @@ if __name__ == "__main__":
     if (parsed.g0_warmup < 0 or parsed.g0_timing_repeats < 1
             or parsed.g0_timing_views < 1 or parsed.g0_max_views < 0):
         parser.error("G0 timing counts must be positive (warmup may be zero).")
+    if parsed.g0_renderer_ladder and parsed.g0_max_views != 1:
+        parser.error("The exploratory renderer ladder requires --g0_max_views 1.")
     safe_state(parsed.quiet)
     run(model.extract(parsed), pipeline.extract(parsed), parsed)

@@ -54,8 +54,8 @@ def render_native(camera, triangles, background, context, scale=1, antialias=Tru
             "FMMS G0 requires nvdiffrast; install requirements-g0.txt first."
         ) from exc
 
-    if scale not in (1, 2):
-        raise ValueError(f"G0 native scale must be 1 or 2, got {scale}.")
+    if scale not in (1, 2, 4):
+        raise ValueError(f"G0 native scale must be 1, 2, or 4, got {scale}.")
     if getattr(triangles, "texel_order", 0) != 0:
         raise ValueError("G0 accepts baseline checkpoints only (texel_order must be 0).")
 

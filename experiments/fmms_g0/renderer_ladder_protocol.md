@@ -1,7 +1,7 @@
 # Exploratory renderer-ladder protocol
 
-Status: **PREREGISTERED — ladder output not yet observed**  
-Date: 2026-07-30  
+Status: **PREREGISTERED — ladder output not yet observed**
+Date: 2026-07-30
 Classification: exploratory mechanism diagnostic, not part of the confirmatory G0 gate
 
 ## Question

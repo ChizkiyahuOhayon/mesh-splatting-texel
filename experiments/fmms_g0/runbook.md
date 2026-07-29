@@ -44,6 +44,20 @@ python g0_native_eval.py \
 
 This smoke run is recorded as `confirmatory_settings: false` and cannot pass G0.
 
+If the smoke quality is far outside the G0 tolerance, run the preregistered
+single-view renderer ladder before any full-scene evaluation:
+
+```bash
+python g0_native_eval.py \
+  -s data/360_v2/garden -m output/baseline/garden --eval \
+  --g0_scene garden --g0_output output/fmms_g0_renderer_ladder \
+  --g0_renderer_ladder --g0_max_views 1 \
+  --g0_warmup 0 --g0_timing_repeats 1 --g0_timing_views 1
+```
+
+The ladder adds `splat1`, `splat2`, and `aa4`; its interpretation is locked in
+`renderer_ladder_protocol.md`. It is exploratory and cannot pass G0.
+
 ## Monitor and inspect
 
 ```bash
