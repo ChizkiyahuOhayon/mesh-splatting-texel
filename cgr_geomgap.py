@@ -30,11 +30,12 @@ from scipy.spatial import cKDTree
 LABEL_NAMES = {0: "flat", 1: "crease", 2: "thin"}
 
 
-def sample_surface(vertices, faces, n_points, rng, labels=None):
+def sample_surface(vertices, faces, n_points, rng):
     """Area-weighted uniform sample of ``n_points`` on the mesh surface.
 
-    Returns (points [n,3], point_label [n] or None). Barycentric sampling within
-    each chosen face; face-selection probability is proportional to face area.
+    Returns (points [n,3], face_index [n]). Barycentric sampling within each chosen
+    face; face-selection probability is proportional to face area. The caller maps
+    ``face_index`` to any per-face attribute (label, spoke radius, ...).
     """
     v = vertices[faces]                       # (F,3,3)
     e1, e2 = v[:, 1] - v[:, 0], v[:, 2] - v[:, 0]
@@ -48,8 +49,7 @@ def sample_surface(vertices, faces, n_points, rng, labels=None):
     over = u + w > 1.0                        # fold back into the triangle
     u[over], w[over] = 1.0 - u[over], 1.0 - w[over]
     pts = v[fidx, 0] + u[:, None] * e1[fidx] + w[:, None] * e2[fidx]
-    plab = labels[fidx] if labels is not None else None
-    return pts, plab
+    return pts, fidx
 
 
 def main():
@@ -73,7 +73,9 @@ def main():
     # scene scale for a relative report: the GT bounding-box diagonal
     diag = float(np.linalg.norm(gv.max(0) - gv.min(0)))
 
-    gt_pts, gt_plab = sample_surface(gv, gf, args.n_gt, rng, labels=glab)
+    gt_pts, gt_fidx = sample_surface(gv, gf, args.n_gt, rng)
+    gt_plab = glab[gt_fidx]
+    gt_prad = gt["face_spoke_radius"][gt_fidx] if "face_spoke_radius" in gt else None
     recon_pts, _ = sample_surface(rv, rf, args.n_recon, rng)
 
     # one-sided Chamfer GT -> recon: for each GT point, distance to the nearest
@@ -105,9 +107,39 @@ def main():
         print("  P0 (appearance hides bad thin geometry) is SUPPORTED if thin geometry error"
               " >> crease; the ratio is the recoverable-geometry headroom.")
 
+    # the thickness sweep: GT->recon error binned by spoke radius. If the mesh
+    # reconstructs even the thinnest spokes, error stays flat -> P0 fails; if it
+    # breaks below some radius, that is the under-resolution regime a fix targets.
+    curve = []
+    if gt_prad is not None and (gt_prad > 0).any():
+        crease_med = stats.get("crease", {}).get("median", float("nan"))
+        radii = np.unique(gt_prad[gt_prad > 0])
+        print(f"\n  thickness sweep (GT->recon Chamfer per spoke radius; crease baseline "
+              f"= {crease_med:.5f}):")
+        print(f"  {'radius':>8s}  {'~px@400':>7s}  {'n_pts':>7s}  {'median':>10s}  "
+              f"{'p90':>10s}  {'xcrease':>8s}")
+        print("  " + "-" * 60)
+        for r in radii:
+            m = gt_prad == r
+            if m.sum() < 20:
+                continue
+            d = dist[m]
+            med = float(np.median(d))
+            # rough pixel width at 400px, fov 45deg, cam radius 3 (2r * f / z)
+            px = 2 * r * (0.5 * 400 / np.tan(np.deg2rad(45) / 2)) / 3.0
+            row = {"radius": float(r), "approx_px": float(px), "n": int(m.sum()),
+                   "median": med, "p90": float(np.percentile(d, 90)),
+                   "x_crease": med / max(crease_med, 1e-12)}
+            curve.append(row)
+            print(f"  {r:>8.4f}  {px:>7.1f}  {int(m.sum()):>7d}  {med:>10.5f}  "
+                  f"{np.percentile(d, 90):>10.5f}  {med/max(crease_med,1e-12):>7.2f}x")
+        print("  READ: flat & ~1x across radii -> mesh resolves even thin geometry (P0 fails);"
+              " a sharp rise below some radius -> the under-resolution regime.")
+
     if args.out:
         with open(args.out, "w") as f:
-            json.dump({"scene_diag": diag, "by_regime": stats}, f, indent=2)
+            json.dump({"scene_diag": diag, "by_regime": stats,
+                       "thickness_sweep": curve}, f, indent=2)
         print(f"\n  wrote {args.out}")
 
 

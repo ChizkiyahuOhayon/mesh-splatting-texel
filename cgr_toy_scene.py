@@ -7,9 +7,9 @@ CGR separation-diagnostic must tell apart:
     cube. Multi-view photometric gradients at a well-fit crease *cancel* (the
     crease sits at a multi-view fixed point), so the trajectory-coherence signal
     O_i should read LOW there.
-  * UNDER-RESOLVED-THIN geometry — thin protruding fins (a few edge-lengths
-    thick). A fin that the reconstruction has not yet grown is *persistently
-    driven* in one direction, so O_i should read HIGH there.
+  * UNDER-RESOLVED-THIN geometry — thin cylindrical spokes. A spoke that the
+    reconstruction has not yet grown is *persistently driven* in one direction,
+    so O_i should read HIGH there.
 
 The generator emits a MeshSplatting-ingestible **Blender / NeRF-synthetic** scene
 (``transforms_train.json`` + ``transforms_test.json`` + RGBA PNGs), plus the GT
@@ -28,10 +28,10 @@ Face regime labels (per GT face): 0 = flat, 1 = crease, 2 = thin.
 
 Usage
 -----
-    python maclab/cgr_toy_scene.py --out data/cgr_toy --n-train 100 --n-test 20 \
+    python cgr_toy_scene.py --out data/cgr_toy --n-train 100 --n-test 20 \
         --res 400 --seed 0
     # quick local smoke test:
-    python maclab/cgr_toy_scene.py --out /tmp/cgr_toy_smoke --n-train 6 --n-test 2 \
+    python cgr_toy_scene.py --out /tmp/cgr_toy_smoke --n-train 6 --n-test 2 \
         --res 128 --seed 0 --preview
 """
 
@@ -113,14 +113,28 @@ def _box_grid(center, half, res):
 @dataclass
 class ToyMesh:
     mesh: trimesh.Trimesh
-    face_label: np.ndarray  # (F,) in {0,1,2}
+    face_label: np.ndarray          # (F,) in {0,1,2}
+    face_spoke_radius: np.ndarray   # (F,) spoke radius for thin faces, 0 elsewhere
 
 
-def build_toy_mesh(seed=0, cube_res=14, fin_res=10, crease_band=0.08):
-    """Central cube (creases) + four thin fins (thin structures).
+def _fibonacci_dirs(n):
+    """n roughly-uniform directions on the sphere (deterministic)."""
+    i = np.arange(n) + 0.5
+    phi = np.arccos(1 - 2 * i / n)
+    gold = np.pi * (1 + 5 ** 0.5)
+    theta = gold * i
+    return np.stack([np.sin(phi) * np.cos(theta),
+                     np.sin(phi) * np.sin(theta),
+                     np.cos(phi)], axis=1)
+
+
+def build_toy_mesh(seed=0, cube_res=14, fin_res=10, crease_band=0.08,
+                   n_spokes=None, spoke_r_min=0.035, spoke_r_max=0.035, spoke_len=0.7):
+    """Central cube (creases) + thin cylindrical spokes.
 
     ``crease_band`` (in world units) is how close a cube face's centroid must be
     to a cube edge to be labelled a crease; interior cube faces are ``flat``.
+    Omitting ``n_spokes`` preserves the original E9c eight-spoke geometry.
     """
     rng = np.random.default_rng(seed)
     cube_half = np.array([0.5, 0.5, 0.5])
@@ -151,37 +165,50 @@ def build_toy_mesh(seed=0, cube_res=14, fin_res=10, crease_band=0.08):
 
     # --- thin cylindrical spokes (the under-resolved-thin regime) ---------
     # 2D-thin tubes are far harder for an opaque connected mesh than a flat plate:
-    # the mesh must wrap around a small-radius cylinder, so sub-resolution spokes
-    # stay under-resolved (persistently driven) while the cube's creases resolve.
-    # Varying radius spans clearly-resolvable to near the pixel limit.
-    spoke_specs = [
-        # (base_on_cube, out_dir, length, radius)
-        ([0.5, 0.15, 0.1], [1, 0, 0], 0.7, 0.035),
-        ([0.5, -0.2, -0.15], [1, 0.15, 0], 0.7, 0.020),
-        ([-0.5, 0.1, 0.15], [-1, 0, 0.1], 0.7, 0.028),
-        ([-0.5, -0.15, -0.1], [-1, 0, 0], 0.7, 0.014),
-        ([0.1, 0.5, 0.1], [0, 1, 0], 0.7, 0.030),
-        ([-0.1, 0.5, -0.15], [0.1, 1, 0], 0.7, 0.017),
-        ([0.15, -0.5, 0.1], [0, -1, 0], 0.7, 0.024),
-        ([-0.1, -0.5, -0.1], [0, -1, 0.1], 0.7, 0.012),
-    ]
-    for (base, out_dir, length, radius) in spoke_specs:
+    # the mesh must wrap around a small-radius cylinder. With no sweep requested,
+    # preserve the original E9c geometry exactly. Otherwise spread ``n_spokes`` in
+    # roughly-uniform directions with geometrically spaced radii.
+    rad_list = []
+    if n_spokes is None:
+        spoke_specs = [
+            # (base_on_cube, out_dir, length, radius)
+            ([0.5, 0.15, 0.1], [1, 0, 0], 0.7, 0.035),
+            ([0.5, -0.2, -0.15], [1, 0.15, 0], 0.7, 0.020),
+            ([-0.5, 0.1, 0.15], [-1, 0, 0.1], 0.7, 0.028),
+            ([-0.5, -0.15, -0.1], [-1, 0, 0], 0.7, 0.014),
+            ([0.1, 0.5, 0.1], [0, 1, 0], 0.7, 0.030),
+            ([-0.1, 0.5, -0.15], [0.1, 1, 0], 0.7, 0.017),
+            ([0.15, -0.5, 0.1], [0, -1, 0], 0.7, 0.024),
+            ([-0.1, -0.5, -0.1], [0, -1, 0.1], 0.7, 0.012),
+        ]
+    else:
+        dirs = _fibonacci_dirs(n_spokes)
+        radii = (np.geomspace(spoke_r_max, spoke_r_min, n_spokes)
+                 if n_spokes > 1 else np.array([spoke_r_max]))
+        spoke_specs = []
+        for out_dir, radius in zip(dirs, radii):
+            base = out_dir / np.max(np.abs(out_dir)) * 0.5
+            spoke_specs.append((base, out_dir, spoke_len, float(radius)))
+
+    for base, out_dir, length, radius in spoke_specs:
         sv, sf = _spoke(base, out_dir, length, radius, sections=16)
         v_list.append(sv)
         f_list.append(sf + off)
         off += len(sv)
         lab_list.append(np.full(len(sf), LABEL_THIN, dtype=np.int64))
+        rad_list.append(np.full(len(sf), radius))
 
     verts = np.concatenate(v_list, 0)
     faces = np.concatenate(f_list, 0)
     face_label = np.concatenate(lab_list, 0)
+    face_radius = np.concatenate([np.zeros(len(cf))] + rad_list)
     mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
     # Weld coincident vertices so the mesh is a proper manifold with shared edges
     # across the cube faces (its sharp creases). merge_vertices preserves face order
     # and count, so the per-face labels stay aligned.
     mesh.merge_vertices()
     assert len(mesh.faces) == len(face_label), "weld must preserve face order/count"
-    return ToyMesh(mesh=mesh, face_label=face_label)
+    return ToyMesh(mesh=mesh, face_label=face_label, face_spoke_radius=face_radius)
 
 
 def _spoke(base, direction, length, radius, sections=16):
@@ -358,9 +385,11 @@ def _write_split(outdir, split, c2ws, verts, faces, albedo, fovx, H, W, lights):
 
 
 def generate(outdir, n_train=100, n_test=20, res=400, fovx_deg=45.0, seed=0,
-             radius=3.0, cube_res=14, fin_res=10, preview=False):
+             radius=3.0, cube_res=14, fin_res=10, preview=False,
+             n_spokes=None, spoke_r_min=0.035, spoke_r_max=0.035):
     os.makedirs(outdir, exist_ok=True)
-    toy = build_toy_mesh(seed=seed, cube_res=cube_res, fin_res=fin_res)
+    toy = build_toy_mesh(seed=seed, cube_res=cube_res, fin_res=fin_res,
+                         n_spokes=n_spokes, spoke_r_min=spoke_r_min, spoke_r_max=spoke_r_max)
     verts = np.asarray(toy.mesh.vertices, dtype=np.float64)
     faces = np.asarray(toy.mesh.faces, dtype=np.int64)
     albedo = face_albedo(toy.mesh, seed=seed)
@@ -378,6 +407,7 @@ def generate(outdir, n_train=100, n_test=20, res=400, fovx_deg=45.0, seed=0,
     np.savez(
         os.path.join(outdir, "gt_labels.npz"),
         face_label=toy.face_label,
+        face_spoke_radius=toy.face_spoke_radius,
         face_centroid=toy.mesh.triangles.mean(axis=1),
         face_normal=np.asarray(toy.mesh.face_normals),
         vertices=verts,
@@ -411,6 +441,12 @@ def main():
     ap.add_argument("--radius", type=float, default=3.0)
     ap.add_argument("--cube-res", type=int, default=14)
     ap.add_argument("--fin-res", type=int, default=10)
+    ap.add_argument("--n-spokes", type=int, default=None,
+                    help="enable a Fibonacci thickness sweep with this many spokes; "
+                         "omitted preserves the original E9c geometry")
+    ap.add_argument("--spoke-r-min", type=float, default=0.035,
+                    help="thinnest spoke radius (thickness sweep goes r-max -> r-min)")
+    ap.add_argument("--spoke-r-max", type=float, default=0.035, help="thickest spoke radius")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--preview", action="store_true")
     args = ap.parse_args()
@@ -418,6 +454,7 @@ def main():
         args.out, n_train=args.n_train, n_test=args.n_test, res=args.res,
         fovx_deg=args.fovx_deg, seed=args.seed, radius=args.radius,
         cube_res=args.cube_res, fin_res=args.fin_res, preview=args.preview,
+        n_spokes=args.n_spokes, spoke_r_min=args.spoke_r_min, spoke_r_max=args.spoke_r_max,
     )
 
 
