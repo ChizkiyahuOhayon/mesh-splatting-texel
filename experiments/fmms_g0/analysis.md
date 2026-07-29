@@ -29,3 +29,39 @@ Interpretation:
 
 Next experiment: the preregistered exploratory renderer ladder in
 `renderer_ladder_protocol.md`.
+
+## Garden renderer ladder 01 — 2026-07-30
+
+Classification: **EXPLORATORY MECHANISM DIAGNOSTIC** (one held-out view and one
+timing repetition). The protocol in `renderer_ladder_protocol.md` was committed
+before this output was observed.
+
+| Variant | PSNR | SSIM | LPIPS-VGG | ΔPSNR vs SSAA4 | Time | Peak increment |
+|---|---:|---:|---:|---:|---:|---:|
+| splat1 | 19.923 | 0.5880 | 0.3493 | −1.571 | 33.5 ms | 2.13 GB |
+| splat2 | 21.285 | 0.6879 | 0.2804 | −0.209 | 46.9 ms | 2.77 GB |
+| ssaa4 | 21.494 | 0.7051 | 0.2705 | — | 67.7 ms | 4.75 GB |
+| point1 | 19.935 | 0.5467 | 0.3689 | −1.559 | 52.8 ms | 1.30 GB |
+| aa1 | 20.427 | 0.5763 | 0.3566 | −1.067 | 50.7 ms | 1.30 GB |
+| aa2 | 20.882 | 0.6215 | 0.3275 | −0.612 | 92.8 ms | 1.30 GB |
+| aa4 | 20.958 | 0.6304 | 0.3254 | −0.536 | 209.8 ms | 2.43 GB |
+
+Precommitted decision: **renderer-semantic mismatch; stop FMMS native-AA
+replacement and do not run G1 in its current form.** AA4 remains 0.536 dB and
+0.0549 LPIPS behind SSAA4, exceeding both locked mismatch thresholds (0.20 dB and
+0.01 LPIPS). Increasing the hard renderer from AA2 to AA4 recovers only 0.076 dB
+while making it 2.26x slower. AA4 is 3.10x slower than SSAA4.
+
+The same-renderer ladder also prevents an over-broad conclusion: sampling still
+matters inside the MeshSplatting compositor. Splat2 recovers 1.362 dB over splat1,
+and SSAA4 adds a further 0.209 dB. What is rejected is replacing that compositor
+with the current opaque hard z-buffer plus coverage AA—not the general value of
+footprint filtering.
+
+Consequences:
+
+1. Do not spend the three-scene budget on confirmatory G0: no hard-renderer variant
+   from the mechanism ladder is close enough to make a pass plausible.
+2. Retain the original MeshSplatting compositor for the next quality-led study.
+3. Test the independent appearance-bandwidth hypothesis with a frozen-checkpoint,
+   deterministic screen-footprint filter before implementing a learned hierarchy.
