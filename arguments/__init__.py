@@ -76,6 +76,7 @@ class PipelineParams(ParamGroup):
         self.compute_cov3D_python = False
         self.depth_ratio = 1.0
         self.debug = False
+        self.texel_footprint_filter = False
         super().__init__(parser, "Pipeline Parameters")
 
 class OptimizationParams(ParamGroup):
@@ -222,4 +223,3 @@ def update_indoor(params):
     params.depth_lambda_final = 0.0
     params.iteration_mesh = 12000
     return params
-

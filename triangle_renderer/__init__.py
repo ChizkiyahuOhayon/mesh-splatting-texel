@@ -24,6 +24,7 @@ from diff_triangle_rasterization import TriangleRasterizationSettings, TriangleR
 from scene.triangle_model import TriangleModel
 from utils.sh_utils import eval_sh
 from utils.point_utils import depth_to_normal
+from svsr_footprint import filter_texel_detail, projected_texel_weights
 import torch.nn.functional as F
 
 def normals_world_to_view(view, normal_world):
@@ -168,6 +169,8 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     # alongside the C++ TORCH_CHECK: this guard is active immediately, without rebuilding
     # the CUDA extension, and catches a face/texel desync before it reaches the kernel).
     texels = pc.get_texels if hasattr(pc, "get_texels") else None
+    texel_footprint_weights = None
+    image_2D_pytorch = None
     if texels is not None:
         order = getattr(pc, "texel_order", 0)
         # NB: do NOT name this `F` -- the module imports torch.nn.functional as F, and a
@@ -178,6 +181,12 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
             raise ValueError(
                 f"texels shape {tuple(texels.shape)} inconsistent with {n_faces} faces / "
                 f"order {order} (expected [{n_faces}, {order*order}, 3])")
+        if getattr(pipe, "texel_footprint_filter", False):
+            image_2D_pytorch = compute_image_2d_pytorch_exact(
+                vertices, viewpoint_camera.full_proj_transform, W_init, H_init)
+            texel_footprint_weights = projected_texel_weights(
+                image_2D_pytorch, triangles_indices, order).detach()
+            texels = filter_texel_detail(texels, texel_footprint_weights)
 
     # Rasterize visible triangles to image, obtain their radii (on screen).
     rendered_image, radii, scaling, allmap, max_blending, was_rendered  = rasterizer(
@@ -206,7 +215,9 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
 
     vertices_cam = transform_point_4x3(vertices, viewpoint_camera.world_view_transform,)  # (V, 3)
     vertex_depths_pytorch =vertices_cam[:, 2]  # (V,)
-    image_2D_pytorch = compute_image_2d_pytorch_exact(vertices, viewpoint_camera.full_proj_transform, W_init, H_init)
+    if image_2D_pytorch is None:
+        image_2D_pytorch = compute_image_2d_pytorch_exact(
+            vertices, viewpoint_camera.full_proj_transform, W_init, H_init)
     
     rets =  {"render": rendered_image_small,
             "visibility_filter" : radii > 0,
@@ -218,7 +229,8 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
             "vertex_rendered": vertex_rendered,
             "full_image": rendered_image,
             "render_normal_full": allmap[2:5],
-            "triangle_was_rendered": was_rendered
+            "triangle_was_rendered": was_rendered,
+            "texel_footprint_weights": texel_footprint_weights
             }
 
     # additional regularizations
@@ -272,9 +284,3 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     })
 
     return rets
-
-
-
-
-
- 
