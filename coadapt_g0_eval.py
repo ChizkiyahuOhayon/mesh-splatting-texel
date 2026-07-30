@@ -50,8 +50,8 @@ def run(dataset, pipeline, args):
         sh_views = sh_views[:args.coadapt_max_views]
 
     manifest = {
-        "protocol": "experiments/coadapt_g0/protocol.md",
-        "scene": "room",
+        "protocol": args.coadapt_protocol,
+        "scene": args.coadapt_scene,
         "dataset_path": str(Path(dataset.source_path).resolve()),
         "sh_model": str(Path(args.coadapt_sh_model).resolve()),
         "sh_iteration": sh_iteration,
@@ -130,7 +130,7 @@ def run(dataset, pipeline, args):
         for name in ("zero", "face_mean")
     }
     results = {
-        "scene": "room",
+        "scene": args.coadapt_scene,
         "summary": summary,
         "recovery_fraction": recovery,
         "gate_applicable": all(value is not None for value in recovery["zero"].values()),
@@ -148,6 +148,8 @@ if __name__ == "__main__":
     pipeline = PipelineParams(parser)
     parser.add_argument("--iteration", default=-1, type=int)
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--coadapt_scene", default="room", choices=("garden", "room"))
+    parser.add_argument("--coadapt_protocol", default="experiments/coadapt_g0/protocol.md")
     parser.add_argument("--coadapt_sh_model", required=True)
     parser.add_argument("--coadapt_sh_iteration", default=-1, type=int)
     parser.add_argument("--coadapt_output", required=True)
