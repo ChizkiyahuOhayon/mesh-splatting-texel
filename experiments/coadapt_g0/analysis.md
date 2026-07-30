@@ -58,3 +58,44 @@ checkpoint, metric, or decision threshold changed.
 
 Server result directory:
 `/home/smbu/dy/nas/meshsplatting_smbu/experiments/coadapt_g0_room_smoke_02/`
+
+---
+
+# COADAPT-G0 Room full 01
+
+## Classification
+
+**CONFIRMATORY FULL GATE**, 39 held-out views, source revision `b6ca8ae`.
+
+| Variant | PSNR | SSIM | LPIPS-VGG |
+|---|---:|---:|---:|
+| SH reference | 28.5142 | 0.8916 | 0.2431 |
+| Fixed texel | 28.2880 | 0.8845 | 0.2578 |
+| Zero texel | 26.2808 | 0.7708 | 0.3793 |
+| Face mean | 25.9048 | 0.7279 | 0.4247 |
+
+The unchanged fixed checkpoint regresses by 0.2261 dB and 0.01466 LPIPS versus
+the independently trained SH reference. Within the *same* texel checkpoint,
+however, removing the carrier loses another 2.0072 dB and worsens LPIPS by 0.12155.
+Keeping only the per-face mean is worse still: it trails `fixed` by 2.3832 dB and
+0.16697 LPIPS.
+
+The zero-carrier recovery fractions are **−887.6% PSNR** and **−829.1% LPIPS**.
+Both are far below the preregistered 25% threshold.
+
+## Locked decision
+
+**PATH CO-ADAPTATION SUPPORTED.** The learned carrier strongly compensates a base
+that diverged during joint optimization; the cross-run fixed-versus-SH regression
+cannot be attributed to the carrier alone. The per-face DC component is not the
+useful part on Room—the within-face residual reverses a large DC/base deficit.
+
+Proceed to exactly one frozen-base residual training gate. Initialize order-2
+texels at zero on the final SH checkpoint, freeze geometry/topology/opacity/SH,
+and optimize only the carrier with one fixed schedule. Do not tune SVSR, revive
+Stump, or change the renderer.
+
+## Raw material
+
+Server result directory:
+`/home/smbu/dy/nas/meshsplatting_smbu/experiments/coadapt_g0_room_full_01/`

@@ -1,0 +1,40 @@
+{
+  "classification": "confirmatory_full_gate",
+  "scene": "room",
+  "views": 39,
+  "source_revision": "b6ca8ae0dfd33854ca299be08af1f09e54ffa72b",
+  "summary": {
+    "sh_reference": {
+      "psnr": 28.5141538473276,
+      "ssim": 0.8916310224777613,
+      "lpips_vgg": 0.24310828286867875
+    },
+    "fixed": {
+      "psnr": 28.28801370278383,
+      "ssim": 0.884519419608972,
+      "lpips_vgg": 0.25776935693545217
+    },
+    "zero": {
+      "psnr": 26.280849994757236,
+      "ssim": 0.7707849817398267,
+      "lpips_vgg": 0.3793220573510879
+    },
+    "face_mean": {
+      "psnr": 25.90484355046199,
+      "ssim": 0.7279262634424063,
+      "lpips_vgg": 0.42474183440208435
+    }
+  },
+  "recovery_fraction": {
+    "zero": {
+      "psnr": -8.875751415459549,
+      "lpips_vgg": -8.29084553164575
+    },
+    "face_mean": {
+      "psnr": -10.538465680783057,
+      "lpips_vgg": -11.388829816025833
+    }
+  },
+  "gate_applicable": true,
+  "decision": "PATH_CO_ADAPTATION_SUPPORTED"
+}
