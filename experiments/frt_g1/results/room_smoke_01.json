@@ -1,0 +1,29 @@
+{
+  "classification": "implementation_smoke",
+  "scene": "room",
+  "source_revision": "8dd6b427002925a78381fe49eb7fd7f61b52b81b",
+  "updates": 2,
+  "texel_order": 2,
+  "texel_parameters": 77499480,
+  "zero_init_max_abs": 0.0,
+  "base_tensors_unchanged": true,
+  "optimizer_parameter_groups": [
+    "texels"
+  ],
+  "elapsed_seconds_including_save_and_hash": 220.78774208796676,
+  "peak_allocated_bytes": 14505686016,
+  "checkpoint_sha256": "1be2154a3ed5b30bb6c0719622f3e23caf7be29351e0952af9ce4cf09d899932",
+  "loss_trace": [
+    {
+      "step": 1,
+      "loss": 0.026578199118375778,
+      "l1": 0.016052452847361565
+    },
+    {
+      "step": 2,
+      "loss": 0.030125876888632774,
+      "l1": 0.01809326931834221
+    }
+  ],
+  "decision": "IMPLEMENTATION_VALID"
+}
