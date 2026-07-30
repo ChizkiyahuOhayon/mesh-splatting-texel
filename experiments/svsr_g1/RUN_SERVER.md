@@ -11,13 +11,15 @@ GARDEN_SH=/home/smbu/dy/mesh-splatting/output/mipnerf360/garden
 GARDEN_TEXEL=/home/smbu/dy/mesh-splatting-texel/output/main/garden_texel2
 NAS_ROOT=/home/smbu/dy/nas/meshsplatting_smbu
 WORKTREE="$NAS_ROOT/code/mesh-splatting-texel-v10"
-SVSR_OUT="$NAS_ROOT/experiments/svsr_g1_garden_smoke_01"
+SVSR_OUT="$NAS_ROOT/experiments/svsr_g1_garden_smoke_02"
 
 mkdir -p "$NAS_ROOT/code" "$NAS_ROOT/tmp" "$NAS_ROOT/torch_extensions" "$NAS_ROOT/experiments"
-test ! -e "$WORKTREE" && \
-  git clone -b main git@github.com:ChizkiyahuOhayon/mesh-splatting-texel.git "$WORKTREE"
 cd "$WORKTREE"
-git rev-parse --short HEAD
+
+SVSR_SOURCE_REVISION=$(git ls-remote \
+  git@github.com:ChizkiyahuOhayon/mesh-splatting-texel.git \
+  refs/heads/main | cut -f1)
+test -n "$SVSR_SOURCE_REVISION" && echo "source revision: $SVSR_SOURCE_REVISION"
 
 test -d "$GARDEN_DATA/images" && echo "dataset OK"
 test -f "$GARDEN_SH/cfg_args" && echo "SH model OK"
@@ -31,6 +33,7 @@ TMP="$NAS_ROOT/tmp" \
 TEMP="$NAS_ROOT/tmp" \
 TORCH_EXTENSIONS_DIR="$NAS_ROOT/torch_extensions" \
 PYTHONDONTWRITEBYTECODE=1 \
+SVSR_SOURCE_REVISION="$SVSR_SOURCE_REVISION" \
 CUDA_VISIBLE_DEVICES=0 \
 python svsr_g1_eval.py \
   -s "$GARDEN_DATA" \

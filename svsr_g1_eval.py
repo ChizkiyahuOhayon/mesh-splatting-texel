@@ -5,7 +5,6 @@ import hashlib
 import json
 from pathlib import Path
 import statistics
-import subprocess
 
 import torch
 import torchvision
@@ -15,6 +14,7 @@ from arguments import ModelParams, PipelineParams, get_combined_args
 from lpipsPyTorch.modules.lpips import LPIPS
 from scene import Scene
 from scene.triangle_model import TriangleModel
+from svsr_metadata import source_revision
 from triangle_renderer import render
 from utils.general_utils import safe_state
 from utils.image_utils import psnr
@@ -117,8 +117,7 @@ def run(dataset, pipeline, args):
         "filter": "mean + clamp(projected_area / texel_count, 0, 1) * detail",
         "max_views": args.svsr_max_views,
         "confirmatory_settings": args.svsr_max_views == 0,
-        "git_commit": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True).strip(),
+        "git_commit": source_revision(),
         "gpu": torch.cuda.get_device_name(torch.cuda.current_device()),
         "torch": torch.__version__,
     }
