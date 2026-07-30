@@ -1,0 +1,37 @@
+{
+  "classification": "exploratory",
+  "scene": "garden",
+  "max_views": 1,
+  "view": "DSC07956",
+  "summary": {
+    "sh": {
+      "psnr": 21.4940242767334,
+      "ssim": 0.705058753490448,
+      "lpips_vgg": 0.2704774737358093
+    },
+    "fixed": {
+      "psnr": 21.60397720336914,
+      "ssim": 0.7307366728782654,
+      "lpips_vgg": 0.229971244931221
+    },
+    "footprint": {
+      "psnr": 21.610315322875977,
+      "ssim": 0.7299844622612,
+      "lpips_vgg": 0.230542853474617,
+      "delta_vs_fixed": {
+        "psnr": 0.0063381195068359375,
+        "ssim": -0.0007522106170654297,
+        "lpips_vgg": 0.0005716085433959961
+      }
+    }
+  },
+  "footprint_statistics": {
+    "rendered_faces": 1364470,
+    "q10": 0.3933955729007721,
+    "q50": 1.0,
+    "q90": 1.0,
+    "fraction_full_detail": 0.6219403743743896,
+    "fraction_partial_detail": 0.37805959582328796,
+    "fraction_zero_detail": 0.0
+  }
+}
