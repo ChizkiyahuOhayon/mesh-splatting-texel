@@ -21,3 +21,11 @@ def recovery_fraction(reference, fixed, candidate, higher_is_better):
         raise ValueError("the fixed variant must regress relative to the reference")
     recovered = candidate - fixed if higher_is_better else fixed - candidate
     return recovered / regression
+
+
+def recovery_fraction_or_none(reference, fixed, candidate, higher_is_better):
+    """Return no recovery value when the fixed variant did not regress."""
+    try:
+        return recovery_fraction(reference, fixed, candidate, higher_is_better)
+    except ValueError:
+        return None

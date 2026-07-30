@@ -2,7 +2,11 @@ import unittest
 
 import torch
 
-from coadapt_decompose import recovery_fraction, texel_variants
+from coadapt_decompose import (
+    recovery_fraction,
+    recovery_fraction_or_none,
+    texel_variants,
+)
 
 
 class TexelVariantsTest(unittest.TestCase):
@@ -20,6 +24,9 @@ class TexelVariantsTest(unittest.TestCase):
     def test_recovery_requires_a_regression(self):
         with self.assertRaises(ValueError):
             recovery_fraction(8.0, 10.0, 9.0, True)
+
+    def test_optional_recovery_marks_non_regression_not_applicable(self):
+        self.assertIsNone(recovery_fraction_or_none(8.0, 10.0, 9.0, True))
 
 
 if __name__ == "__main__":

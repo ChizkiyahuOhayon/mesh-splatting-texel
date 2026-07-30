@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 
 from arguments import ModelParams, PipelineParams, get_combined_args
-from coadapt_decompose import recovery_fraction, texel_variants
+from coadapt_decompose import recovery_fraction_or_none, texel_variants
 from lpipsPyTorch.modules.lpips import LPIPS
 from scene import Scene
 from scene.triangle_model import TriangleModel
@@ -120,10 +120,10 @@ def run(dataset, pipeline, args):
     summary = {name: _summarize(rows, name) for name in names}
     recovery = {
         name: {
-            "psnr": recovery_fraction(
+            "psnr": recovery_fraction_or_none(
                 summary["sh_reference"]["psnr"], summary["fixed"]["psnr"],
                 summary[name]["psnr"], True),
-            "lpips_vgg": recovery_fraction(
+            "lpips_vgg": recovery_fraction_or_none(
                 summary["sh_reference"]["lpips_vgg"], summary["fixed"]["lpips_vgg"],
                 summary[name]["lpips_vgg"], False),
         }
@@ -133,6 +133,7 @@ def run(dataset, pipeline, args):
         "scene": "room",
         "summary": summary,
         "recovery_fraction": recovery,
+        "gate_applicable": all(value is not None for value in recovery["zero"].values()),
         "per_view": rows,
     }
     with open(output_root / "results.json", "w", encoding="utf-8") as handle:
