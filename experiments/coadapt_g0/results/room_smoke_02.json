@@ -1,0 +1,39 @@
+{
+  "classification": "exploratory_implementation_smoke",
+  "scene": "room",
+  "max_views": 1,
+  "source_revision": "b6ca8ae0dfd33854ca299be08af1f09e54ffa72b",
+  "summary": {
+    "sh_reference": {
+      "psnr": 28.394556045532227,
+      "ssim": 0.8570638298988342,
+      "lpips_vgg": 0.23318684101104736
+    },
+    "fixed": {
+      "psnr": 28.28247833251953,
+      "ssim": 0.8622365593910217,
+      "lpips_vgg": 0.2296830713748932
+    },
+    "zero": {
+      "psnr": 26.079689025878906,
+      "ssim": 0.7170310020446777,
+      "lpips_vgg": 0.36185941100120544
+    },
+    "face_mean": {
+      "psnr": 26.120647430419922,
+      "ssim": 0.7081784605979919,
+      "lpips_vgg": 0.3938189148902893
+    }
+  },
+  "recovery_fraction": {
+    "zero": {
+      "psnr": -19.65412433416722,
+      "lpips_vgg": null
+    },
+    "face_mean": {
+      "psnr": -19.288677864570037,
+      "lpips_vgg": null
+    }
+  },
+  "gate_applicable": false
+}
