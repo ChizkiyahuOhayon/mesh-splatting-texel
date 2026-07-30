@@ -8,7 +8,7 @@ from the same revision. Mixing the earlier `a73c0f4` metadata with the COADAPT
 evaluator fails because that metadata predates `reserve_output_directory`.
 
 ```bash
-SOURCE_REVISION=604e66244942184669e59f5c714bd269088f5302
+SOURCE_REVISION=b6ca8ae0dfd33854ca299be08af1f09e54ffa72b
 BASE_URL="https://raw.githubusercontent.com/ChizkiyahuOhayon/mesh-splatting-texel/$SOURCE_REVISION"
 
 curl -fL "$BASE_URL/coadapt_decompose.py" -o coadapt_decompose.py
@@ -51,6 +51,10 @@ python coadapt_g0_eval.py \
 
 After the smoke completes without an exception, use a fresh path and omit the
 smoke-only flag:
+
+Recovery fractions may be `null` and `gate_applicable` may be false for a one-view
+smoke when that particular view does not exhibit the full-set regression. This is
+expected: smoke validates execution only, while the locked decision uses all views.
 
 ```bash
 COADAPT_FULL="$NAS_ROOT/experiments/coadapt_g0_room_full_01"
