@@ -1,0 +1,11 @@
+{
+  "verdict": "FAIL",
+  "classification": "confirmatory_early_stop",
+  "trigger_scene": "room",
+  "trigger": "psnr_recovery_fraction_below_0.25",
+  "room_psnr_recovery_fraction": -0.012094231326522605,
+  "room_lpips_no_regression": false,
+  "garden_positive_control_passed": true,
+  "stump_status": "not_run_due_to_precommitted_early_stop",
+  "decision": "retire SVSR test-time footprint explanation and start exact DETRIS K=0/K=3 reproduction"
+}

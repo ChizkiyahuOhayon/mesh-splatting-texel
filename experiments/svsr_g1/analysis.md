@@ -51,3 +51,27 @@ Garden therefore **passes its preregistered positive-control condition**. The sm
 mixed footprint-versus-fixed deltas are not claimed as a new quality improvement.
 Proceed unchanged to full Room and Stump; do not tune on Garden.
 
+## Room full 01 — 2026-07-30
+
+Classification: **CONFIRMATORY NEGATIVE CONTROL** (39 held-out views).
+
+| Variant | PSNR | SSIM | LPIPS-VGG | ΔPSNR vs fixed | ΔLPIPS vs fixed |
+|---|---:|---:|---:|---:|---:|
+| SH | 28.5142 | 0.8916 | 0.2431 | +0.2261 | −0.0147 |
+| fixed | 28.2880 | 0.8845 | 0.2578 | — | — |
+| footprint | 28.2853 | 0.8843 | 0.2581 | −0.0027 | +0.0004 |
+
+Fixed texels reproduce the expected Room regression: −0.2261 dB PSNR,
+−0.00711 SSIM, and +0.01466 LPIPS versus SH. Footprint filtering recovers
+**−1.21%** of the PSNR regression—it slightly worsens the result—and also worsens
+LPIPS by 0.00036 versus fixed.
+
+Precommitted decision: **SVSR-G1 FAIL**. The protocol requires immediate failure if
+either negative control recovers less than 25%; Room is far below that threshold and
+also violates the LPIPS condition. Stump is not run because it cannot change the
+locked verdict. Do not tune the footprint function or implement G2.
+
+What this rules out: test-time attenuation of subpixel within-face detail is not the
+main cause of the fixed-texel cross-scene regression. The separately trained texel
+checkpoint may instead have DC appearance, geometry, or optimization co-adaptation,
+but diagnosing those post hoc is outside this stopped branch.

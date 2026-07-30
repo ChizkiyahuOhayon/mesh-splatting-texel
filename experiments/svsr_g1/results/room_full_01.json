@@ -1,0 +1,33 @@
+{
+  "classification": "confirmatory_negative_control",
+  "scene": "room",
+  "views": 39,
+  "source_revision": "a73c0f4de70ad8d05ae56527f7f857d24737063f",
+  "summary": {
+    "sh": {
+      "psnr": 28.5141538473276,
+      "ssim": 0.8916310224777613,
+      "lpips_vgg": 0.24310828286867875
+    },
+    "fixed": {
+      "psnr": 28.28801370278383,
+      "ssim": 0.884519419608972,
+      "lpips_vgg": 0.25776935693545217
+    },
+    "footprint": {
+      "psnr": 28.285278711563503,
+      "ssim": 0.8843071827521691,
+      "lpips_vgg": 0.25813180169998073,
+      "delta_vs_fixed": {
+        "psnr": -0.002734991220325611,
+        "ssim": -0.00021223685680282767,
+        "lpips_vgg": 0.0003624447645285689
+      }
+    }
+  },
+  "locked_diagnostics": {
+    "fixed_psnr_regression_vs_sh": 0.22614014454376985,
+    "psnr_recovery_fraction": -0.012094231326522605,
+    "footprint_lpips_no_regression": false
+  }
+}
