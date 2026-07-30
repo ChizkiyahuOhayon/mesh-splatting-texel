@@ -14,7 +14,7 @@ from arguments import ModelParams, PipelineParams, get_combined_args
 from lpipsPyTorch.modules.lpips import LPIPS
 from scene import Scene
 from scene.triangle_model import TriangleModel
-from svsr_metadata import source_revision
+from svsr_metadata import reserve_output_directory, source_revision
 from triangle_renderer import render
 from utils.general_utils import safe_state
 from utils.image_utils import psnr
@@ -83,9 +83,7 @@ def _save(image, output_root, variant, index):
 
 
 def run(dataset, pipeline, args):
-    output_root = Path(args.svsr_output).resolve()
-    if output_root.exists():
-        raise RuntimeError(f"SVSR output path must not exist: {output_root}")
+    output_root = reserve_output_directory(Path(args.svsr_output).resolve())
 
     texel_iteration, texel_checkpoint = _checkpoint(dataset.model_path, args.iteration)
     sh_iteration, sh_checkpoint = _checkpoint(args.svsr_sh_model, args.svsr_sh_iteration)
@@ -99,7 +97,6 @@ def run(dataset, pipeline, args):
     if args.svsr_max_views > 0:
         sh_views = sh_views[:args.svsr_max_views]
 
-    output_root.mkdir(parents=True)
     manifest = {
         "protocol": "experiments/svsr_g1/protocol.md",
         "scene": args.svsr_scene,

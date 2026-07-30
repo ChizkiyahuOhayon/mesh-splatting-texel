@@ -1,6 +1,7 @@
 """Source provenance for Git checkouts and archive deployments."""
 
 import os
+from pathlib import Path
 import subprocess
 
 
@@ -20,3 +21,11 @@ def source_revision():
             "SVSR_SOURCE_REVISION to the downloaded GitHub revision."
         ) from error
 
+
+def reserve_output_directory(path):
+    path = Path(path)
+    try:
+        path.mkdir(parents=True)
+    except FileExistsError as error:
+        raise RuntimeError(f"SVSR output path must not exist: {path}") from error
+    return path

@@ -1,9 +1,11 @@
 import os
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from svsr_metadata import source_revision
+from svsr_metadata import reserve_output_directory, source_revision
 
 
 class SourceRevisionTest(unittest.TestCase):
@@ -18,6 +20,14 @@ class SourceRevisionTest(unittest.TestCase):
             with patch("subprocess.check_output", side_effect=subprocess.CalledProcessError(128, "git")):
                 with self.assertRaisesRegex(RuntimeError, "SVSR_SOURCE_REVISION"):
                     source_revision()
+
+    def test_output_directory_is_reserved_atomically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "result"
+            self.assertEqual(reserve_output_directory(output), output)
+            self.assertTrue(output.is_dir())
+            with self.assertRaisesRegex(RuntimeError, "must not exist"):
+                reserve_output_directory(output)
 
 
 if __name__ == "__main__":
