@@ -1,0 +1,32 @@
+{
+  "classification": "confirmatory_positive_control",
+  "scene": "garden",
+  "max_views": 0,
+  "summary": {
+    "sh": {
+      "psnr": 24.69506851832072,
+      "ssim": 0.7480803777774175,
+      "lpips_vgg": 0.2489771917462349
+    },
+    "fixed": {
+      "psnr": 25.02104163169861,
+      "ssim": 0.7738593419392904,
+      "lpips_vgg": 0.20836383228500685
+    },
+    "footprint": {
+      "psnr": 25.024206161499023,
+      "ssim": 0.7731824591755867,
+      "lpips_vgg": 0.20887584115068117,
+      "delta_vs_fixed": {
+        "psnr": 0.003164529800415039,
+        "ssim": -0.0006768827637037012,
+        "lpips_vgg": 0.0005120088656743182
+      }
+    }
+  },
+  "locked_retention": {
+    "psnr": 1.009707947283206,
+    "ssim": 0.9737428253729135,
+    "lpips_vgg": 0.9873930925078209
+  }
+}

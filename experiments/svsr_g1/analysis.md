@@ -31,3 +31,23 @@ Sanity and preregistered positive-control interpretation:
 Decision: **continue unchanged to full-test Garden**. Do not tune the footprint
 formula. Room and Stump remain the decisive negative controls for the mechanism.
 
+## Garden full 01 — 2026-07-30
+
+Classification: **CONFIRMATORY POSITIVE-CONTROL COMPONENT** (`svsr_max_views=0`).
+This resolves the Garden condition but cannot decide G1 without Room and Stump.
+
+| Variant | PSNR | SSIM | LPIPS-VGG | ΔPSNR vs fixed | ΔLPIPS vs fixed |
+|---|---:|---:|---:|---:|---:|
+| SH | 24.6951 | 0.7481 | 0.2490 | −0.3260 | +0.0406 |
+| fixed | 25.0210 | 0.7739 | 0.2084 | — | — |
+| footprint | 25.0242 | 0.7732 | 0.2089 | +0.0032 | +0.0005 |
+
+Relative to SH, fixed texels gain 0.3260 dB and reduce LPIPS by 0.04061. The
+footprint variant gains 0.3291 dB and reduces LPIPS by 0.04010, retaining **101.0%**
+of the PSNR gain and **98.7%** of the LPIPS gain. It also retains 97.4% of the SSIM
+gain. These exceed the locked 70% Garden thresholds.
+
+Garden therefore **passes its preregistered positive-control condition**. The small
+mixed footprint-versus-fixed deltas are not claimed as a new quality improvement.
+Proceed unchanged to full Room and Stump; do not tune on Garden.
+
