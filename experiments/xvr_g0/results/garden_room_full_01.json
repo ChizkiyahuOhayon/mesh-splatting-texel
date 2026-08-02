@@ -1,0 +1,53 @@
+{
+  "classification": "confirmatory_two_scene_gate",
+  "date": "2026-08-03",
+  "true_source_revision": "95c33c5e66fadffc87af1d3cfa6d64caa890b889",
+  "recorded_source_revision": "95c33c5f",
+  "runtime_sha256": {
+    "xvr_g0_eval.py": "00536449dd30bdfc1d9b0ae9b0ffefba804e69b629cf64a84246d1363df5268d",
+    "xvr_score.py": "f72feea1feb5f4e77c3766012d9cc3bae9cc942a2fd1417f13704e87d54751e4",
+    "svsr_metadata.py": "4f9db5630758a2b0757aca93f6f0fa80aebf5466778904ddefc9a2d9d6fb512d"
+  },
+  "provenance_status": "verified_runtime_content_with_metadata_only_revision_typo",
+  "garden": {
+    "train_views": 16,
+    "test_views": 24,
+    "eligible_faces": 1003391,
+    "primary_top_10pct": {
+      "capture": 0.38689401745796204,
+      "lift": 3.8689054721064577
+    },
+    "raw_capture": 0.41950252652168274,
+    "best_non_residual_capture": 0.40009182691574097,
+    "primary_vs_raw_relative": -0.07773137705294674,
+    "primary_vs_best_non_residual_relative": -0.032986950919540736,
+    "checks": {
+      "eligible_faces_at_least_10000": true,
+      "capture_lift_at_least_1_75x": true,
+      "beats_best_non_residual_by_10pct": false,
+      "within_5pct_of_raw_residual": false
+    },
+    "pass": false
+  },
+  "room": {
+    "train_views": 16,
+    "test_views": 39,
+    "eligible_faces": 680688,
+    "primary_top_10pct": {
+      "capture": 0.4287456274032593,
+      "lift": 4.287443676649719
+    },
+    "raw_capture": 0.4535071849822998,
+    "best_non_residual_capture": 0.4297288954257965,
+    "primary_vs_raw_relative": -0.05460014394260804,
+    "primary_vs_best_non_residual_relative": -0.0022881124192567492,
+    "checks": {
+      "eligible_faces_at_least_10000": true,
+      "capture_lift_at_least_1_75x": true,
+      "beats_best_non_residual_by_10pct": false,
+      "within_5pct_of_raw_residual": false
+    },
+    "pass": false
+  },
+  "decision": "XVR_G0_FAIL"
+}
