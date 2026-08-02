@@ -1,0 +1,43 @@
+{
+  "classification": "implementation_smoke",
+  "date": "2026-08-03",
+  "source_revision": "7d80535d4915dbf261cce0867f3a5222d27fe2f9",
+  "scene": "garden",
+  "train_views": 2,
+  "test_views": 1,
+  "confirmatory": false,
+  "face_count": 6968004,
+  "eligible_faces": 90805,
+  "top_10pct": {
+    "persistent_error_mass": {
+      "capture": 0.3772623538970947,
+      "lift": 3.77241581826073
+    },
+    "raw_error_mass": {
+      "capture": 0.3845778703689575,
+      "lift": 3.845566955054861
+    },
+    "max_blending": {
+      "capture": 0.17793972790241241,
+      "lift": 1.7792993053825086
+    },
+    "projected_coverage": {
+      "capture": 0.3573996126651764,
+      "lift": 3.5737993423699312
+    },
+    "world_area": {
+      "capture": 0.2579690217971802,
+      "lift": 2.5795481801886297
+    }
+  },
+  "relative_primary_deltas": {
+    "vs_raw_error_mass": -0.019022198195763118,
+    "vs_max_blending": 1.1201693311793584,
+    "vs_projected_coverage": 0.0555757212040584,
+    "vs_world_area": 0.4624327807611919
+  },
+  "decision": {
+    "pass": null,
+    "reason": "exploratory settings; no gate decision"
+  }
+}
