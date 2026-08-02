@@ -1,0 +1,67 @@
+{
+  "classification": "confirmatory_two_scene_gate",
+  "date": "2026-08-02",
+  "source_revision": "8dd6b427002925a78381fe49eb7fd7f61b52b81b",
+  "garden": {
+    "summary": {
+      "sh_reference": {
+        "psnr": 24.737198909123737,
+        "ssim": 0.7484429801503817,
+        "lpips_vgg": 0.24798371704916158
+      },
+      "fixed": {
+        "psnr": 24.97069541613261,
+        "ssim": 0.7651634539167086,
+        "lpips_vgg": 0.21380308580895266
+      },
+      "zero": {
+        "psnr": 24.737198909123737,
+        "ssim": 0.7484429801503817,
+        "lpips_vgg": 0.24798371704916158
+      },
+      "face_mean": {
+        "psnr": 24.044350147247314,
+        "ssim": 0.6927136555314064,
+        "lpips_vgg": 0.28429719681541127
+      }
+    },
+    "delta_fixed_vs_sh": {
+      "psnr": 0.2334965070088728,
+      "ssim": 0.016720473766326904,
+      "lpips_vgg": -0.034180631240208925
+    },
+    "condition": "PASS"
+  },
+  "room": {
+    "summary": {
+      "sh_reference": {
+        "psnr": 28.5141538473276,
+        "ssim": 0.8916310224777613,
+        "lpips_vgg": 0.24310828286867875
+      },
+      "fixed": {
+        "psnr": 28.494821352836414,
+        "ssim": 0.8791084686915079,
+        "lpips_vgg": 0.25444984397827053
+      },
+      "zero": {
+        "psnr": 28.5141538473276,
+        "ssim": 0.8916310224777613,
+        "lpips_vgg": 0.24310828286867875
+      },
+      "face_mean": {
+        "psnr": 28.01422671782665,
+        "ssim": 0.8505134215721717,
+        "lpips_vgg": 0.315288306810917
+      }
+    },
+    "delta_fixed_vs_sh": {
+      "psnr": -0.01933249449118435,
+      "ssim": -0.012522553786253332,
+      "lpips_vgg": 0.01134156110959178
+    },
+    "condition": "IMMEDIATE_FAIL_LPIPS"
+  },
+  "zero_reference_integrity": "EXACT",
+  "decision": "FRT_G1_FAIL"
+}
