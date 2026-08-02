@@ -1,0 +1,40 @@
+{
+  "classification": "implementation_smoke",
+  "date": "2026-08-03",
+  "source_revision": "6e5864862331224efb6b1a4b563563b153c638f2",
+  "scene": "garden",
+  "train_views": 1,
+  "test_views": 1,
+  "selected_parent_faces": 32,
+  "unique_midpoint_vertices": 94,
+  "confirmatory": false,
+  "parity": {
+    "global_mae": 0.00001284916773726121,
+    "probe_region_pixels": 4555,
+    "probe_region_mae": 0.0038188972012533446,
+    "max_abs": 0.5230557918548584
+  },
+  "new_parameter_gradients": {
+    "vertices_l2": 1.0512258841188782e-09,
+    "vertex_weight_l2": 2.582194902345236e-09,
+    "features_dc_l2": 5.0743560677801725e-06,
+    "features_rest_l2": 0.000019652896298794076,
+    "combined_appearance_l2": 0.000020297424034437753,
+    "appearance_to_geometry_ratio": 19308.337381219215,
+    "all_finite": true
+  },
+  "checks": {
+    "topology_counts_exact": true,
+    "original_parameter_prefix_bitwise_unchanged": true,
+    "probe_region_pixels_at_least_100": true,
+    "global_mae_at_most_1e_4": true,
+    "probe_region_mae_at_most_2e_3": false,
+    "all_new_gradients_finite": true,
+    "new_geometry_gradient_nonzero": true,
+    "new_appearance_gradient_nonzero": true
+  },
+  "decision": {
+    "pass": null,
+    "reason": "implementation smoke; no gate decision"
+  }
+}
