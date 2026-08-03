@@ -74,7 +74,7 @@ RasterizetrianglesCUDA(
 
   const int P = triangles_indices.size(0);
   if (donor_mode != 0) {
-    TORCH_CHECK(donor_mode >= 1 && donor_mode <= 3, "donor_mode must be a bitmask in [1, 3], got ", donor_mode);
+    TORCH_CHECK(donor_mode >= 1 && donor_mode <= 7, "donor_mode must be a bitmask in [1, 7], got ", donor_mode);
     TORCH_CHECK(window_source.dim() == 1 && window_source.size(0) == P,
                 "window_source must be [F] with F = ", P, ", got ", window_source.sizes());
     TORCH_CHECK(donor_indices.dim() == 2 && donor_indices.size(1) == 3,

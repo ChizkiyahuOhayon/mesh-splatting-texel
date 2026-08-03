@@ -135,6 +135,7 @@
 	 const int donor_mode,
 	 float2* donor_normals,
 	 float* donor_offsets,
+	 float2* donor_p_image,
 	 const float sigma,
 	 float* scaling,
 	 const float* shs,
@@ -211,6 +212,7 @@
 	 const bool has_donor = (window_source != nullptr) && (donor_mode != 0) && (window_source[idx] >= 0);
 	 const bool donor_win = has_donor && (donor_mode & FORWARD::DONOR_WINDOW);
 	 const bool donor_op = has_donor && (donor_mode & FORWARD::DONOR_OPACITY);
+	 const bool donor_app = has_donor && (donor_mode & FORWARD::DONOR_APPEARANCE);
 
 	 float3 donor_center = {0.0f, 0.0f, 0.0f};
 	 float donor_min_weight = INFINITY;
@@ -238,7 +240,17 @@
 		 donor_center.y /= 3;
 		 donor_center.z /= 3;
 
-		 if (donor_win) {
+		 if (donor_win || donor_app) {
+			 float2 donor_image[3];
+			 for (int i = 0; i < 3; i++) {
+				 float4 p_hom = transformPoint4x4(donor_p[i], projmatrix);
+				 float inv_w = 1.0f / (p_hom.w + 0.0000001f);
+				 donor_image[i] = { ndc2Pix(p_hom.x * inv_w, W), ndc2Pix(p_hom.y * inv_w, H) };
+				 if (donor_app) {
+					 donor_p_image[cumsum_for_triangle + i] = donor_image[i];
+				 }
+			 }
+			 if (donor_win) {
 			 float4 p_hom_center = transformPoint4x4(donor_center, projmatrix);
 			 float p_w_center = 1.0f / (p_hom_center.w + 0.0000001f);
 			 float2 donor_center_2D = {
@@ -246,12 +258,8 @@
 				ndc2Pix(p_hom_center.y * p_w_center, H)
 			 };
 
-			 float2 donor_image[3];
 			 float donor_distance_points = 0.0f;
 			 for (int i = 0; i < 3; i++) {
-				 float4 p_hom = transformPoint4x4(donor_p[i], projmatrix);
-				 float inv_w = 1.0f / (p_hom.w + 0.0000001f);
-				 donor_image[i] = { ndc2Pix(p_hom.x * inv_w, W), ndc2Pix(p_hom.y * inv_w, H) };
 				 float distance = __fsqrt_rn((donor_image[i].x - donor_center_2D.x) * (donor_image[i].x - donor_center_2D.x)
 					+ (donor_image[i].y - donor_center_2D.y) * (donor_image[i].y - donor_center_2D.y));
 				 if (distance > donor_distance_points) {
@@ -286,6 +294,7 @@
 				 donor_offsets[cumsum_for_triangle + i] = offset;
 			 }
 			 donor_cull = (donor_distance_points > 1600 or donor_distance_points < 1 or donor_dist > -1);
+			 }
 		 }
 	 }
 	 const float eff_min_weight = donor_op ? donor_min_weight : min_weight;
@@ -525,8 +534,10 @@
 	 const float2* __restrict__ normals,
 	 const float* __restrict__ offsets,
 	 const int* __restrict__ window_source,
+	 const int* __restrict__ donor_indices,
 	 const float2* __restrict__ donor_normals,
 	 const float* __restrict__ donor_offsets,
+	 const float2* __restrict__ donor_p_image,
 	 const int donor_mode,
 	 const float2* __restrict__ points_xy_image,
 	 const float* __restrict__ vertex_depth, 
@@ -580,11 +591,16 @@
 	 __shared__ float2 collected_phi_center[BLOCK_SIZE];
 	 __shared__ float2 collected_p_images[BLOCK_SIZE * MAX_NB_POINTS];
 	 // RITS window donors: the donor's edge lines replace the face's own in the
-	 // soft-window evaluation only; the inside test above them stays face-local.
+	 // soft-window evaluation, and the donor's projected frame replaces the
+	 // face's own in color interpolation; the inside test stays face-local.
 	 __shared__ int collected_donor[BLOCK_SIZE];
 	 __shared__ float2 collected_donor_normals[BLOCK_SIZE * MAX_NB_POINTS];
 	 __shared__ float collected_donor_offsets[BLOCK_SIZE * MAX_NB_POINTS];
+	 __shared__ float2 collected_donor_p_images[BLOCK_SIZE * MAX_NB_POINTS];
+	 __shared__ int collected_donor_vidx[BLOCK_SIZE * MAX_NB_POINTS];
 	 const bool donor_windows_active = (window_source != nullptr) && (donor_mode & FORWARD::DONOR_WINDOW);
+	 const bool donor_appearance_active = (window_source != nullptr) && (donor_mode & FORWARD::DONOR_APPEARANCE);
+	 const bool donors_active = donor_windows_active || donor_appearance_active;
 	 /*
 	 ===================================================================================================
 	 */
@@ -629,13 +645,19 @@
 				collected_p_images[MAX_NB_POINTS * block.thread_rank() + k] = p_image[3 * coll_id + k];
 			}
 			collected_phi_center[block.thread_rank()] = phi_center[coll_id];
-			if (donor_windows_active) {
-				bool donated = window_source[coll_id] >= 0;
-				collected_donor[block.thread_rank()] = donated;
-				if (donated) {
+			if (donors_active) {
+				int donor_row = window_source[coll_id];
+				collected_donor[block.thread_rank()] = donor_row >= 0;
+				if (donor_row >= 0) {
 					for (int k = 0; k < 3; k++) {
-						collected_donor_normals[MAX_NB_POINTS * block.thread_rank() + k] = donor_normals[3 * coll_id + k];
-						collected_donor_offsets[MAX_NB_POINTS * block.thread_rank() + k] = donor_offsets[3 * coll_id + k];
+						if (donor_windows_active) {
+							collected_donor_normals[MAX_NB_POINTS * block.thread_rank() + k] = donor_normals[3 * coll_id + k];
+							collected_donor_offsets[MAX_NB_POINTS * block.thread_rank() + k] = donor_offsets[3 * coll_id + k];
+						}
+						if (donor_appearance_active) {
+							collected_donor_p_images[MAX_NB_POINTS * block.thread_rank() + k] = donor_p_image[3 * coll_id + k];
+							collected_donor_vidx[MAX_NB_POINTS * block.thread_rank() + k] = donor_indices[3 * donor_row + k];
+						}
 					}
 				}
 			}
@@ -710,10 +732,16 @@
 
 			 // COLOR INTERPOLATION
 
+			 // A donor-appearance face interpolates in the donor's projected
+			 // frame with the donor's corner vertices: an affine screen-space
+			 // field is determined by its values at three points, so this
+			 // reproduces the donor's color field exactly on the child.
+			 const bool donor_frame = donor_appearance_active && collected_donor[j];
+
 			 // Interpolate the colors
-			 float2 uv0 = collected_p_images[j * 3 + 0];
-			 float2 uv1 = collected_p_images[j * 3 + 1];
-			 float2 uv2 = collected_p_images[j * 3 + 2];
+			 float2 uv0 = donor_frame ? collected_donor_p_images[j * 3 + 0] : collected_p_images[j * 3 + 0];
+			 float2 uv1 = donor_frame ? collected_donor_p_images[j * 3 + 1] : collected_p_images[j * 3 + 1];
+			 float2 uv2 = donor_frame ? collected_donor_p_images[j * 3 + 2] : collected_p_images[j * 3 + 2];
 
 			 // vectors along the edges from uv0
 			 float2 v0 = { uv1.x - uv0.x, uv1.y - uv0.y };
@@ -731,9 +759,9 @@
 			 float b2 = 1.0f - b0 - b1;
 			
 			 int aux = 3 * j_id;
-			 int vertex_idx0 = triangles_indices[aux];
-			 int vertex_idx1 = triangles_indices[aux + 1];
-			 int vertex_idx2 = triangles_indices[aux + 2];
+			 int vertex_idx0 = donor_frame ? collected_donor_vidx[j * 3 + 0] : triangles_indices[aux];
+			 int vertex_idx1 = donor_frame ? collected_donor_vidx[j * 3 + 1] : triangles_indices[aux + 1];
+			 int vertex_idx2 = donor_frame ? collected_donor_vidx[j * 3 + 2] : triangles_indices[aux + 2];
 
 			 float depth_vertex_0 =  vertex_depth[vertex_idx0];
 			 float depth_vertex_1 =  vertex_depth[vertex_idx1];
@@ -810,8 +838,10 @@
 	 const float2* normals,
 	 const float* offsets,
 	 const int* window_source,
+	 const int* donor_indices,
 	 const float2* donor_normals,
 	 const float* donor_offsets,
+	 const float2* donor_p_image,
 	 const int donor_mode,
 	 const float2* points_xy_image,
 	 const float* vertex_depth,
@@ -839,8 +869,10 @@
 		 normals,
 		 offsets,
 		 window_source,
+		 donor_indices,
 		 donor_normals,
 		 donor_offsets,
+		 donor_p_image,
 		 donor_mode,
 		 points_xy_image,
 		 vertex_depth,
@@ -889,6 +921,7 @@
 	 const int donor_mode,
 	 float2* donor_normals,
 	 float* donor_offsets,
+	 float2* donor_p_image,
 	 const float sigma,
 	 float* scaling,
 	 const float* shs,
@@ -926,6 +959,7 @@
 		 donor_mode,
 		 donor_normals,
 		 donor_offsets,
+		 donor_p_image,
 		 sigma,
 		 scaling,
 		 shs,

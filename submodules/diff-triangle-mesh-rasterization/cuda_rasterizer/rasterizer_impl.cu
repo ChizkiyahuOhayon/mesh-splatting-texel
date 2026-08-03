@@ -188,11 +188,13 @@
 	 {
 		 obtain(chunk, geom.donor_normals, total_nb_points, 128);
 		 obtain(chunk, geom.donor_offsets, total_nb_points, 128);
+		 obtain(chunk, geom.donor_p_image, total_nb_points, 128);
 	 }
 	 else
 	 {
 		 geom.donor_normals = nullptr;
 		 geom.donor_offsets = nullptr;
+		 geom.donor_p_image = nullptr;
 	 }
 
 	 return geom;
@@ -293,6 +295,7 @@
 		 with_donors ? donor_mode : 0,
 		 geomState.donor_normals,
 		 geomState.donor_offsets,
+		 geomState.donor_p_image,
 		 sigma,
 		 scaling,
 		 shs,
@@ -394,8 +397,10 @@
 		 geomState.normals,
 		 geomState.offsets,
 		 with_donors ? window_source : nullptr,
+		 with_donors ? donor_indices : nullptr,
 		 geomState.donor_normals,
 		 geomState.donor_offsets,
+		 geomState.donor_p_image,
 		 with_donors ? donor_mode : 0,
 		 geomState.means2D,
 		 geomState.vertex_depth,

@@ -3,6 +3,7 @@ import unittest
 import torch
 
 from rits_prolongation import (
+    DONOR_APPEARANCE,
     DONOR_OPACITY,
     DONOR_WINDOW,
     donor_mode,
@@ -40,6 +41,10 @@ class DonorModeTest(unittest.TestCase):
         self.assertEqual(donor_mode(True, False), DONOR_WINDOW)
         self.assertEqual(donor_mode(False, True), DONOR_OPACITY)
         self.assertEqual(donor_mode(True, True), DONOR_WINDOW | DONOR_OPACITY)
+        self.assertEqual(
+            donor_mode(True, True, True),
+            DONOR_WINDOW | DONOR_OPACITY | DONOR_APPEARANCE,
+        )
 
 
 class InstallProlongationProbeTest(unittest.TestCase):
@@ -200,6 +205,72 @@ class ProlongationIdentityTest(unittest.TestCase):
         self.assertTrue(
             variant1_differs,
             "child-local windows should not reproduce the parent alpha",
+        )
+
+
+def barycentric_color(pixel, tri2d, colors):
+    """Per-pixel color exactly as renderCUDA interpolates it."""
+    v0 = tri2d[1] - tri2d[0]
+    v1 = tri2d[2] - tri2d[0]
+    v2 = pixel - tri2d[0]
+    inv_den = 1.0 / (v0[0] * v1[1] - v1[0] * v0[1])
+    b0 = (v2[0] * v1[1] - v1[0] * v2[1]) * inv_den
+    b1 = (-v2[0] * v0[1] + v0[0] * v2[1]) * inv_den
+    b2 = 1.0 - b0 - b1
+    return b2 * colors[0] + b0 * colors[1] + b1 * colors[2]
+
+
+class AppearanceProlongationTest(ProlongationIdentityTest):
+    """The appearance contract behind RITS-D1: the parent's screen-affine color
+    field is reproduced exactly by donor-frame interpolation, while 3D-averaged
+    midpoint colors are not — the residual RITS-D0 measured on Room."""
+
+    def setUp(self):
+        super().setUp()
+        self.parent_colors = torch.tensor(
+            [[0.9, 0.2, 0.1], [0.1, 0.8, 0.3], [0.2, 0.3, 0.7]]
+        )
+
+    def test_barycentric_formula_is_affine_exact(self):
+        for index in range(3):
+            reproduced = barycentric_color(
+                self.parent2d[index], self.parent2d, self.parent_colors
+            )
+            self.assertLess(float((reproduced - self.parent_colors[index]).abs().max()), 1e-4)
+
+    def test_donor_frame_reproduces_parent_field_and_midpoints_do_not(self):
+        edge_pairs = [(0, 1), (1, 2), (2, 0)]
+        midpoint_colors = {
+            pair: 0.5 * (self.parent_colors[pair[0]] + self.parent_colors[pair[1]])
+            for pair in edge_pairs
+        }
+        child_colors = [
+            torch.stack([self.parent_colors[0], midpoint_colors[(0, 1)], midpoint_colors[(2, 0)]]),
+            torch.stack([self.parent_colors[1], midpoint_colors[(1, 2)], midpoint_colors[(0, 1)]]),
+            torch.stack([self.parent_colors[2], midpoint_colors[(2, 0)], midpoint_colors[(1, 2)]]),
+            torch.stack([midpoint_colors[(0, 1)], midpoint_colors[(1, 2)], midpoint_colors[(2, 0)]]),
+        ]
+        midpoint_bias = 0.0
+        for pixel in self._interior_pixels():
+            owner = next(
+                index
+                for index, child in enumerate(self.children2d)
+                if bool(((window_lines(child)[0] @ pixel + window_lines(child)[1]) <= 0).all())
+            )
+            parent_color = barycentric_color(pixel, self.parent2d, self.parent_colors)
+            donor_frame_color = barycentric_color(pixel, self.parent2d, self.parent_colors)
+            self.assertLess(float((donor_frame_color - parent_color).abs().max()), 1e-6)
+            child_local_color = barycentric_color(
+                pixel, self.children2d[owner], child_colors[owner]
+            )
+            midpoint_bias = max(
+                midpoint_bias, float((child_local_color - parent_color).abs().max())
+            )
+        self.assertGreater(
+            midpoint_bias,
+            1e-3,
+            "3D-averaged midpoint colors should not reproduce the parent field "
+            "under perspective; if they do, D1's appearance term is vacuous",
         )
 
 

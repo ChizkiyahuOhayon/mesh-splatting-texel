@@ -33,10 +33,13 @@
  {
 	 // Window-donor mode bits (RITS prolongation). A face whose window_source
 	 // entry is non-negative evaluates its soft window / culling / depth key on
-	 // the donor triangle (DONOR_WINDOW) and/or takes the donor's min-vertex
-	 // opacity (DONOR_OPACITY), while its pixel support stays its own.
+	 // the donor triangle (DONOR_WINDOW), takes the donor's min-vertex opacity
+	 // (DONOR_OPACITY), and/or interpolates color and vertex depth in the
+	 // donor's projected frame (DONOR_APPEARANCE), while its pixel support
+	 // stays its own.
 	 constexpr int DONOR_WINDOW = 1;
 	 constexpr int DONOR_OPACITY = 2;
+	 constexpr int DONOR_APPEARANCE = 4;
 
 	 // Perform initial steps for each Triangle prior to rasterization.
 	 void preprocess(int P, int D, int M,
@@ -48,6 +51,7 @@
 		 const int donor_mode,
 		 float2* donor_normals,
 		 float* donor_offsets,
+		 float2* donor_p_image,
 		 const float sigma,
 		 float* scaling,
 		 const float* shs,
@@ -94,8 +98,10 @@
 		 const float2* normals,
 		 const float* offsets,
 		 const int* window_source,
+		 const int* donor_indices,
 		 const float2* donor_normals,
 		 const float* donor_offsets,
+		 const float2* donor_p_image,
 		 const int donor_mode,
 		 const float2* points_xy_image,
 		 const float* vertex_depth, 

@@ -66,10 +66,12 @@
 
 		 float* vertex_depth;
 
-		 // Edge lines of each face's window donor (RITS prolongation); allocated
-		 // only when donors are active so the training path pays no memory cost.
+		 // Edge lines and projected vertices of each face's window donor (RITS
+		 // prolongation); allocated only when donors are active so the training
+		 // path pays no memory cost.
 		 float2* donor_normals;
 		 float* donor_offsets;
+		 float2* donor_p_image;
 
 		 static GeometryState fromChunk(char*& chunk, size_t P, size_t total_nb_points, size_t V, bool with_donors);
 	 };
