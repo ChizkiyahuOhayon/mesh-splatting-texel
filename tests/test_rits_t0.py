@@ -5,7 +5,7 @@ import torch
 from rits_prolongation import (
     FINETUNE_LRS,
     fd_probe_indices,
-    fd_rung_check,
+    fd_ratio_probe,
     install_trainable_split,
 )
 from rits_t0_decide import decide
@@ -21,19 +21,27 @@ class FdProbeTest(unittest.TestCase):
     def test_count_is_clamped_to_the_gradient_size(self):
         self.assertEqual(fd_probe_indices(torch.ones(3), count=8).numel(), 3)
 
-    def test_rung_check_passes_a_converging_estimate(self):
-        check = fd_rung_check(analytic=1.0, coarse=1.08, fine=1.02)
-        self.assertTrue(check["pass"])
+    def test_ratio_probe_recovers_a_scaled_analytic_gradient(self):
+        # A quadratic whose true slope is 4x the reported analytic gradient:
+        # the probe must report that scale, not hide or fail on it.
+        parameter = torch.zeros(5)
+        slope = torch.tensor([1.0, -3.0, 0.5, 2.0, 0.1])
 
-    def test_rung_check_fails_out_of_tolerance(self):
-        check = fd_rung_check(analytic=1.0, coarse=1.5, fine=1.4)
-        self.assertFalse(check["pass"])
-        self.assertGreater(check["relative"], 0.05)
+        def loss():
+            return float((slope * parameter).sum())
 
-    def test_rung_check_fails_a_diverging_estimate(self):
-        check = fd_rung_check(analytic=1.0, coarse=1.01, fine=1.04)
-        self.assertFalse(check["pass"])
-        self.assertFalse(check["converging"])
+        result = fd_ratio_probe(parameter, slope / 4.0, loss, probes=3)
+        self.assertAlmostEqual(result["median_ratio"], 4.0, places=3)
+        self.assertLess(result["max_rung_disagreement"], 1e-6)
+        self.assertEqual([row["index"] for row in result["rows"]][0], 1)
+
+    def test_ratio_probe_restores_the_parameter(self):
+        parameter = torch.tensor([0.25, -0.5])
+        result = fd_ratio_probe(
+            parameter, torch.tensor([1.0, 2.0]), lambda: float(parameter.sum()), probes=2
+        )
+        self.assertTrue(torch.equal(parameter, torch.tensor([0.25, -0.5])))
+        self.assertIsNotNone(result["median_ratio"])
 
 
 class InstallTrainableSplitTest(unittest.TestCase):

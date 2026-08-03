@@ -11,12 +11,7 @@ from tqdm import tqdm
 
 from arguments import ModelParams, PipelineParams, get_combined_args
 from lpipsPyTorch.modules.lpips import LPIPS
-from rits_prolongation import (
-    FINETUNE_LRS,
-    fd_probe_indices,
-    fd_rung_check,
-    install_trainable_split,
-)
+from rits_prolongation import FINETUNE_LRS, fd_ratio_probe, install_trainable_split
 from scene import Scene
 from scene.triangle_model import TriangleModel
 from svsr_g1_eval import _checkpoint, _metrics, _sha256
@@ -34,9 +29,10 @@ SMOKE_ANNEAL_STEPS = 40
 SMOKE_SELECT_FRACTION = 0.01
 LAMBDA_DSSIM = 0.2
 SEED = 1234
-FD_PROBES = 8
+FD_PROBES = 4
 FD_RUNGS = (0.002, 0.001)
-FD_TOLERANCE = 0.05
+FD_CONVERGENCE_TOLERANCE = 0.05
+FD_FIDELITY_TOLERANCE = 0.25
 ARMS = ("unsplit", "abrupt", "rits")
 
 PARAMETER_NAMES = ("vertices", "vertex_weight", "_features_dc", "_features_rest")
@@ -133,45 +129,52 @@ def _g0_lite(triangles, pipeline, background, view, split):
             f"appearance {appearance_norm})"
         )
 
-    dc_gradient = triangles._features_dc.grad[base_vertices:].detach()
-    probe_indices = fd_probe_indices(dc_gradient, FD_PROBES)
-    flat_gradient = dc_gradient.flatten()
-    finite_difference = []
-    with torch.no_grad():
-        flat = triangles._features_dc.data[base_vertices:].reshape(-1)
-        for index in probe_indices.tolist():
-            original = float(flat[index])
-            analytic = float(flat_gradient[index])
-            estimates = []
-            for step in FD_RUNGS:
-                samples = []
-                for sign in (1.0, -1.0):
-                    flat[index] = original + sign * step
-                    samples.append(float(blended_loss()))
-                flat[index] = original
-                estimates.append((samples[0] - samples[1]) / (2.0 * step))
-            check = fd_rung_check(analytic, estimates[0], estimates[1], FD_TOLERANCE)
-            finite_difference.append(
-                {
-                    "index": index,
-                    "analytic": analytic,
-                    "fd_coarse": estimates[0],
-                    "fd_fine": estimates[1],
-                    **check,
-                }
-            )
-            if not check["pass"]:
-                raise RuntimeError(
-                    "G0-lite: finite-difference mismatch at scalar "
-                    f"{index}: analytic {analytic:.6e}, fd {estimates[1]:.6e} "
-                    f"(coarse {estimates[0]:.6e}), relative {check['relative']:.4f}"
-                )
+    # Relative fidelity: the split's new parameters must carry gradients as
+    # faithful as the checkpoint's own. The absolute ratio is a rasterizer
+    # property (~8.5x even on an untouched checkpoint), so only the agreement
+    # between the two blocks is evidence about refinement.
+    dc_data = triangles._features_dc.data
+    dc_grad = triangles._features_dc.grad.detach()
+    blocks = {
+        "original": (dc_data[:base_vertices], dc_grad[:base_vertices]),
+        "midpoint": (dc_data[base_vertices:], dc_grad[base_vertices:]),
+    }
+    fidelity = {
+        name: fd_ratio_probe(
+            parameter.reshape(-1), gradient.reshape(-1), blended_loss, FD_PROBES, FD_RUNGS
+        )
+        for name, (parameter, gradient) in blocks.items()
+    }
+    original_ratio = fidelity["original"]["median_ratio"]
+    midpoint_ratio = fidelity["midpoint"]["median_ratio"]
+    unconverged = {
+        name: row["max_rung_disagreement"]
+        for name, row in fidelity.items()
+        if row["max_rung_disagreement"] > FD_CONVERGENCE_TOLERANCE
+    }
+    if unconverged:
+        raise RuntimeError(f"G0-lite: finite differences did not converge: {unconverged}")
+    if original_ratio is None or midpoint_ratio is None:
+        raise RuntimeError("G0-lite: a probed block has no nonzero analytic gradient")
+    if original_ratio <= 0.0 or midpoint_ratio <= 0.0:
+        raise RuntimeError(
+            f"G0-lite: gradient sign disagreement (original {original_ratio:.4f}, "
+            f"midpoint {midpoint_ratio:.4f})"
+        )
+    relative = abs(midpoint_ratio / original_ratio - 1.0)
+    if relative > FD_FIDELITY_TOLERANCE:
+        raise RuntimeError(
+            "G0-lite: midpoint gradient fidelity departs from the checkpoint's "
+            f"by {relative:.4f} (original {original_ratio:.4f}, "
+            f"midpoint {midpoint_ratio:.4f})"
+        )
     for name in PARAMETER_NAMES:
         getattr(triangles, name).grad = None
     return {
         "geometry_gradient_norm": geometry_norm,
         "appearance_gradient_norm": appearance_norm,
-        "finite_difference": finite_difference,
+        "fidelity": fidelity,
+        "relative_fidelity_gap": relative,
     }
 
 

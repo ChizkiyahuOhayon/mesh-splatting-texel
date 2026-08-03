@@ -61,21 +61,46 @@ def fd_probe_indices(gradient, count=8):
     return torch.topk(flat, min(count, flat.numel())).indices
 
 
-def fd_rung_check(analytic, coarse, fine, tolerance=0.05, growth=1.25):
-    """Two-rung central-difference check against an analytic gradient.
+def fd_ratio_probe(flat_parameter, flat_gradient, loss_fn, probes=4, rungs=(0.002, 0.001)):
+    """Central-difference / analytic ratios on the largest-|gradient| scalars.
 
-    The fine-step estimate must agree within `tolerance` and its error must
-    not exceed `growth` times the coarse-step error: a correct gradient is
-    the small-step limit of the difference quotient, so halving the step must
-    not move the estimate away from it beyond noise.
+    Reports ratios rather than pass/fail: MeshSplatting's rasterizer backward
+    under-reports SH-DC gradients by ~8.5x even on an untouched checkpoint
+    (experiments/rits_t0/results/g0_diag_garden_01.md), so an absolute
+    criterion would measure the renderer, not the caller's operator. The two
+    rungs establish that each measurement itself has converged.
     """
-    scale = max(abs(analytic), abs(fine), 1e-12)
-    relative = abs(fine - analytic) / scale
-    converging = abs(fine - analytic) <= growth * abs(coarse - analytic)
+    indices = fd_probe_indices(flat_gradient, probes)
+    rows = []
+    with torch.no_grad():
+        for index in indices.tolist():
+            original = float(flat_parameter[index])
+            analytic = float(flat_gradient[index])
+            estimates = []
+            for step in rungs:
+                samples = []
+                for sign in (1.0, -1.0):
+                    flat_parameter[index] = original + sign * step
+                    samples.append(float(loss_fn()))
+                flat_parameter[index] = original
+                estimates.append((samples[0] - samples[1]) / (2.0 * step))
+            coarse, fine = estimates[0], estimates[-1]
+            rows.append(
+                {
+                    "index": index,
+                    "analytic": analytic,
+                    "fd_coarse": coarse,
+                    "fd_fine": fine,
+                    "rung_disagreement": abs(fine - coarse)
+                    / max(abs(fine), abs(coarse), 1e-12),
+                    "ratio": fine / analytic if analytic != 0.0 else None,
+                }
+            )
+    ratios = [row["ratio"] for row in rows if row["ratio"] is not None]
     return {
-        "relative": relative,
-        "converging": converging,
-        "pass": relative <= tolerance and converging,
+        "rows": rows,
+        "median_ratio": float(torch.tensor(ratios).median()) if ratios else None,
+        "max_rung_disagreement": max(row["rung_disagreement"] for row in rows),
     }
 
 

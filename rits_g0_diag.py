@@ -24,7 +24,7 @@ from pathlib import Path
 import torch
 
 from arguments import ModelParams, PipelineParams, get_combined_args
-from rits_prolongation import fd_probe_indices, install_trainable_split
+from rits_prolongation import fd_ratio_probe, install_trainable_split
 from rits_t0_train import FD_RUNGS, LAMBDA_DSSIM, _photometric_loss, _select_faces
 from scene import Scene
 from scene.triangle_model import TriangleModel
@@ -58,40 +58,15 @@ def _probe(triangles, loss_fn, vertex_slice):
     """Analytic vs central-difference gradient on the top-|grad| f_dc scalars."""
     triangles._features_dc.grad = None
     loss_fn().backward()
-    block_gradient = triangles._features_dc.grad[vertex_slice].detach()
-    indices = fd_probe_indices(block_gradient, PROBES)
-    flat_gradient = block_gradient.flatten()
-    rows = []
-    with torch.no_grad():
-        flat = triangles._features_dc.data[vertex_slice].reshape(-1)
-        for index in indices.tolist():
-            original = float(flat[index])
-            analytic = float(flat_gradient[index])
-            estimates = []
-            for step in FD_RUNGS:
-                samples = []
-                for sign in (1.0, -1.0):
-                    flat[index] = original + sign * step
-                    samples.append(float(loss_fn()))
-                flat[index] = original
-                estimates.append((samples[0] - samples[1]) / (2.0 * step))
-            rows.append(
-                {
-                    "index": index,
-                    "analytic": analytic,
-                    "fd_coarse": estimates[0],
-                    "fd_fine": estimates[1],
-                    "ratio_fd_over_analytic": (
-                        estimates[1] / analytic if analytic != 0.0 else None
-                    ),
-                }
-            )
+    result = fd_ratio_probe(
+        triangles._features_dc.data[vertex_slice].reshape(-1),
+        triangles._features_dc.grad[vertex_slice].detach().reshape(-1),
+        loss_fn,
+        PROBES,
+        FD_RUNGS,
+    )
     triangles._features_dc.grad = None
-    ratios = [row["ratio_fd_over_analytic"] for row in rows if row["ratio_fd_over_analytic"]]
-    return {
-        "rows": rows,
-        "median_ratio": float(torch.tensor(ratios).median()) if ratios else None,
-    }
+    return result
 
 
 def run(dataset, pipeline, args):

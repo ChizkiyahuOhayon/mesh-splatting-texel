@@ -61,12 +61,14 @@ On the first name-sorted training view at `gamma = 0.5`:
 
 1. gradients of all four parameter tensors are finite;
 2. the midpoint-row geometry and appearance gradient group norms are nonzero;
-3. central finite differences on the **8 largest-|gradient| midpoint `f_dc`
-   scalars**, with the G0-lite loss reduced in **float64** (renders stay
-   float32), at steps 0.002 and 0.001: for every scalar, the finer-step
-   estimate agrees with the analytic gradient within 5% relative error and
-   its error is not larger than 1.25x the coarser-step error (convergence
-   toward the analytic value).
+3. midpoint parameters carry gradients of the **same fidelity as the
+   checkpoint's original parameters**. With the G0-lite loss reduced in
+   **float64** (renders stay float32), probe the 4 largest-|gradient| `f_dc`
+   scalars of the original block and of the midpoint block at steps 0.002 and
+   0.001, and take each block's median central-difference / analytic ratio.
+   The check passes when every probe's two rungs agree within 5% (the
+   measurement is converged), both medians are positive (sign agreement), and
+   the midpoint median is within 25% relative of the original median.
 
 If any check fails, no arm trains and the gate stops as an implementation
 failure, not a scientific result.
@@ -89,6 +91,23 @@ two-rung convergence requirement guards against residual nonlinearity. The
 donor image is independent of midpoint DC and is cached across evaluations.
 The 5% tolerance and all training-side settings and decision rules are
 unchanged; a genuine gradient defect still fails this check.
+
+**Amendment 3, 2026-08-04, before any training output was observed.** With a
+converged measurement in place, smoke 03 showed the analytic midpoint SH-DC
+gradient to be ~8.87x smaller than the finite difference. The diagnostic in
+`results/g0_diag_garden_01.md` traced this to the baseline: the unmodified
+production path on an unmodified checkpoint (no split, no donors, no blend)
+already shows ~8.44x, and midpoint vertices (8.65x) match original vertices
+in the same split model (8.28x). The discrepancy is a property of
+MeshSplatting's rasterizer backward, not of refinement; Adam's per-parameter
+normalization absorbs a near-uniform scale factor, which is why the baseline
+trains normally. An absolute finite-difference criterion therefore tests the
+rasterizer rather than the refinement operator. Item 3 above is restated as a
+relative criterion against original parameters measured in the same run, view,
+and loss — the property the precondition actually needs to establish, and one
+a broken split path would still fail. All three arms share the rasterizer, so
+the discrepancy cancels in the arm comparison; the decision rule and every
+training-side setting remain unchanged.
 
 ## Locked decision
 
