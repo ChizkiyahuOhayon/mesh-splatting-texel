@@ -1,0 +1,44 @@
+{
+  "experiment": "RITS-D0",
+  "classification": "confirmatory_two_scene_gate",
+  "provenance": "Decision evidence transcribed from user-provided console output; server results.json files are authoritative.",
+  "source_revision": "cabb5c43e510526b027b4f976b272e6613ffb5be",
+  "settings": {
+    "train_views_per_scene": 4,
+    "test_views_per_scene": 4,
+    "selected_parent_faces_per_scene": 512,
+    "global_mae_limit": 0.0001,
+    "probe_region_mae_limit": 0.002,
+    "required_region_reduction": 0.80
+  },
+  "scenes": {
+    "garden": {
+      "scene_pass": true,
+      "probe_region_pixels": 121796,
+      "variants": {
+        "v1_inherited": {"global_mae": 1.1052520693959417e-4, "probe_region_mae": 4.203463858221352e-3, "p99_abs_error": 7.231831550598145e-4, "max_abs_error": 0.6708362698554993},
+        "v2_parent_window": {"global_mae": 7.369512814352411e-6, "probe_region_mae": 3.721863731202118e-4, "p99_abs_error": 1.7875432968139648e-4, "max_abs_error": 0.012855999171733856},
+        "v3_parent_opacity": {"global_mae": 1.1050748894113372e-4, "probe_region_mae": 4.202739511743125e-3, "p99_abs_error": 7.22244381904602e-4, "max_abs_error": 0.6708362698554993},
+        "v4_prolongation": {"global_mae": 7.3331611727195356e-6, "probe_region_mae": 3.7067671503988273e-4, "p99_abs_error": 1.766681671142578e-4, "max_abs_error": 0.012855999171733856}
+      },
+      "v4_probe_reduction_vs_v1": 0.9118,
+      "children_rendered_v1_per_view": [1744, 1908, 1759, 1836],
+      "children_rendered_v4_per_view": [1860, 1924, 1763, 1852]
+    },
+    "room": {
+      "scene_pass": false,
+      "failed_checks": ["variant4_reduces_probe_mae_by_80_percent"],
+      "probe_region_pixels": 172809,
+      "variants": {
+        "v1_inherited": {"global_mae": 5.486684538577779e-5, "probe_region_mae": 1.8245802742476217e-3, "p99_abs_error": 1.1039972305297852e-3, "max_abs_error": 0.3527035713195801},
+        "v2_parent_window": {"global_mae": 3.215454361536042e-5, "probe_region_mae": 1.2182180767084602e-3, "p99_abs_error": 7.10904598236084e-4, "max_abs_error": 0.02759312465786934},
+        "v3_parent_opacity": {"global_mae": 5.485831181506502e-5, "probe_region_mae": 1.8242766347512655e-3, "p99_abs_error": 1.1032819747924805e-3, "max_abs_error": 0.3527035713195801},
+        "v4_prolongation": {"global_mae": 3.214550297183123e-5, "probe_region_mae": 1.2178946797153183e-3, "p99_abs_error": 7.100999355316162e-4, "max_abs_error": 0.027593126520514488}
+      },
+      "v4_probe_reduction_vs_v1": 0.3325,
+      "baseline_parents_rendered_per_view": {"DSCF4667": 268, "DSCF4771": 201, "DSCF4867": 75, "DSCF4971": 11}
+    }
+  },
+  "decision": "FAIL",
+  "verdict_notes": "Variant 1 reproduced CSU-F0 exactly on both scenes; v4 passes all absolute limits on both scenes and beats v2/v3 on both; Room fails only the 80% relative-reduction condition; residual matches the preregistered screen-affine vs 3D-affine appearance interpolation bias."
+}
