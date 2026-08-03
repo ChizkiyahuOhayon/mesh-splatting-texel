@@ -66,7 +66,12 @@
 
 		 float* vertex_depth;
 
-		 static GeometryState fromChunk(char*& chunk, size_t P, size_t total_nb_points, size_t V);
+		 // Edge lines of each face's window donor (RITS prolongation); allocated
+		 // only when donors are active so the training path pays no memory cost.
+		 float2* donor_normals;
+		 float* donor_offsets;
+
+		 static GeometryState fromChunk(char*& chunk, size_t P, size_t total_nb_points, size_t V, bool with_donors);
 	 };
  
 	 struct ImageState
@@ -91,23 +96,23 @@
 	 };
  
 	 template <typename T>
-	 size_t required(size_t P, size_t total_nb_points = 0, size_t V = 0);
- 
+	 size_t required(size_t P, size_t total_nb_points = 0, size_t V = 0, bool with_donors = false);
+
 	 // General case for states that don't need `total_nb_points`
-	 template<typename T> 
-	 size_t required(size_t P, size_t total_nb_points, size_t V)
+	 template<typename T>
+	 size_t required(size_t P, size_t total_nb_points, size_t V, bool with_donors)
 	 {
 		 char* size = nullptr;
 		 T::fromChunk(size, P);
 		 return ((size_t)size) + 128;
 	 }
- 
+
 	 // Specialization for GeometryState
-	 template<> 
-	 size_t required<GeometryState>(size_t P, size_t total_nb_points, size_t V)
+	 template<>
+	 size_t required<GeometryState>(size_t P, size_t total_nb_points, size_t V, bool with_donors)
 	 {
 		 char* size = nullptr;
-		 GeometryState::fromChunk(size, P, total_nb_points, V);
+		 GeometryState::fromChunk(size, P, total_nb_points, V, with_donors);
 		 return ((size_t)size) + 128;
 	 }
  };

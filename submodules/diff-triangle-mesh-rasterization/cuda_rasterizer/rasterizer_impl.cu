@@ -162,7 +162,7 @@
 		 present);
  }
  
- CudaRasterizer::GeometryState CudaRasterizer::GeometryState::fromChunk(char*& chunk, size_t P, size_t total_nb_points, size_t V)
+ CudaRasterizer::GeometryState CudaRasterizer::GeometryState::fromChunk(char*& chunk, size_t P, size_t total_nb_points, size_t V, bool with_donors)
  {
 	 GeometryState geom;
 	 obtain(chunk, geom.depths, P, 128);
@@ -184,7 +184,17 @@
      obtain(chunk, geom.rect_min, P, 128);
      obtain(chunk, geom.rect_max, P, 128);
 	 obtain(chunk, geom.vertex_depth, V, 128);
- 
+	 if (with_donors)
+	 {
+		 obtain(chunk, geom.donor_normals, total_nb_points, 128);
+		 obtain(chunk, geom.donor_offsets, total_nb_points, 128);
+	 }
+	 else
+	 {
+		 geom.donor_normals = nullptr;
+		 geom.donor_offsets = nullptr;
+	 }
+
 	 return geom;
  }
  
@@ -230,6 +240,9 @@
 	 const float* colors_precomp,
 	 const float* texels,
 	 const int texel_order,
+	 const int* window_source,
+	 const int* donor_indices,
+	 const int donor_mode,
 	 float* scaling,
 	 const float* viewmatrix,
 	 const float* projmatrix,
@@ -245,10 +258,11 @@
  {
 	 const float focal_y = height / (2.0f * tan_fovy);
 	 const float focal_x = width / (2.0f * tan_fovx);
- 
-	 size_t chunk_size = required<GeometryState>(P, total_nb_points, V);
+
+	 const bool with_donors = (window_source != nullptr) && (donor_mode != 0);
+	 size_t chunk_size = required<GeometryState>(P, total_nb_points, V, with_donors);
 	 char* chunkptr = geometryBuffer(chunk_size);
-	 GeometryState geomState = GeometryState::fromChunk(chunkptr, P, total_nb_points, V); 
+	 GeometryState geomState = GeometryState::fromChunk(chunkptr, P, total_nb_points, V, with_donors);
 	 
 	 if (radii == nullptr)
 	 {
@@ -274,6 +288,11 @@
 		 vertices,
 		 triangles_indices,
 		 vertex_weights,
+		 with_donors ? window_source : nullptr,
+		 with_donors ? donor_indices : nullptr,
+		 with_donors ? donor_mode : 0,
+		 geomState.donor_normals,
+		 geomState.donor_offsets,
 		 sigma,
 		 scaling,
 		 shs,
@@ -374,6 +393,10 @@
 		 width, height,
 		 geomState.normals,
 		 geomState.offsets,
+		 with_donors ? window_source : nullptr,
+		 geomState.donor_normals,
+		 geomState.donor_offsets,
+		 with_donors ? donor_mode : 0,
 		 geomState.means2D,
 		 geomState.vertex_depth,
 		 triangles_indices,
@@ -435,7 +458,9 @@
 	 float* dL_dvertice_depth,
 	 bool debug)
  {
-	 GeometryState geomState = GeometryState::fromChunk(geom_buffer, P, total_nb_points, V);
+	 // Backward never runs with donors (the Python wrapper raises first), so the
+	 // saved geometry chunk is always reinterpreted with the donor-free layout.
+	 GeometryState geomState = GeometryState::fromChunk(geom_buffer, P, total_nb_points, V, false);
 	 BinningState binningState = BinningState::fromChunk(binning_buffer, R);
 	 ImageState imgState = ImageState::fromChunk(img_buffer, width * height);
  

@@ -130,6 +130,11 @@
 	 const float* vertices,
 	 const int* triangles_indices,
 	 const float* vertex_weights,
+	 const int* window_source,
+	 const int* donor_indices,
+	 const int donor_mode,
+	 float2* donor_normals,
+	 float* donor_offsets,
 	 const float sigma,
 	 float* scaling,
 	 const float* shs,
@@ -196,6 +201,95 @@
 	 center_triangle.y /= 3;
 	 center_triangle.z /= 3;
 
+	 // RITS window donor: a refined face may inherit the per-face scalar
+	 // semantics of the triangle it subdivides (window domain and inradius,
+	 // size culling, frustum reference, depth sort key, min-vertex opacity),
+	 // keeping only its pixel support local. The donor's 2D quantities are
+	 // recomputed here with the exact formulas used below for the face itself;
+	 // the baseline path is left untouched so that runs without donors remain
+	 // bit-identical to the unmodified rasterizer.
+	 const bool has_donor = (window_source != nullptr) && (donor_mode != 0) && (window_source[idx] >= 0);
+	 const bool donor_win = has_donor && (donor_mode & FORWARD::DONOR_WINDOW);
+	 const bool donor_op = has_donor && (donor_mode & FORWARD::DONOR_OPACITY);
+
+	 float3 donor_center = {0.0f, 0.0f, 0.0f};
+	 float donor_min_weight = INFINITY;
+	 float donor_dist = 0.0f;
+	 bool donor_cull = false;
+	 if (has_donor) {
+		 const int donor_base = 3 * window_source[idx];
+		 float3 donor_p[3];
+		 for (int i = 0; i < 3; i++) {
+			 int vertex_index = donor_indices[donor_base + i];
+			 donor_p[i] = make_float3(
+				vertices[3 * vertex_index + 0],
+				vertices[3 * vertex_index + 1],
+				vertices[3 * vertex_index + 2]
+			 );
+			 donor_center.x += donor_p[i].x;
+			 donor_center.y += donor_p[i].y;
+			 donor_center.z += donor_p[i].z;
+			 float weight = vertex_weights[vertex_index];
+			 if (weight < donor_min_weight) {
+				 donor_min_weight = weight;
+			 }
+		 }
+		 donor_center.x /= 3;
+		 donor_center.y /= 3;
+		 donor_center.z /= 3;
+
+		 if (donor_win) {
+			 float4 p_hom_center = transformPoint4x4(donor_center, projmatrix);
+			 float p_w_center = 1.0f / (p_hom_center.w + 0.0000001f);
+			 float2 donor_center_2D = {
+				ndc2Pix(p_hom_center.x * p_w_center, W),
+				ndc2Pix(p_hom_center.y * p_w_center, H)
+			 };
+
+			 float2 donor_image[3];
+			 float donor_distance_points = 0.0f;
+			 for (int i = 0; i < 3; i++) {
+				 float4 p_hom = transformPoint4x4(donor_p[i], projmatrix);
+				 float inv_w = 1.0f / (p_hom.w + 0.0000001f);
+				 donor_image[i] = { ndc2Pix(p_hom.x * inv_w, W), ndc2Pix(p_hom.y * inv_w, H) };
+				 float distance = __fsqrt_rn((donor_image[i].x - donor_center_2D.x) * (donor_image[i].x - donor_center_2D.x)
+					+ (donor_image[i].y - donor_center_2D.y) * (donor_image[i].y - donor_center_2D.y));
+				 if (distance > donor_distance_points) {
+					 donor_distance_points = distance;
+				 }
+			 }
+
+			 float a = __fsqrt_rn((donor_image[1].x - donor_image[2].x) * (donor_image[1].x - donor_image[2].x) + (donor_image[1].y - donor_image[2].y) * (donor_image[1].y - donor_image[2].y));
+			 float b = __fsqrt_rn((donor_image[0].x - donor_image[2].x) * (donor_image[0].x - donor_image[2].x) + (donor_image[0].y - donor_image[2].y) * (donor_image[0].y - donor_image[2].y));
+			 float c = __fsqrt_rn((donor_image[0].x - donor_image[1].x) * (donor_image[0].x - donor_image[1].x) + (donor_image[0].y - donor_image[1].y) * (donor_image[0].y - donor_image[1].y));
+			 float sum = a + b + c;
+			 float2 donor_incenter;
+			 donor_incenter.x = (a * donor_image[0].x + b * donor_image[1].x + c * donor_image[2].x) / sum;
+			 donor_incenter.y = (a * donor_image[0].y + b * donor_image[1].y + c * donor_image[2].y) / sum;
+
+			 for (int i = 0; i < 3; i++) {
+				 float2 p1_conv = donor_image[i];
+				 float2 p2_conv = donor_image[(i + 1) % 3];
+				 float nx = p2_conv.y - p1_conv.y;
+				 float ny = -(p2_conv.x - p1_conv.x);
+				 float inv_norm = 1.0f / __fsqrt_rn(nx * nx + ny * ny);
+				 float2 normal = {nx * inv_norm, ny * inv_norm};
+				 float offset = - (normal.x * p1_conv.x + normal.y * p1_conv.y);
+				 donor_dist = normal.x * donor_incenter.x + normal.y * donor_incenter.y + offset;
+				 if (donor_dist > 0) {
+					 normal.x = -normal.x;
+					 normal.y = -normal.y;
+					 offset = -offset;
+					 donor_dist = -donor_dist;
+				 }
+				 donor_normals[cumsum_for_triangle + i] = normal;
+				 donor_offsets[cumsum_for_triangle + i] = offset;
+			 }
+			 donor_cull = (donor_distance_points > 1600 or donor_distance_points < 1 or donor_dist > -1);
+		 }
+	 }
+	 const float eff_min_weight = donor_op ? donor_min_weight : min_weight;
+
 
 	 int vertex_index = triangles_indices[cumsum_for_triangle];
 	 float3 p0 = make_float3(
@@ -217,9 +311,12 @@
 	 );
 
  
-	 // Perform near culling, quit if outside.
+	 // Perform near culling, quit if outside. A donor-window face stands and
+	 // falls with its donor's reference point, which also becomes its depth
+	 // sort key below, so siblings composite exactly where their parent did.
 	 float3 p_view_triangle;
-	 if (!in_frustum_triangle(idx, center_triangle, viewmatrix, projmatrix, prefiltered, p_view_triangle)){
+	 const float3 eff_center = donor_win ? donor_center : center_triangle;
+	 if (!in_frustum_triangle(idx, eff_center, viewmatrix, projmatrix, prefiltered, p_view_triangle)){
 		 return;
 	 }
 
@@ -271,7 +368,7 @@
 		return;
 	}
 
-	if (min_weight < stopping_influence){
+	if (eff_min_weight < stopping_influence){
 		return;
 	}
 
@@ -354,7 +451,9 @@
 	 }
 
 	 // or distance_points < 1 or dist > -1
-	if (distance_points > 1600 or distance_points < 1 or dist > -1) {
+	 // A donor-window face defers this sub-pixel cull to its donor: children at
+	 // half the parent's projected size must not vanish where the parent renders.
+	if (donor_win ? donor_cull : (distance_points > 1600 or distance_points < 1 or dist > -1)) {
 			radii[idx] = 0;
 			tiles_touched[idx] = 0;
 			scaling[idx] = 0.0f;
@@ -399,17 +498,17 @@
 		return;
 	}
 
-	float phi_center_min = dist;
+	float phi_center_min = donor_win ? donor_dist : dist;
 	float max_distance = ceil(distance_points);
 
 	 // We save the 2D Size in Image Space
 	 scaling[idx] = max_distance;
 
 	 phi_center[idx] = {1.0f / phi_center_min, size};
-	 depths[idx] = p_view_triangle.z; 
+	 depths[idx] = p_view_triangle.z;
 	 radii[idx] = max_distance;
 	 points_xy_image[idx] = center_triangle_2D;
-	 conic_opacity[idx] = {normal_cvx.x, normal_cvx.y, normal_cvx.z, min_weight};
+	 conic_opacity[idx] = {normal_cvx.x, normal_cvx.y, normal_cvx.z, eff_min_weight};
 	 tiles_touched[idx] = (rect_max_triangle_test.y - rect_min_triangle_test.y) * (rect_max_triangle_test.x - rect_min_triangle_test.x);
 
  }
@@ -425,6 +524,10 @@
 	 int W, int H,
 	 const float2* __restrict__ normals,
 	 const float* __restrict__ offsets,
+	 const int* __restrict__ window_source,
+	 const float2* __restrict__ donor_normals,
+	 const float* __restrict__ donor_offsets,
+	 const int donor_mode,
 	 const float2* __restrict__ points_xy_image,
 	 const float* __restrict__ vertex_depth, 
 	 const int* __restrict__ triangles_indices,
@@ -476,6 +579,12 @@
 	 __shared__ float2 collected_xy[BLOCK_SIZE];
 	 __shared__ float2 collected_phi_center[BLOCK_SIZE];
 	 __shared__ float2 collected_p_images[BLOCK_SIZE * MAX_NB_POINTS];
+	 // RITS window donors: the donor's edge lines replace the face's own in the
+	 // soft-window evaluation only; the inside test above them stays face-local.
+	 __shared__ int collected_donor[BLOCK_SIZE];
+	 __shared__ float2 collected_donor_normals[BLOCK_SIZE * MAX_NB_POINTS];
+	 __shared__ float collected_donor_offsets[BLOCK_SIZE * MAX_NB_POINTS];
+	 const bool donor_windows_active = (window_source != nullptr) && (donor_mode & FORWARD::DONOR_WINDOW);
 	 /*
 	 ===================================================================================================
 	 */
@@ -520,6 +629,16 @@
 				collected_p_images[MAX_NB_POINTS * block.thread_rank() + k] = p_image[3 * coll_id + k];
 			}
 			collected_phi_center[block.thread_rank()] = phi_center[coll_id];
+			if (donor_windows_active) {
+				bool donated = window_source[coll_id] >= 0;
+				collected_donor[block.thread_rank()] = donated;
+				if (donated) {
+					for (int k = 0; k < 3; k++) {
+						collected_donor_normals[MAX_NB_POINTS * block.thread_rank() + k] = donor_normals[3 * coll_id + k];
+						collected_donor_offsets[MAX_NB_POINTS * block.thread_rank() + k] = donor_offsets[3 * coll_id + k];
+					}
+				}
+			}
 		 }
 		 block.sync();
  
@@ -553,7 +672,21 @@
 
 			 if (outside)
 				continue;
- 
+
+			 if (donor_windows_active && collected_donor[j]) {
+				 // Re-evaluate the soft value in the donor's window: the maximum
+				 // donor-edge distance, clamped to the donor's interior because a
+				 // pixel on the donor boundary may land epsilon outside it.
+				 max_val = -INFINITY;
+				 for (int k = 0; k < 3; k++) {
+					 float dist = (collected_donor_normals[base + k].x * pixf.x
+							  + collected_donor_normals[base + k].y * pixf.y
+							  + collected_donor_offsets[base + k]);
+					 max_val = fmaxf(max_val, dist);
+				 }
+				 max_val = fminf(max_val, 0.0f);
+			 }
+
 			 float phi_x = max_val;
 			 float phi_final = phi_x * phi_center_min.x;
 			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma));
@@ -676,8 +809,12 @@
 	 int W, int H,
 	 const float2* normals,
 	 const float* offsets,
+	 const int* window_source,
+	 const float2* donor_normals,
+	 const float* donor_offsets,
+	 const int donor_mode,
 	 const float2* points_xy_image,
-	 const float* vertex_depth, 
+	 const float* vertex_depth,
 	 const int* triangles_indices,
 	 const float sigma,
 	 const float* colors,
@@ -701,6 +838,10 @@
 		 W, H,
 		 normals,
 		 offsets,
+		 window_source,
+		 donor_normals,
+		 donor_offsets,
+		 donor_mode,
 		 points_xy_image,
 		 vertex_depth,
 		 triangles_indices,
@@ -743,6 +884,11 @@
 	 const float* vertices,
 	 const int* triangles_indices,
 	 const float* vertex_weights,
+	 const int* window_source,
+	 const int* donor_indices,
+	 const int donor_mode,
+	 float2* donor_normals,
+	 float* donor_offsets,
 	 const float sigma,
 	 float* scaling,
 	 const float* shs,
@@ -775,6 +921,11 @@
 		 vertices,
 		 triangles_indices,
 		 vertex_weights,
+		 window_source,
+		 donor_indices,
+		 donor_mode,
+		 donor_normals,
+		 donor_offsets,
 		 sigma,
 		 scaling,
 		 shs,

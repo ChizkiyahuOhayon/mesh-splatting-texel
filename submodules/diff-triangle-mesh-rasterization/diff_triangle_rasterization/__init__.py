@@ -37,6 +37,7 @@ def rasterize_triangles(
     scaling,
     raster_settings,
     texels=None,
+    window_donors=None,
 ):
     return _RasterizeTriangles.apply(
         vertices,
@@ -48,6 +49,7 @@ def rasterize_triangles(
         scaling,
         raster_settings,
         texels,
+        window_donors,
     )
 
 class _RasterizeTriangles(torch.autograd.Function):
@@ -63,6 +65,7 @@ class _RasterizeTriangles(torch.autograd.Function):
         scaling,
         raster_settings,
         texels,
+        window_donors,
     ):
         # texel_order 0 disables the carrier entirely: the C++ side then receives a
         # null pointer and the kernels take exactly the original code path, so the
@@ -72,9 +75,18 @@ class _RasterizeTriangles(torch.autograd.Function):
             texels = torch.zeros(0, device=vertices.device, dtype=vertices.dtype)
             texel_order = 0
 
+        # RITS window donors: (window_source [F], donor_indices [D, 3], donor_mode).
+        # donor_mode 0 hands the C++ side null pointers, keeping the original code
+        # path bit-reproducible exactly like texel_order 0 does for texels.
+        if window_donors is None:
+            empty = torch.zeros(0, device=vertices.device, dtype=torch.int32)
+            window_source, donor_indices, donor_mode = empty, empty, 0
+        else:
+            window_source, donor_indices, donor_mode = window_donors
+
         # Restructure arguments the way that the C++ lib expects them
         args = (
-            raster_settings.bg, 
+            raster_settings.bg,
             vertices,
             triangles_indices,
             vertex_weights,
@@ -82,6 +94,9 @@ class _RasterizeTriangles(torch.autograd.Function):
             colors_precomp,
             texels,
             texel_order,
+            window_source,
+            donor_indices,
+            donor_mode,
             scaling,
             raster_settings.viewmatrix,
             raster_settings.projmatrix,
@@ -114,6 +129,7 @@ class _RasterizeTriangles(torch.autograd.Function):
         ctx.num_rendered = num_rendered
         ctx.sigma = sigma
         ctx.texel_order = texel_order
+        ctx.donor_mode = donor_mode
         ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels)
         return color, radii, scaling, depth, max_blending, was_rendered
 
@@ -125,6 +141,10 @@ class _RasterizeTriangles(torch.autograd.Function):
         raster_settings = ctx.raster_settings
         sigma = ctx.sigma
         texel_order = ctx.texel_order
+        if ctx.donor_mode != 0:
+            raise NotImplementedError(
+                "backward through active window donors is not implemented; "
+                "RITS-D0 is a forward-only diagnostic (see experiments/rits_d0)")
         vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels = ctx.saved_tensors
 
         # Restructure args as C++ method expects them
@@ -175,6 +195,7 @@ class _RasterizeTriangles(torch.autograd.Function):
             None,  # scaling
             None,  # raster_settings
             grad_texels if texel_order > 0 else None,
+            None,  # window_donors
         )
 
         return grads
@@ -212,8 +233,8 @@ class TriangleRasterizer(nn.Module):
             
         return visible
 
-    def forward(self, vertices, triangles_indices, vertex_weights, sigma, scaling,  shs = None, colors_precomp = None, texels = None):
-        
+    def forward(self, vertices, triangles_indices, vertex_weights, sigma, scaling,  shs = None, colors_precomp = None, texels = None, window_donors = None):
+
         raster_settings = self.raster_settings
 
         if (shs is None and colors_precomp is None) or (shs is not None and colors_precomp is not None):
@@ -236,6 +257,7 @@ class TriangleRasterizer(nn.Module):
             scaling,
             raster_settings,
             texels,
+            window_donors,
         )
 
 

@@ -55,10 +55,13 @@ RasterizetrianglesCUDA(
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
 	const int texel_order,
+	const torch::Tensor& window_source,
+	const torch::Tensor& donor_indices,
+	const int donor_mode,
 	torch::Tensor& scaling,
 	const torch::Tensor& viewmatrix,
 	const torch::Tensor& projmatrix,
-	const float tan_fovx, 
+	const float tan_fovx,
 	const float tan_fovy,
     const int image_height,
     const int image_width,
@@ -68,8 +71,19 @@ RasterizetrianglesCUDA(
 	const bool prefiltered,
 	const bool debug)
 {
-    
+
   const int P = triangles_indices.size(0);
+  if (donor_mode != 0) {
+    TORCH_CHECK(donor_mode >= 1 && donor_mode <= 3, "donor_mode must be a bitmask in [1, 3], got ", donor_mode);
+    TORCH_CHECK(window_source.dim() == 1 && window_source.size(0) == P,
+                "window_source must be [F] with F = ", P, ", got ", window_source.sizes());
+    TORCH_CHECK(donor_indices.dim() == 2 && donor_indices.size(1) == 3,
+                "donor_indices must be [D, 3], got ", donor_indices.sizes());
+    TORCH_CHECK(window_source.scalar_type() == torch::kInt32 && donor_indices.scalar_type() == torch::kInt32,
+                "window_source and donor_indices must be int32");
+    TORCH_CHECK(window_source.is_cuda() && window_source.is_contiguous(), "window_source must be contiguous CUDA");
+    TORCH_CHECK(donor_indices.is_cuda() && donor_indices.is_contiguous(), "donor_indices must be contiguous CUDA");
+  }
   if (texel_order > 0) {
     TORCH_CHECK(texels.dim() == 3, "texels must be [F, order*order, 3], got dim ", texels.dim());
     TORCH_CHECK(texels.size(0) == P, "texel face count ", texels.size(0), " != triangle count ", P);
@@ -131,7 +145,10 @@ RasterizetrianglesCUDA(
 		colors.contiguous().data_ptr<float>(), 
 		texel_order > 0 ? texels.contiguous().data_ptr<float>() : nullptr,
 		texel_order,
-		scaling.contiguous().data_ptr<float>(), 
+		donor_mode != 0 ? window_source.contiguous().data_ptr<int>() : nullptr,
+		donor_mode != 0 ? donor_indices.contiguous().data_ptr<int>() : nullptr,
+		donor_mode,
+		scaling.contiguous().data_ptr<float>(),
 		viewmatrix.contiguous().data_ptr<float>(), 
 		projmatrix.contiguous().data_ptr<float>(),
 		campos.contiguous().data_ptr<float>(),

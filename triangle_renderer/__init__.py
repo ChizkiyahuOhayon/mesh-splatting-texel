@@ -101,7 +101,7 @@ def compute_image_2d_pytorch_exact(vertices, projmatrix, W, H):
     return image_2D_pytorch
 
 
-def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
+def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, window_donors = None):
     """
     Render the scene. 
     
@@ -198,6 +198,7 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         colors_precomp = colors_precomp,
         scaling = scaling,
         texels = texels,
+        window_donors = window_donors,
        )
 
     radii = radii[:vertex_index]
