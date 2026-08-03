@@ -13,7 +13,8 @@ from arguments import ModelParams, PipelineParams, get_combined_args
 from lpipsPyTorch.modules.lpips import LPIPS
 from rits_prolongation import (
     FINETUNE_LRS,
-    directional_probe_step,
+    fd_probe_indices,
+    fd_rung_check,
     install_trainable_split,
 )
 from scene import Scene
@@ -33,6 +34,8 @@ SMOKE_ANNEAL_STEPS = 40
 SMOKE_SELECT_FRACTION = 0.01
 LAMBDA_DSSIM = 0.2
 SEED = 1234
+FD_PROBES = 8
+FD_RUNGS = (0.002, 0.001)
 FD_TOLERANCE = 0.05
 ARMS = ("unsplit", "abrupt", "rits")
 
@@ -92,14 +95,25 @@ def _select_faces(triangles, pipeline, background, train_views, fraction):
 
 
 def _g0_lite(triangles, pipeline, background, view, split):
-    """Locked precondition of the rits arm; raises on failure."""
-    donors = split["window_donors"]
+    """Locked precondition of the rits arm; raises on failure.
+
+    The loss here is reduced in float64 (renders stay float32) so per-scalar
+    steps of 0.002 produce differences far above the reduction accuracy; the
+    float32 training loss cannot resolve them (protocol amendment history).
+    The donor image is independent of midpoint parameters, so it is rendered
+    once and reused across every evaluation.
+    """
     base_vertices = split["base_vertex_count"]
-    target = view.original_image.cuda()
+    target = view.original_image.cuda().double()
+    with torch.no_grad():
+        donor_image = render(
+            view, triangles, pipeline, background, window_donors=split["window_donors"]
+        )["render"]
 
     def blended_loss():
-        image = _blended_render(view, triangles, pipeline, background, donors, 0.5)
-        return _photometric_loss(image, target)
+        child = render(view, triangles, pipeline, background)["render"]
+        image = 0.5 * child + 0.5 * donor_image
+        return _photometric_loss(image.double(), target)
 
     blended_loss().backward()
     grads = {name: getattr(triangles, name).grad for name in PARAMETER_NAMES}
@@ -119,34 +133,39 @@ def _g0_lite(triangles, pipeline, background, view, split):
             f"appearance {appearance_norm})"
         )
 
-    # Directional probe along the midpoint f_dc gradient (protocol amendment
-    # 2026-08-04): the analytic directional derivative along the unit gradient
-    # direction is the block's gradient norm.
-    gradient = triangles._features_dc.grad[base_vertices:].detach()
-    dc_norm = float(gradient.norm())
-    direction = gradient / dc_norm
-    step = directional_probe_step(dc_norm, float(direction.abs().max()))
+    dc_gradient = triangles._features_dc.grad[base_vertices:].detach()
+    probe_indices = fd_probe_indices(dc_gradient, FD_PROBES)
+    flat_gradient = dc_gradient.flatten()
+    finite_difference = []
     with torch.no_grad():
-        block = triangles._features_dc.data[base_vertices:]
-        original = block.clone()
-        samples = []
-        for sign in (1.0, -1.0):
-            block.copy_(original + sign * step * direction)
-            samples.append(float(blended_loss()))
-        block.copy_(original)
-    estimate = (samples[0] - samples[1]) / (2.0 * step)
-    relative = abs(estimate - dc_norm) / max(abs(estimate), dc_norm, 1e-12)
-    finite_difference = {
-        "step": step,
-        "analytic_directional": dc_norm,
-        "fd_directional": estimate,
-        "relative": relative,
-    }
-    if relative > FD_TOLERANCE:
-        raise RuntimeError(
-            "G0-lite: directional finite-difference mismatch "
-            f"{relative:.4f} (analytic {dc_norm:.6e}, fd {estimate:.6e}, step {step:.3e})"
-        )
+        flat = triangles._features_dc.data[base_vertices:].reshape(-1)
+        for index in probe_indices.tolist():
+            original = float(flat[index])
+            analytic = float(flat_gradient[index])
+            estimates = []
+            for step in FD_RUNGS:
+                samples = []
+                for sign in (1.0, -1.0):
+                    flat[index] = original + sign * step
+                    samples.append(float(blended_loss()))
+                flat[index] = original
+                estimates.append((samples[0] - samples[1]) / (2.0 * step))
+            check = fd_rung_check(analytic, estimates[0], estimates[1], FD_TOLERANCE)
+            finite_difference.append(
+                {
+                    "index": index,
+                    "analytic": analytic,
+                    "fd_coarse": estimates[0],
+                    "fd_fine": estimates[1],
+                    **check,
+                }
+            )
+            if not check["pass"]:
+                raise RuntimeError(
+                    "G0-lite: finite-difference mismatch at scalar "
+                    f"{index}: analytic {analytic:.6e}, fd {estimates[1]:.6e} "
+                    f"(coarse {estimates[0]:.6e}), relative {check['relative']:.4f}"
+                )
     for name in PARAMETER_NAMES:
         getattr(triangles, name).grad = None
     return {

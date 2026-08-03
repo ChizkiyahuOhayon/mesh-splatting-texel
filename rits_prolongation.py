@@ -50,30 +50,33 @@ def install_prolongation_probe(
     return probe
 
 
-def directional_probe_step(
-    gradient_norm, max_abs_direction, target_delta=1e-4, max_element_step=0.05
-):
-    """Step size for a float32-robust directional finite-difference probe.
+def fd_probe_indices(gradient, count=8):
+    """Flattened indices of the largest-magnitude gradient entries.
 
-    Per-scalar probes fail in float32: one midpoint SH-DC gradient is ~1e-6,
-    so a 1e-3 step moves the full-image loss by ~1e-9 — below the ~4e-9
-    float32 spacing around a loss of ~0.03 — and the central difference
-    rounds to exactly zero. Probing along the unit gradient direction
-    aggregates the whole block's signal instead: the step targets a loss
-    change of `target_delta`, capped per element so the probe stays in the
-    linear regime.
+    Probing the largest entries keeps each per-scalar loss change as far
+    above the measurement floor as the gradient allows; uniformly sampled
+    scalars are mostly invisible in any single view and carry no signal.
     """
-    if gradient_norm <= 0.0:
-        raise ValueError("directional probe requires a nonzero gradient norm")
-    if max_abs_direction <= 0.0:
-        raise ValueError("directional probe requires a nonzero direction")
-    step = min(target_delta / gradient_norm, max_element_step / max_abs_direction)
-    if step * gradient_norm < 1e-6:
-        raise RuntimeError(
-            "directional probe cannot resolve the loss change: expected "
-            f"{step * gradient_norm:.3e} under the {max_element_step} element cap"
-        )
-    return step
+    flat = gradient.detach().abs().flatten()
+    return torch.topk(flat, min(count, flat.numel())).indices
+
+
+def fd_rung_check(analytic, coarse, fine, tolerance=0.05, growth=1.25):
+    """Two-rung central-difference check against an analytic gradient.
+
+    The fine-step estimate must agree within `tolerance` and its error must
+    not exceed `growth` times the coarse-step error: a correct gradient is
+    the small-step limit of the difference quotient, so halving the step must
+    not move the estimate away from it beyond noise.
+    """
+    scale = max(abs(analytic), abs(fine), 1e-12)
+    relative = abs(fine - analytic) / scale
+    converging = abs(fine - analytic) <= growth * abs(coarse - analytic)
+    return {
+        "relative": relative,
+        "converging": converging,
+        "pass": relative <= tolerance and converging,
+    }
 
 
 # Restore-path fine-tuning learning rates (scene/triangle_model.py

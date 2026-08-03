@@ -4,29 +4,36 @@ import torch
 
 from rits_prolongation import (
     FINETUNE_LRS,
-    directional_probe_step,
+    fd_probe_indices,
+    fd_rung_check,
     install_trainable_split,
 )
 from rits_t0_decide import decide
 from tests.test_rits_prolongation import DummyModel
 
 
-class DirectionalProbeStepTest(unittest.TestCase):
-    def test_step_targets_the_requested_loss_change(self):
-        step = directional_probe_step(gradient_norm=1e-4, max_abs_direction=0.01)
-        self.assertAlmostEqual(step * 1e-4, 1e-4)
+class FdProbeTest(unittest.TestCase):
+    def test_indices_pick_the_largest_magnitudes(self):
+        gradient = torch.tensor([[0.1, -5.0, 0.0], [2.0, -0.3, 4.0]])
+        indices = fd_probe_indices(gradient, count=3)
+        self.assertEqual(set(indices.tolist()), {1, 3, 5})
 
-    def test_element_cap_limits_the_step(self):
-        step = directional_probe_step(gradient_norm=2e-5, max_abs_direction=0.5)
-        self.assertAlmostEqual(step, 0.05 / 0.5)
+    def test_count_is_clamped_to_the_gradient_size(self):
+        self.assertEqual(fd_probe_indices(torch.ones(3), count=8).numel(), 3)
 
-    def test_unresolvable_signal_raises(self):
-        with self.assertRaises(RuntimeError):
-            directional_probe_step(gradient_norm=1e-9, max_abs_direction=1.0)
+    def test_rung_check_passes_a_converging_estimate(self):
+        check = fd_rung_check(analytic=1.0, coarse=1.08, fine=1.02)
+        self.assertTrue(check["pass"])
 
-    def test_zero_gradient_raises(self):
-        with self.assertRaises(ValueError):
-            directional_probe_step(gradient_norm=0.0, max_abs_direction=1.0)
+    def test_rung_check_fails_out_of_tolerance(self):
+        check = fd_rung_check(analytic=1.0, coarse=1.5, fine=1.4)
+        self.assertFalse(check["pass"])
+        self.assertGreater(check["relative"], 0.05)
+
+    def test_rung_check_fails_a_diverging_estimate(self):
+        check = fd_rung_check(analytic=1.0, coarse=1.01, fine=1.04)
+        self.assertFalse(check["pass"])
+        self.assertFalse(check["converging"])
 
 
 class InstallTrainableSplitTest(unittest.TestCase):
