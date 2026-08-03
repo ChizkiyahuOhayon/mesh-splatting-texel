@@ -11,7 +11,11 @@ from tqdm import tqdm
 
 from arguments import ModelParams, PipelineParams, get_combined_args
 from lpipsPyTorch.modules.lpips import LPIPS
-from rits_prolongation import FINETUNE_LRS, install_trainable_split
+from rits_prolongation import (
+    FINETUNE_LRS,
+    directional_probe_step,
+    install_trainable_split,
+)
 from scene import Scene
 from scene.triangle_model import TriangleModel
 from svsr_g1_eval import _checkpoint, _metrics, _sha256
@@ -29,8 +33,6 @@ SMOKE_ANNEAL_STEPS = 40
 SMOKE_SELECT_FRACTION = 0.01
 LAMBDA_DSSIM = 0.2
 SEED = 1234
-FD_PROBES = 8
-FD_STEP = 1e-3
 FD_TOLERANCE = 0.05
 ARMS = ("unsplit", "abrupt", "rits")
 
@@ -117,27 +119,34 @@ def _g0_lite(triangles, pipeline, background, view, split):
             f"appearance {appearance_norm})"
         )
 
-    midpoint_dc = triangles._features_dc.grad[base_vertices:].flatten()
-    probe_indices = torch.linspace(0, midpoint_dc.numel() - 1, FD_PROBES).long()
-    finite_difference = []
+    # Directional probe along the midpoint f_dc gradient (protocol amendment
+    # 2026-08-04): the analytic directional derivative along the unit gradient
+    # direction is the block's gradient norm.
+    gradient = triangles._features_dc.grad[base_vertices:].detach()
+    dc_norm = float(gradient.norm())
+    direction = gradient / dc_norm
+    step = directional_probe_step(dc_norm, float(direction.abs().max()))
     with torch.no_grad():
-        flat = triangles._features_dc.data[base_vertices:].reshape(-1)
-        for index in probe_indices.tolist():
-            original = float(flat[index])
-            samples = []
-            for offset in (FD_STEP, -FD_STEP):
-                flat[index] = original + offset
-                samples.append(float(blended_loss()))
-            flat[index] = original
-            analytic = float(midpoint_dc[index])
-            estimate = (samples[0] - samples[1]) / (2.0 * FD_STEP)
-            scale = max(abs(estimate), abs(analytic), 1e-10)
-            relative = abs(estimate - analytic) / scale
-            finite_difference.append(
-                {"index": index, "analytic": analytic, "fd": estimate, "relative": relative}
-            )
-            if relative > FD_TOLERANCE and max(abs(estimate), abs(analytic)) > 1e-10:
-                raise RuntimeError(f"G0-lite: finite-difference mismatch {relative:.4f}")
+        block = triangles._features_dc.data[base_vertices:]
+        original = block.clone()
+        samples = []
+        for sign in (1.0, -1.0):
+            block.copy_(original + sign * step * direction)
+            samples.append(float(blended_loss()))
+        block.copy_(original)
+    estimate = (samples[0] - samples[1]) / (2.0 * step)
+    relative = abs(estimate - dc_norm) / max(abs(estimate), dc_norm, 1e-12)
+    finite_difference = {
+        "step": step,
+        "analytic_directional": dc_norm,
+        "fd_directional": estimate,
+        "relative": relative,
+    }
+    if relative > FD_TOLERANCE:
+        raise RuntimeError(
+            "G0-lite: directional finite-difference mismatch "
+            f"{relative:.4f} (analytic {dc_norm:.6e}, fd {estimate:.6e}, step {step:.3e})"
+        )
     for name in PARAMETER_NAMES:
         getattr(triangles, name).grad = None
     return {

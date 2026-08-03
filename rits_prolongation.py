@@ -50,6 +50,32 @@ def install_prolongation_probe(
     return probe
 
 
+def directional_probe_step(
+    gradient_norm, max_abs_direction, target_delta=1e-4, max_element_step=0.05
+):
+    """Step size for a float32-robust directional finite-difference probe.
+
+    Per-scalar probes fail in float32: one midpoint SH-DC gradient is ~1e-6,
+    so a 1e-3 step moves the full-image loss by ~1e-9 — below the ~4e-9
+    float32 spacing around a loss of ~0.03 — and the central difference
+    rounds to exactly zero. Probing along the unit gradient direction
+    aggregates the whole block's signal instead: the step targets a loss
+    change of `target_delta`, capped per element so the probe stays in the
+    linear regime.
+    """
+    if gradient_norm <= 0.0:
+        raise ValueError("directional probe requires a nonzero gradient norm")
+    if max_abs_direction <= 0.0:
+        raise ValueError("directional probe requires a nonzero direction")
+    step = min(target_delta / gradient_norm, max_element_step / max_abs_direction)
+    if step * gradient_norm < 1e-6:
+        raise RuntimeError(
+            "directional probe cannot resolve the loss change: expected "
+            f"{step * gradient_norm:.3e} under the {max_element_step} element cap"
+        )
+    return step
+
+
 # Restore-path fine-tuning learning rates (scene/triangle_model.py
 # load_parameters); vertex opacity stays frozen by convention.
 FINETUNE_LRS = {"f_dc": 0.0016, "f_rest": 0.0016 / 20.0, "vertices": 0.0001, "vertex_weight": 0.0}

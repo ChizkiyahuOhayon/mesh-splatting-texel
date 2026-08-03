@@ -2,9 +2,31 @@ import unittest
 
 import torch
 
-from rits_prolongation import FINETUNE_LRS, install_trainable_split
+from rits_prolongation import (
+    FINETUNE_LRS,
+    directional_probe_step,
+    install_trainable_split,
+)
 from rits_t0_decide import decide
 from tests.test_rits_prolongation import DummyModel
+
+
+class DirectionalProbeStepTest(unittest.TestCase):
+    def test_step_targets_the_requested_loss_change(self):
+        step = directional_probe_step(gradient_norm=1e-4, max_abs_direction=0.01)
+        self.assertAlmostEqual(step * 1e-4, 1e-4)
+
+    def test_element_cap_limits_the_step(self):
+        step = directional_probe_step(gradient_norm=2e-5, max_abs_direction=0.5)
+        self.assertAlmostEqual(step, 0.05 / 0.5)
+
+    def test_unresolvable_signal_raises(self):
+        with self.assertRaises(RuntimeError):
+            directional_probe_step(gradient_norm=1e-9, max_abs_direction=1.0)
+
+    def test_zero_gradient_raises(self):
+        with self.assertRaises(ValueError):
+            directional_probe_step(gradient_norm=0.0, max_abs_direction=1.0)
 
 
 class InstallTrainableSplitTest(unittest.TestCase):

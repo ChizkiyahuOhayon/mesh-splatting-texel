@@ -61,11 +61,26 @@ On the first name-sorted training view at `gamma = 0.5`:
 
 1. gradients of all four parameter tensors are finite;
 2. the midpoint-row geometry and appearance gradient group norms are nonzero;
-3. central finite differences on 8 deterministic midpoint `f_dc` scalars
-   (step 1e-3) agree with analytic gradients within 5% relative error.
+3. a central finite difference **along the unit direction of the midpoint
+   `f_dc` gradient block** agrees with the analytic directional derivative
+   (the block's gradient norm) within 5% relative error. The step targets a
+   loss change of 1e-4 and is capped at 0.05 per element; if the cap makes
+   the expected change smaller than 1e-6 the check fails as unresolvable.
 
 If any check fails, no arm trains and the gate stops as an implementation
 failure, not a scientific result.
+
+**Amendment 2026-08-04, before any training output was observed.** The
+original item 3 prescribed per-scalar central differences (8 scalars, step
+1e-3). That procedure is unimplementable in float32: an individual midpoint
+SH-DC gradient is ~1e-6, so a 1e-3 step changes the full-image loss by ~1e-9,
+below the ~4e-9 spacing of float32 around a loss of ~0.03; the difference
+rounds to exactly zero and the relative error is identically 1. The smoke run
+failed at this precondition exactly as designed and produced no training or
+metric output. The directional probe above aggregates the block's signal so
+the expected loss change (~2e-4) is orders of magnitude above float32
+resolution, while still validating gradient direction and magnitude. The 5%
+tolerance and all training-side settings and decision rules are unchanged.
 
 ## Locked decision
 
