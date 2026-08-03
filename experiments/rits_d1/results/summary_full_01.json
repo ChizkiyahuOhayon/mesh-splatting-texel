@@ -1,0 +1,28 @@
+{
+  "experiment": "RITS-D1",
+  "classification": "confirmatory_two_scene_gate",
+  "provenance": "Transcribed from user-provided console output; server results.json files are authoritative.",
+  "source_revision": "55e6c6dcadbf3c5a967433930c45424a2ed65501",
+  "scenes": {
+    "garden": {
+      "scene_pass": true,
+      "probe_region_pixels": 121796,
+      "variants": {
+        "v1_inherited": {"global_mae": 1.1052520693959417e-4, "probe_region_mae": 4.203463858221352e-3},
+        "v4_prolongation": {"global_mae": 7.3331611727195356e-6, "probe_region_mae": 3.7067671503988273e-4},
+        "v5_full_prolongation": {"global_mae": 6.167667035353245e-10, "probe_region_mae": 2.0769093290277396e-8, "p99_abs_error": 0.0, "max_abs_error": 3.0736327171325684e-3}
+      }
+    },
+    "room": {
+      "scene_pass": true,
+      "probe_region_pixels": 172809,
+      "variants": {
+        "v1_inherited": {"global_mae": 5.486684538577779e-5, "probe_region_mae": 1.8245802742476217e-3},
+        "v4_prolongation": {"global_mae": 3.214550297183123e-5, "probe_region_mae": 1.2178946797153183e-3},
+        "v5_full_prolongation": {"global_mae": 4.628099158860877e-12, "probe_region_mae": 2.4304979239278075e-11, "p99_abs_error": 0.0, "max_abs_error": 4.583597183227539e-5}
+      }
+    }
+  },
+  "decision": "PASS",
+  "verdict_notes": "All anchors reproduced; v5 is float-noise identity on both scenes; exact refinement invariance demonstrated on trained real-scene checkpoints."
+}
