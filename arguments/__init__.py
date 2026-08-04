@@ -171,6 +171,13 @@ class OptimizationParams(ParamGroup):
         # per rendered pixel. SAC-G0 asks what that last factor is worth when
         # the model is trained at the rate it will be rendered at.
         self.final_scaling = 4
+        # Supersampling factor for the post-training cleanup, which deletes
+        # faces whose maximum blending weight never exceeds 0.5. That maximum
+        # is taken per pixel, so the factor decides how many chances each face
+        # gets to survive. 0 keeps whatever factor training ended with, which
+        # is the published behaviour; setting it makes the criterion
+        # independent of the training schedule.
+        self.cleanup_scaling = 0
 
         self.size_probs_zero = 7.5e-05
         self.size_probs_zero_image_space = 0.0

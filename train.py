@@ -471,7 +471,12 @@ def training(
                     triangles.texel_optimizer.step()
                     triangles.texel_optimizer.zero_grad(set_to_none = True)
 
-    # cleaning of triangles that we do not need
+    # cleaning of triangles that we do not need. `max_blending` is a per-pixel
+    # maximum, so the supersampling factor sets how many chances each face gets
+    # to clear the threshold; pinning it makes the criterion independent of the
+    # training schedule instead of inheriting whatever factor training ended on.
+    if opt.cleanup_scaling:
+        triangles.scaling = opt.cleanup_scaling
     viewpoint_stack = scene.getTrainCameras().copy()
     triangles.importance_score = torch.zeros((triangles._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
     while viewpoint_stack:
@@ -597,6 +602,8 @@ if __name__ == "__main__":
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 30_000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--seed", type=int, default=0,
+                        help="seed for python, numpy and torch; 0 is the published value")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
 
@@ -613,7 +620,7 @@ if __name__ == "__main__":
     lpips_fn = lpips.LPIPS(net='vgg').to(device="cuda")
 
     # Initialize system state (RNG)
-    safe_state(args.quiet)
+    safe_state(args.quiet, args.seed)
 
     lps = lp.extract(args)
     ops = op.extract(args)

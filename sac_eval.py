@@ -91,6 +91,7 @@ def run(dataset, pipeline, args):
         "protocol": "experiments/sac_g0/protocol.md",
         "arm": args.sac_arm,
         "scene": args.sac_scene,
+        "seed": args.sac_seed,
         "dataset_path": str(Path(dataset.source_path).resolve()),
         "model_path": str(Path(dataset.model_path).resolve()),
         "iteration": iteration,
@@ -117,6 +118,7 @@ def run(dataset, pipeline, args):
     results = {
         "arm": args.sac_arm,
         "scene": args.sac_scene,
+        "seed": args.sac_seed,
         "cells": cells,
         "primitives": {
             "vertices": int(triangles.vertices.shape[0]),
@@ -140,6 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--sac_arm", required=True, choices=("stock", "splat2"))
     parser.add_argument("--sac_scene", required=True)
+    parser.add_argument("--sac_seed", type=int, default=0)
     parser.add_argument("--sac_output", required=True)
     parser.add_argument(
         "--sac_training_seconds",
