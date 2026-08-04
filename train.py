@@ -158,7 +158,7 @@ def training(
         if iteration == start_upsampling:
             triangles.scaling = opt.upscaling_factor
         if iteration == start_upsampling + 5000:
-            triangles.scaling = 4
+            triangles.scaling = opt.final_scaling
 
         iter_start.record()
         triangles.update_learning_rate(iteration)

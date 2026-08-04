@@ -166,6 +166,11 @@ class OptimizationParams(ParamGroup):
         self.splitt_large_triangles = 100
         self.start_upsampling = 20000
         self.upscaling_factor = 2
+        # Supersampling factor for the last training phase, and the rate the
+        # model is deployed at. 4 is the published behaviour: sixteen samples
+        # per rendered pixel. SAC-G0 asks what that last factor is worth when
+        # the model is trained at the rate it will be rendered at.
+        self.final_scaling = 4
 
         self.size_probs_zero = 7.5e-05
         self.size_probs_zero_image_space = 0.0
