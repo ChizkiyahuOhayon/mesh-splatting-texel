@@ -62,8 +62,9 @@ On the first name-sorted training view at `gamma = 0.5`:
 1. gradients of all four parameter tensors are finite;
 2. the midpoint-row geometry and appearance gradient group norms are nonzero;
 3. midpoint parameters carry gradients of the **same fidelity as the
-   checkpoint's original parameters**. With the G0-lite loss reduced in
-   **float64** (renders stay float32), probe the 4 largest-|gradient| `f_dc`
+   checkpoint's original parameters**. Using a **mean-squared-error probe
+   loss** on the blended image, reduced in **float64** (renders stay
+   float32), probe the 4 largest-|gradient| `f_dc`
    scalars of the original block and of the midpoint block at steps 0.002 and
    0.001, and take each block's median central-difference / analytic ratio.
    The check passes when every probe's two rungs agree within 5% (the
@@ -108,6 +109,31 @@ and loss — the property the precondition actually needs to establish, and one
 a broken split path would still fail. All three arms share the rasterizer, so
 the discrepancy cancels in the arm comparison; the decision rule and every
 training-side setting remain unchanged.
+
+**Amendment 4, 2026-08-04.** The Room rits arm stopped at the convergence
+clause: its midpoint rungs disagreed by 8.0% against the 5% requirement. The
+cause is the probe's own outer loss. `L1` is non-differentiable where a pixel
+residual changes sign, and a 0.002 step in a DC coefficient moves colour by
+about 5.6e-4, which flips the residual sign for a nonzero fraction of pixels;
+the difference quotient then carries a genuine step-dependent bias, larger on
+Room, whose few rendered children concentrate the signal. The probe loss is
+therefore mean squared error. The rendered image is exactly linear in a DC
+coefficient (colour is `C0 * dc + ...`, and per-pixel alpha and transmittance
+do not depend on colour), so an MSE probe loss is exactly quadratic in the
+probed scalar and its central difference is exact at any step, while the
+quantity under test — the rasterizer backward — is unchanged. Analytic and
+finite-difference values are both taken from this same probe loss, and a
+residual rung disagreement now signals real non-smoothness, such as an SH
+clamp changing state, which is worth catching.
+
+Scope of this amendment: it changes the precondition's measurement instrument
+only. No training setting, arm definition, or decision rule changes. The probe
+restores every perturbed scalar to its stored value and clears gradients, and
+both seeds are set after it, so training is bitwise unaffected by it. At the
+time of writing, five arms had completed training and none of their held-out
+metrics had been inspected; the Garden rits arm passed the previous
+(L1+SSIM-probe) form of this precondition, and because the probe cannot affect
+training, its result stands.
 
 ## Locked decision
 

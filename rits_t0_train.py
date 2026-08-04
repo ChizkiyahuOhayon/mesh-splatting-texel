@@ -93,11 +93,14 @@ def _select_faces(triangles, pipeline, background, train_views, fraction):
 def _g0_lite(triangles, pipeline, background, view, split):
     """Locked precondition of the rits arm; raises on failure.
 
-    The loss here is reduced in float64 (renders stay float32) so per-scalar
-    steps of 0.002 produce differences far above the reduction accuracy; the
-    float32 training loss cannot resolve them (protocol amendment history).
-    The donor image is independent of midpoint parameters, so it is rendered
-    once and reused across every evaluation.
+    The probe loss is mean squared error reduced in float64 (renders stay
+    float32). The rendered image is exactly linear in a DC coefficient, so an
+    MSE probe is exactly quadratic in the probed scalar and its central
+    difference is exact at any step, while the quantity under test -- the
+    rasterizer backward -- is unchanged. The training loss cannot serve here:
+    L1 kinks where a pixel residual changes sign, which biases the difference
+    quotient step-dependently (protocol amendment history). The donor image is
+    independent of midpoint parameters, so it is rendered once and reused.
     """
     base_vertices = split["base_vertex_count"]
     target = view.original_image.cuda().double()
@@ -109,7 +112,7 @@ def _g0_lite(triangles, pipeline, background, view, split):
     def blended_loss():
         child = render(view, triangles, pipeline, background)["render"]
         image = 0.5 * child + 0.5 * donor_image
-        return _photometric_loss(image.double(), target)
+        return (image.double() - target).pow(2).mean()
 
     blended_loss().backward()
     grads = {name: getattr(triangles, name).grad for name in PARAMETER_NAMES}

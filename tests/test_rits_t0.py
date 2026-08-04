@@ -35,6 +35,25 @@ class FdProbeTest(unittest.TestCase):
         self.assertLess(result["max_rung_disagreement"], 1e-6)
         self.assertEqual([row["index"] for row in result["rows"]][0], 1)
 
+    def test_quadratic_probe_loss_converges_where_a_kinked_one_does_not(self):
+        # The G0-lite instrument choice: a rendered image linear in the probed
+        # scalar makes an MSE loss exactly quadratic, so both rungs agree; an
+        # L1 loss kinks where the residual changes sign and they do not.
+        parameter = torch.zeros(1)
+        residual = torch.tensor([0.0005, -0.0011, 0.0016, -0.0004])
+
+        def image():
+            return residual + 0.282 * parameter
+
+        quadratic = fd_ratio_probe(
+            parameter, torch.ones(1), lambda: float(image().pow(2).mean()), probes=1
+        )
+        kinked = fd_ratio_probe(
+            parameter, torch.ones(1), lambda: float(image().abs().mean()), probes=1
+        )
+        self.assertLess(quadratic["max_rung_disagreement"], 1e-6)
+        self.assertGreater(kinked["max_rung_disagreement"], 0.05)
+
     def test_ratio_probe_restores_the_parameter(self):
         parameter = torch.tensor([0.25, -0.5])
         result = fd_ratio_probe(
