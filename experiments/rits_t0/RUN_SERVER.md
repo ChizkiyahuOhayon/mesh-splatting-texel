@@ -63,3 +63,11 @@ python rits_t0_decide.py \
 
 The rule is locked in `experiments/rits_t0/protocol.md`. `pass: true` requires
 every check; on failure the topology branch closes (final, no T1).
+
+## Retrying an arm
+
+Output paths are reserved write-once. An attempt that fails partway leaves its
+reserved directory behind (holding only `t0_manifest.json`, with no
+`results.json` and no `DONE`), so a retry must use a new suffix — `_02`, then
+`_03` — and the failed directory is left in place as a record of the attempt.
+Point the decision command at whichever directory carries `DONE`.
