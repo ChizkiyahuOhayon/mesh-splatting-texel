@@ -51,6 +51,16 @@ Procedure per scene:
 The implementation smoke uses one training view, one held-out view, 32 faces,
 and 50 steps on Garden only, and can trigger no decision.
 
+Two clarifications fixed before implementation, neither observed against any
+output:
+
+- The restore-path learning rates are used verbatim, which sets the opacity
+  learning rate to zero; midpoint opacity therefore stays at its inherited
+  value. RITS-D0 measured opacity's share of the discrepancy at about 0.02%,
+  so this cannot materially change the outcome.
+- Each step fits one training view, cycling through the four in a fixed order,
+  so every view is fitted 250 times over the locked 1,000 steps.
+
 ## Locked decision
 
 Per scene, let `M_inherited` be RITS-D0 variant 1's probe-region MAE on the

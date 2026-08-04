@@ -108,6 +108,30 @@ def fd_ratio_probe(flat_parameter, flat_gradient, loss_fn, probes=4, rungs=(0.00
 # load_parameters); vertex opacity stays frozen by convention.
 FINETUNE_LRS = {"f_dc": 0.0016, "f_rest": 0.0016 / 20.0, "vertices": 0.0001, "vertex_weight": 0.0}
 
+SPLIT_PARAMETERS = ("vertices", "vertex_weight", "_features_dc", "_features_rest")
+
+
+def zero_original_gradients(model, base_vertex_count):
+    """Confine an update to the rows a split appended.
+
+    Adam's update is `lr * m / (sqrt(v) + eps)`, so a row whose gradient is
+    exactly zero from the first step keeps zero moments and never moves. The
+    caller still asserts the original prefix bitwise afterwards: that check,
+    not this convention, is what guarantees the base model is untouched.
+    """
+    for name in SPLIT_PARAMETERS:
+        gradient = getattr(model, name).grad
+        if gradient is not None:
+            gradient[:base_vertex_count] = 0.0
+
+
+def original_prefix_unchanged(model, originals):
+    """True when every parameter still opens with its pre-split values."""
+    return all(
+        torch.equal(getattr(model, name)[: original.shape[0]].detach(), original)
+        for name, original in originals.items()
+    )
+
 
 def install_trainable_split(model, selected_faces):
     """Install the midpoint split with every parameter trainable.
