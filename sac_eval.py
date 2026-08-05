@@ -124,6 +124,10 @@ def run(dataset, pipeline, args):
             "vertices": int(triangles.vertices.shape[0]),
             "triangles": int(triangles._triangle_indices.shape[0]),
         },
+        # The deployed hardness. Arms that anneal sigma on different schedules
+        # are only comparable if they finish equally hard, so this is recorded
+        # and checked rather than assumed.
+        "sigma": float(triangles.get_sigma),
         # `get_combined_args` copies the config file's namespace and then
         # overlays only those command-line values that are not None, so an
         # optional argument left at a None default is absent from `args`
@@ -144,7 +148,7 @@ if __name__ == "__main__":
     pipeline = PipelineParams(parser)
     parser.add_argument("--iteration", default=-1, type=int)
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--sac_arm", required=True, choices=("stock", "splat2"))
+    parser.add_argument("--sac_arm", required=True, choices=("stock", "splat2", "early"))
     parser.add_argument("--sac_scene", required=True)
     parser.add_argument("--sac_seed", type=int, default=0)
     parser.add_argument("--sac_output", required=True)
