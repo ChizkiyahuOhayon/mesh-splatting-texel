@@ -124,7 +124,11 @@ def run(dataset, pipeline, args):
             "vertices": int(triangles.vertices.shape[0]),
             "triangles": int(triangles._triangle_indices.shape[0]),
         },
-        "training_seconds": args.sac_training_seconds,
+        # `get_combined_args` copies the config file's namespace and then
+        # overlays only those command-line values that are not None, so an
+        # optional argument left at a None default is absent from `args`
+        # entirely rather than present and None.
+        "training_seconds": getattr(args, "sac_training_seconds", None),
         "elapsed_seconds": time.perf_counter() - started,
         "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
     }
