@@ -148,7 +148,8 @@ if __name__ == "__main__":
     pipeline = PipelineParams(parser)
     parser.add_argument("--iteration", default=-1, type=int)
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--sac_arm", required=True, choices=("stock", "splat2", "early"))
+    parser.add_argument("--sac_arm", required=True,
+                        choices=("stock", "splat2", "early", "rng", "multiplicity"))
     parser.add_argument("--sac_scene", required=True)
     parser.add_argument("--sac_seed", type=int, default=0)
     parser.add_argument("--sac_output", required=True)

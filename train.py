@@ -18,7 +18,10 @@
 # For inquiries contact jan.held@uliege.be
 #
 
+import json
 import os
+
+from adc_densify import install_arm
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim, vertex_depth_loss_hr
@@ -66,7 +69,9 @@ def training(
         checkpoint, 
         debug_from,
         scene_name,
-        use_sparse_adam=False
+        use_sparse_adam=False,
+        adc_arm="stock",
+        adc_seed=0
         ):
     
     first_iter = 0
@@ -79,6 +84,11 @@ def training(
 
     triangles.training_setup(opt, opt.feature_lr, opt.weight_lr, opt.lr_triangles_points_init)
     triangles.add_percentage = opt.add_percentage
+
+    # ADC-G0 arm. "stock" installs nothing, so the published densification path runs
+    # unchanged; the other arms replace one bound method each. See
+    # experiments/adc_g0/protocol.md.
+    adc_rounds = install_arm(triangles, adc_arm, adc_seed)
 
 
     if checkpoint:
@@ -511,6 +521,16 @@ def training(
             f"{opt.densify_until_iter + 1000} may not have executed).")
 
     scene.save(iteration)
+
+    # The realised depth histogram is ADC-G0's manipulation check: an arm whose
+    # rounds show no depth-2 faces concentrated nothing, and a null result from it
+    # would say nothing about the hypothesis.
+    if adc_rounds:
+        with open(os.path.join(dataset.model_path, "adc_rounds.json"), "w",
+                  encoding="utf-8") as handle:
+            json.dump({"arm": adc_arm, "seed": adc_seed, "rounds": adc_rounds},
+                      handle, indent=2, allow_nan=False)
+
     print("Training is done")
 
 def prepare_output_and_logger(args):    
@@ -611,6 +631,9 @@ if __name__ == "__main__":
     parser.add_argument('--scene_name', default="Garden", type=str)
     parser.add_argument("--use_sparse_adam", action="store_true", default=True)
     parser.add_argument("--indoor", action="store_true", default=False)
+    parser.add_argument("--adc_arm", type=str, default="stock",
+                        choices=("stock", "rng", "multiplicity"),
+                        help="ADC-G0 densification arm; stock is the published pipeline")
 
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
@@ -638,7 +661,9 @@ if __name__ == "__main__":
              args.start_checkpoint,
              args.debug_from,
              args.scene_name,
-             use_sparse_adam=args.use_sparse_adam
+             use_sparse_adam=args.use_sparse_adam,
+             adc_arm=args.adc_arm,
+             adc_seed=args.seed
              )
     
     # All done
