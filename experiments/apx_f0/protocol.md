@@ -60,12 +60,22 @@ score**. Fitting and scoring on the same pixels would measure memorisation.
    This is a `k * k`-cell partition of the face in its own coordinates; the deployed
    texel carrier may lay cells out differently, so the quantity measured is the
    capacity of that resolution, and the result is read as an upper bound.
-4. For each face and cell, the optimal colour is the mean target colour of the
-   **training** pixels in it. One colour per cell, shared across all views — which is
-   what a texel carrier is, and which correctly charges view-dependent variation as
-   irreducible rather than crediting it as removable.
-5. Score that fixed assignment on **held-out** pixels and compare its squared error
-   against the current model's rendered prediction on the same pixels.
+4. For each face and cell, the fitted value is the mean **residual**
+   (`target - prediction`) of the **training** pixels in it. The deployed texel carrier
+   is *additive on top of SH* — `cuda_rasterizer/forward.cu:775-792` does
+   `interp += texels[...]`, with SH carrying view dependence and texels carrying high
+   spatial frequency — so the model class under test is SH **plus** a per-cell
+   correction, never a replacement for it. One correction per cell, shared across all
+   views, which correctly charges view-dependent variation as irreducible rather than
+   crediting it as removable.
+
+   *(Corrected 2026-08-06. The first version of this protocol claimed a texel carrier
+   is "one colour per cell", and the implementation fitted the target accordingly. That
+   measured replacing the appearance with a static per-cell colour, which discards view
+   dependence and lost ~4 dB for that reason alone; see
+   `experiments/apx_f0/analysis_full_01.md`. Thresholds are unchanged.)*
+5. Score `prediction + fitted correction` on **held-out** pixels and compare its
+   squared error against the current model's prediction on the same pixels.
 
 `k` is reported at `1, 2, 4`. `k = 1` is one colour per face; the current model is
 affine in barycentric coordinates (three vertex colours) and therefore sits between
@@ -74,7 +84,14 @@ affine in barycentric coordinates (three vertex colours) and therefore sits betw
 ### Eligibility
 
 A face needs at least `MIN_PIXELS_PER_CELL * k * k` training pixels and at least one
-held-out pixel. **The eligible fraction is a headline number, not a footnote.** Garden
+held-out pixel, **evaluated per order** — an order-4 grid needs 64 pixels but an
+order-1 grid needs 4, and applying the strictest requirement to every order discards
+faces that could have carried a coarser grid perfectly well. The locked decision reads
+the order-4 set; an **adaptive ceiling**, in which each face takes the finest grid its
+own pixel count supports, is reported alongside because that is what a deployable
+scheme would actually do.
+
+**The eligible fraction is a headline number, not a footnote.** Garden
 carries 6.9M triangles over roughly 1M pixels, so the average face is sub-pixel and
 cannot support a texel grid at all. If eligibility is small, adaptive appearance can
 only ever reach a small part of the model, and that bounds the whole direction

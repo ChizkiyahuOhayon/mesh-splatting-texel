@@ -101,7 +101,16 @@ def _train_pixel_counts(views, triangles, pipeline, background, face_count):
 
 
 def _fit(views, triangles, pipeline, background, compact, order):
-    """Fit one colour per cell from the training pixels of the candidate faces."""
+    """Fit one **residual correction** per cell from the candidate faces' training pixels.
+
+    The deployed texel carrier is additive on top of SH -- `forward.cu:775-792` does
+    `interp += texels[...]`, with SH carrying view dependence and texels carrying high
+    spatial frequency. Fitting the target instead of the residual would measure
+    *replacing* the appearance with a static per-cell colour, which discards view
+    dependence and loses several dB for that reason alone. That is a correct
+    measurement of a model class nobody proposed, and it is what the first run of this
+    gate did.
+    """
     bin_count = compact["count"] * order * order
     totals = torch.zeros(bin_count, 3, device="cuda")
     weights = torch.zeros(bin_count, device="cuda")
@@ -110,12 +119,12 @@ def _fit(views, triangles, pipeline, background, compact, order):
         keep = compact["index"][pixels["faces"]] >= 0
         if not bool(keep.any()):
             return
-        local = compact["index"][pixels["faces"][keep]]
-        cells = _cells(
-            {k: v[keep] for k, v in pixels.items()}, triangles, package["image_2D"], order
+        kept = {k: v[keep] for k, v in pixels.items()}
+        local = compact["index"][kept["faces"]]
+        bins = local * (order * order) + _cells(
+            kept, triangles, package["image_2D"], order
         )
-        bins = local * (order * order) + cells
-        totals.index_add_(0, bins, pixels["target"][keep])
+        totals.index_add_(0, bins, kept["target"] - kept["prediction"])
         weights.index_add_(0, bins, torch.ones_like(bins, dtype=weights.dtype))
 
     _pass(views, triangles, pipeline, background, visit)
@@ -139,14 +148,18 @@ def _score(views, triangles, pipeline, background, compact, fits):
         current.scatter_add_(
             0, local, ((kept["prediction"] - kept["target"]) ** 2).sum(1)
         )
-        coarse = fits[1][0][local]  # the order-1 colour, used where a cell is empty
+        # The order-1 correction, used where a finer cell received no training pixel.
+        coarse = fits[1][0][local]
         for order in CELL_ORDERS:
-            colours, empty = fits[order]
+            corrections, empty = fits[order]
             bins = local * (order * order) + _cells(
                 kept, triangles, package["image_2D"], order
             )
+            # The model class is SH plus a per-cell correction, so the correction is
+            # added to the current prediction rather than replacing it.
+            wanted = kept["target"] - kept["prediction"]
             fitted[order].scatter_add_(
-                0, local, squared_error(bins, kept["target"], colours, empty, coarse)
+                0, local, squared_error(bins, wanted, corrections, empty, coarse)
             )
 
     _pass(views, triangles, pipeline, background, visit)
@@ -159,15 +172,19 @@ def measure(triangles, pipeline, background, train_views, test_views):
         train_views, triangles, pipeline, background, face_count
     )
 
-    largest_order = max(CELL_ORDERS)
-    candidate = counts >= MIN_PIXELS_PER_CELL * largest_order * largest_order
+    # A cell fitted from fewer than MIN_PIXELS_PER_CELL pixels is memorising, so each
+    # order carries its own pixel requirement. The candidate set is the union -- every
+    # face that can support the coarsest grid -- and per-order eligibility is applied
+    # afterwards. Using the strictest order for all of them, as the first run did,
+    # discarded every face that could have supported order 1 or 2.
+    needed = {order: MIN_PIXELS_PER_CELL * order * order for order in CELL_ORDERS}
+    candidate_ids = (counts >= min(needed.values())).nonzero(as_tuple=True)[0]
     index = torch.full((face_count,), -1, dtype=torch.long, device="cuda")
-    candidate_ids = candidate.nonzero(as_tuple=True)[0]
     index[candidate_ids] = torch.arange(candidate_ids.numel(), device="cuda")
     compact = {"index": index, "ids": candidate_ids, "count": int(candidate_ids.numel())}
     if compact["count"] == 0:
         raise RuntimeError(
-            f"no face carries {MIN_PIXELS_PER_CELL * largest_order ** 2} training pixels; "
+            f"no face carries {min(needed.values())} training pixels; "
             "the mesh is too fine for any texel grid"
         )
 
@@ -179,11 +196,27 @@ def measure(triangles, pipeline, background, train_views, test_views):
         test_views, triangles, pipeline, background, compact, fits
     )
 
-    eligible = seen > 0
-    ceiling = {
-        str(order): gain_to_db(float(current[eligible].sum()), float(fitted[order][eligible].sum()))
-        for order in CELL_ORDERS
+    compact_counts = counts[compact["ids"]]
+    eligible = {
+        order: (seen > 0) & (compact_counts >= needed[order]) for order in CELL_ORDERS
     }
+    ceiling = {
+        str(order): gain_to_db(
+            float(current[mask].sum()), float(fitted[order][mask].sum())
+        )
+        for order, mask in eligible.items()
+    }
+
+    # What an adaptive scheme could actually deploy: each face takes the finest grid
+    # its own pixel count supports. Reported alongside the locked per-order ceilings
+    # because it is the quantity the thesis is really about, and it is measured over
+    # every candidate face rather than only those that can hold the finest grid.
+    adaptive = fitted[min(CELL_ORDERS)].clone()
+    for order in sorted(CELL_ORDERS):
+        adaptive = torch.where(compact_counts >= needed[order], fitted[order], adaptive)
+    scored = seen > 0
+
+    decision_mask = eligible[max(CELL_ORDERS)]
     gain = (current - fitted[max(CELL_ORDERS)]).clamp_min(0.0)
     signals = {
         PRIMARY_SIGNAL: residual[compact["ids"]],
@@ -194,22 +227,28 @@ def measure(triangles, pipeline, background, train_views, test_views):
     return {
         "faces_total": face_count,
         "faces_with_enough_pixels": compact["count"],
-        "faces_scored": int(eligible.sum()),
-        # Headline, not a footnote: at 7M triangles over 1M pixels the average face is
-        # sub-pixel, and adaptive appearance can only ever reach the eligible part.
+        "faces_scored": int(scored.sum()),
+        # Headline, not a footnote: at 7M triangles over ~1M pixels the average face is
+        # sub-pixel, and a per-face scheme can only ever reach the eligible part.
         "eligible_fraction": compact["count"] / face_count,
+        "eligible_fraction_per_order": {
+            str(order): int(mask.sum()) / face_count for order, mask in eligible.items()
+        },
         "held_out_pixels": int(seen.sum()),
         "ceiling_db": ceiling,
+        "ceiling_db_adaptive": gain_to_db(
+            float(current[scored].sum()), float(adaptive[scored].sum())
+        ),
         "concentration": {
             f"top_{int(fraction * 100)}pct": top_fraction_capture(
-                gain, gain, eligible, fraction
+                gain, gain, decision_mask, fraction
             )["capture"]
             for fraction in CAPTURE_FRACTIONS
         },
         "signals": {
             name: {
                 f"top_{int(fraction * 100)}pct": top_fraction_capture(
-                    score, gain, eligible, fraction
+                    score, gain, decision_mask, fraction
                 )
                 for fraction in CAPTURE_FRACTIONS
             }
@@ -268,7 +307,10 @@ def run(dataset, pipeline, args):
           f" / {scene_result['faces_total']:,}"
           f"  ({100 * scene_result['eligible_fraction']:.2f}%)")
     for order, value in scene_result["ceiling_db"].items():
-        print(f"  ceiling order {order}: {value:+.4f} dB")
+        share = scene_result["eligible_fraction_per_order"][order]
+        print(f"  ceiling order {order}: {value:+.4f} dB   (reaches {100 * share:.2f}% of faces)")
+    print(f"  ceiling adaptive: {scene_result['ceiling_db_adaptive']:+.4f} dB"
+          f"   (each face takes the finest grid it supports)")
     print(f"  concentration top10% {scene_result['concentration']['top_10pct']:.4f}")
     for name in (PRIMARY_SIGNAL, *NON_RESIDUAL_CONTROLS):
         row = scene_result["signals"][name]["top_10pct"]
