@@ -216,14 +216,33 @@ def measure(triangles, pipeline, background, train_views, test_views):
         adaptive = torch.where(compact_counts >= needed[order], fitted[order], adaptive)
     scored = seen > 0
 
-    decision_mask = eligible[max(CELL_ORDERS)]
-    gain = (current - fitted[max(CELL_ORDERS)]).clamp_min(0.0)
+    # A one-shot least-squares fit to the training residual is not the best correction
+    # available -- zero is always available -- so a negative `ceiling_db` measures that
+    # estimator rather than the capacity the protocol asks about. These two bound the
+    # question properly. The oracle applies the correction only where it helped on
+    # held-out pixels, which no selector can beat; the selected variants apply it to
+    # the faces a deployable signal would actually pick, which no selector needs to.
+    oracle = torch.minimum(current, adaptive)
+    ceiling_oracle = gain_to_db(float(current[scored].sum()), float(oracle[scored].sum()))
+
     signals = {
         PRIMARY_SIGNAL: residual[compact["ids"]],
         "max_blending": blending[compact["ids"]],
         "projected_coverage": counts[compact["ids"]],
         "world_area": triangles.triangle_areas().squeeze()[compact["ids"]],
     }
+    ceiling_selected = {}
+    for fraction in CAPTURE_FRACTIONS:
+        take = max(1, int(compact["count"] * fraction))
+        chosen = torch.topk(signals[PRIMARY_SIGNAL], take, sorted=False).indices
+        applied = current.clone()
+        applied[chosen] = adaptive[chosen]
+        ceiling_selected[f"top_{int(fraction * 100)}pct"] = gain_to_db(
+            float(current[scored].sum()), float(applied[scored].sum())
+        )
+
+    decision_mask = eligible[max(CELL_ORDERS)]
+    gain = (current - fitted[max(CELL_ORDERS)]).clamp_min(0.0)
     return {
         "faces_total": face_count,
         "faces_with_enough_pixels": compact["count"],
@@ -239,6 +258,10 @@ def measure(triangles, pipeline, background, train_views, test_views):
         "ceiling_db_adaptive": gain_to_db(
             float(current[scored].sum()), float(adaptive[scored].sum())
         ),
+        # Upper bound for any selector: correct only where it helped on held-out.
+        "ceiling_db_oracle": ceiling_oracle,
+        # What the deployable signal would actually achieve.
+        "ceiling_db_selected": ceiling_selected,
         "concentration": {
             f"top_{int(fraction * 100)}pct": top_fraction_capture(
                 gain, gain, decision_mask, fraction
@@ -311,6 +334,11 @@ def run(dataset, pipeline, args):
         print(f"  ceiling order {order}: {value:+.4f} dB   (reaches {100 * share:.2f}% of faces)")
     print(f"  ceiling adaptive: {scene_result['ceiling_db_adaptive']:+.4f} dB"
           f"   (each face takes the finest grid it supports)")
+    print(f"  ceiling ORACLE:   {scene_result['ceiling_db_oracle']:+.4f} dB"
+          f"   (correct only where it helped -- no selector can beat this)")
+    for name, value in scene_result["ceiling_db_selected"].items():
+        print(f"  ceiling selected {name:>10}: {value:+.4f} dB"
+              f"   (residual_mass picks the faces)")
     print(f"  concentration top10% {scene_result['concentration']['top_10pct']:.4f}")
     for name in (PRIMARY_SIGNAL, *NON_RESIDUAL_CONTROLS):
         row = scene_result["signals"][name]["top_10pct"]
