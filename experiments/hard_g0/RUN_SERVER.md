@@ -7,7 +7,7 @@ artifact. A retry therefore requires a fresh `HARD_G0_RUN_SUFFIX`.
 ## 1. Update and verify the checkout
 
 ```bash
-cd /home/smbu/dy/mesh-splatting
+cd /home/smbu/dy/mesh-splatting-texel
 git pull --ff-only git@github.com:ChizkiyahuOhayon/mesh-splatting-texel.git main
 git rev-parse HEAD
 git status --short
