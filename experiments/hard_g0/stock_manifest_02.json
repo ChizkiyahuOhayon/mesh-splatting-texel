@@ -1,0 +1,20 @@
+{
+  "protocol": "experiments/hard_g0/protocol.md",
+  "arm": "stock",
+  "scene": "garden",
+  "seed": 0,
+  "dataset_path": "/home/smbu/dy/mesh-splatting/data/mipnerf360/garden",
+  "model_path": "/home/smbu/dy/nas/meshsplatting_smbu/runs/hard_g0_garden_stock_02",
+  "iteration": 30000,
+  "checkpoint_sha256": "e9def0a3f90436e56f3afb547d950343c18f6f267811b8438d1842651cca61a1",
+  "source_revision": "83db7d80787effe2ef1ecbb024a1813893dce2ea",
+  "test_views": 24,
+  "evaluated_scalings": [
+    2,
+    4
+  ],
+  "timing_warmup_views": 3,
+  "gpu": "NVIDIA A40",
+  "cuda_visible_devices": "1",
+  "torch": "2.7.1+cu126"
+}

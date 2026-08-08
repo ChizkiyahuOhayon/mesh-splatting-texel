@@ -1,0 +1,28 @@
+{
+  "checks": {
+    "early_endpoint_sigma_is_1e-4": true,
+    "early_lpips_is_nonworse": false,
+    "early_psnr_gain_at_least_0p10_db": false,
+    "record_identity": true,
+    "stock_endpoint_sigma_is_1e-4": true
+  },
+  "decision": "fail",
+  "deltas_early_minus_stock_at_scaling_4": {
+    "lpips": 0.04295084004600841,
+    "psnr_db": -0.8136368592580148,
+    "ssim": -0.04932383447885513
+  },
+  "early_at_scaling_4": {
+    "lpips_vgg": 0.2907012825210889,
+    "psnr": 23.933019638061523,
+    "sigma": 9.99999999999889e-05,
+    "ssim": 0.6994691292444865
+  },
+  "experiment": "HARD-G0",
+  "stock_at_scaling_4": {
+    "lpips_vgg": 0.2477504424750805,
+    "psnr": 24.746656497319538,
+    "sigma": 9.99999999999889e-05,
+    "ssim": 0.7487929637233416
+  }
+}
