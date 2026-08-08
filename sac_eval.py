@@ -88,7 +88,7 @@ def run(dataset, pipeline, args):
     lpips_metric = LPIPS("vgg", "0.1").cuda().eval()
 
     manifest = {
-        "protocol": "experiments/sac_g0/protocol.md",
+        "protocol": args.sac_protocol,
         "arm": args.sac_arm,
         "scene": args.sac_scene,
         "seed": args.sac_seed,
@@ -153,6 +153,11 @@ if __name__ == "__main__":
     parser.add_argument("--sac_scene", required=True)
     parser.add_argument("--sac_seed", type=int, default=0)
     parser.add_argument("--sac_output", required=True)
+    parser.add_argument(
+        "--sac_protocol",
+        default="experiments/sac_g0/protocol.md",
+        help="preregistered protocol path recorded in the evaluation manifest",
+    )
     parser.add_argument(
         "--sac_training_seconds",
         type=float,

@@ -4,6 +4,14 @@ Status: **PREREGISTERED — no HARD-G0 output has been observed**
 
 Date: 2026-08-05
 
+> **Governance addendum (2026-08-08; no arm, metric, or threshold change).**
+> `RESEARCH_PLAN_v16.md` supersedes only the downstream disposition below. A
+> HARD-G0 failure retires endpoint-dwell/local-bridge work and triggers a
+> representation-level positive-method review; it does not trigger an audit or
+> negative-results paper. The confirmation called HARD-G1 below is Gate A1 in
+> v16 and includes the predeclared delayed-fast arm needed to separate endpoint
+> dwell from hardening rate.
+
 ## Question
 
 Both SAC-G0 arms lose held-out quality over their final iterations at a
