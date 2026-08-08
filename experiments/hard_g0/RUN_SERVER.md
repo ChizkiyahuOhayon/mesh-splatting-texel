@@ -1,8 +1,10 @@
-# HARD-G0 server runbook (physical GPU 0 only)
+# HARD-G0 server runbook (one exclusive physical GPU)
 
 This executes the preregistered Garden/seed-0 comparison sequentially on one
 GPU. It refuses to overwrite any training, evaluation, log, or decision
 artifact. A retry therefore requires a fresh `HARD_G0_RUN_SUFFIX`.
+Before every training or evaluation process, it also refuses to run unless the
+selected physical GPU has no compute process and at least 40,000 MiB free.
 
 ## 1. Update and verify the checkout
 
@@ -21,13 +23,14 @@ are allowed.
 ```bash
 export NAS_ROOT=/home/smbu/dy/nas/meshsplatting_smbu
 export GARDEN_DATA=/home/smbu/dy/mesh-splatting/data/mipnerf360/garden
-export HARD_G0_RUN_SUFFIX=01
+export HARD_G0_RUN_SUFFIX=02
+export HARD_G0_GPU=1
 
 test -d "$GARDEN_DATA/images"
 test -f "$GARDEN_DATA/sparse/0/cameras.bin"
 test -f "$GARDEN_DATA/sparse/0/images.bin"
 test -f "$GARDEN_DATA/sparse/0/points3D.bin"
-nvidia-smi -i 0
+nvidia-smi -i "$HARD_G0_GPU"
 ```
 
 ## 3. Run both arms, both evaluations, and the locked decision
@@ -41,18 +44,18 @@ the shell reports a non-zero status. In another terminal, progress can be
 monitored with:
 
 ```bash
-tail -f "$NAS_ROOT/logs/hard_g0_garden_stock_01.log"
+tail -f "$NAS_ROOT/logs/hard_g0_garden_stock_02.log"
 ```
 
 After the stock arm completes, switch the filename to
-`hard_g0_garden_early25000_01.log`.
+`hard_g0_garden_early25000_02.log`.
 
 ## 4. Return the immutable evidence
 
 ```bash
-cat "$NAS_ROOT/experiments/hard_g0_garden_decision_01.json"
-cat "$NAS_ROOT/experiments/hard_g0_garden_stock_01/sac_manifest.json"
-cat "$NAS_ROOT/experiments/hard_g0_garden_early25000_01/sac_manifest.json"
+cat "$NAS_ROOT/experiments/hard_g0_garden_decision_02.json"
+cat "$NAS_ROOT/experiments/hard_g0_garden_stock_02/sac_manifest.json"
+cat "$NAS_ROOT/experiments/hard_g0_garden_early25000_02/sac_manifest.json"
 ```
 
 HARD-G0 passes only if both saved endpoints are numerically `1e-4`, the early

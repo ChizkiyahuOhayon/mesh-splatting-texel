@@ -7,6 +7,7 @@ itself from the cost of rendering a model at a rate it was not trained for.
 """
 
 import json
+import os
 import time
 from argparse import ArgumentParser
 from pathlib import Path
@@ -101,6 +102,7 @@ def run(dataset, pipeline, args):
         "evaluated_scalings": list(EVALUATED_SCALINGS),
         "timing_warmup_views": TIMING_WARMUP_VIEWS,
         "gpu": torch.cuda.get_device_name(torch.cuda.current_device()),
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
         "torch": torch.__version__,
     }
     with open(output_root / "sac_manifest.json", "w", encoding="utf-8") as handle:
