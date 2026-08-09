@@ -1,8 +1,11 @@
 # EdgeVal-E0: exact connected edge-field representation gate
 
-Status: **PREREGISTERED — no native EdgeVal CUDA output observed**
+Status: **COMPLETED — PASS on attempt 02**
 
 Date: 2026-08-08
+
+The sealed result is `analysis_02.md`. Attempt 01 is an excluded pre-build
+infrastructure failure recorded in `analysis_01.md`.
 
 ## Scope
 

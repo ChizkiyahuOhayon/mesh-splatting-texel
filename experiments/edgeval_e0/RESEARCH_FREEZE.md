@@ -19,15 +19,17 @@ first-order renderer score.
 
 ## Staged authorization
 
-1. **E0 — representation gate (implemented, awaiting GPU evidence).** Require a
+1. **E0 — representation gate (passed on attempt 02).** Required a
    clean native build, full mathematical-core tests, bitwise zero-detail render
    identity, a nonzero effect, and a finite CUDA gradient matching central
-   difference. No Garden checkpoint is used.
-2. **E1 — independent-value gate (not authorized until E0 passes).** On one
+   difference. No Garden checkpoint was used. The sealed result is
+   `analysis_02.md`.
+2. **E1 — independent-value gate (design/implementation now authorized).** On one
    sealed Garden checkpoint, export the exact sparse edge design, accumulate
    float64 fold statistics, and test whether four-fold signed values transfer
    across cameras better than residual, same-view gain, coverage, and random-ID
-   controls. Freeze its executable pass predicate before observing scores.
+   controls. Its executable pass predicate must be frozen before observing any
+   Garden score; an E1 server run is not yet authorized.
 3. **E2 — conditional budget gate (not authorized until E1 passes).** Resolve
    overlapping supports by cross-fitted conditional forward selection. For a
    current set `S` and candidate `e`, jointly ridge-fit `S` and `S+e` only on
