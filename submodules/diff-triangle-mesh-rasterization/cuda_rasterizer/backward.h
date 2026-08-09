@@ -51,6 +51,8 @@
 		 const float* texels,
 		 const int texel_order,
 		 const float* edge_details,
+		 const int edge_detail_dim,
+		 const float* edge_sh1,
 		 const int* face_edge_ids,
 		 const float* final_Ts,
 		 const uint32_t* n_contrib,
@@ -64,8 +66,16 @@
 		 float* dL_dcolors,
 		 float* dL_dtexels,
 		 float* dL_dedge_details,
+		 float* dL_dedge_sh1,
 		 float* dL_dpoints2D,
 		 float* dL_dvertice_depth);
+
+	 void computeVertexSH1Gradients(
+		 int V,
+		 const float* vertices,
+		 const glm::vec3* campos,
+		 const float* dL_dedge_sh1,
+		 glm::vec3* dL_dvertices3D);
 
 	 void computeVertexColorGradients(
         int V, int D, int M,

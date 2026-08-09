@@ -192,8 +192,12 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         raise ValueError("edge_details and face_edge_ids must be provided together")
     if edge_details is not None:
         n_faces = triangles_indices.shape[0]
-        if not (edge_details.dim() == 2 and edge_details.shape[1] == 3):
-            raise ValueError(f"edge_details must be [E, 3], got {tuple(edge_details.shape)}")
+        dc_shape = edge_details.dim() == 2 and edge_details.shape[1] == 3
+        dc_sh1_shape = edge_details.dim() == 3 and edge_details.shape[1:] == (4, 3)
+        if not (dc_shape or dc_sh1_shape):
+            raise ValueError(
+                f"edge_details must be [E, 3] or [E, 4, 3], got {tuple(edge_details.shape)}"
+            )
         if not (face_edge_ids.dim() == 2 and face_edge_ids.shape == (n_faces, 3)):
             raise ValueError(
                 f"face_edge_ids must be [{n_faces}, 3], got {tuple(face_edge_ids.shape)}"

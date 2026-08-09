@@ -243,6 +243,8 @@
 	 const float* texels,
 	 const int texel_order,
 	 const float* edge_details,
+	 const int edge_detail_dim,
+	 float* edge_sh1,
 	 const int* face_edge_ids,
 	 const int* window_source,
 	 const int* donor_indices,
@@ -340,6 +342,11 @@
 			(glm::vec3*)cam_pos
 		);
 	}
+	 if (edge_detail_dim == 4)
+	 {
+		 CHECK_CUDA(FORWARD::computeVertexSH1Factors(
+			 V, vertices, (glm::vec3*)cam_pos, edge_sh1), debug)
+	 }
  
 	 // Compute prefix sum over full list of touched tile counts by triangles
 	 // E.g., [2, 3, 0, 2, 1] -> [2, 5, 5, 7, 8]
@@ -412,6 +419,8 @@
 		 texels,
 		 texel_order,
 		 edge_details,
+		 edge_detail_dim,
+		 edge_sh1,
 		 face_edge_ids,
 		 geomState.conic_opacity,
 		 geomState.depths,
@@ -444,6 +453,8 @@
 	 const float* texels,
 	 const int texel_order,
 	 const float* edge_details,
+	 const int edge_detail_dim,
+	 float* edge_sh1,
 	 const int* face_edge_ids,
 	 const float* viewmatrix,
 	 const float* projmatrix,
@@ -465,6 +476,7 @@
 	 float* dL_dcolor,
 	 float* dL_dtexels,
 	 float* dL_dedge_details,
+	 float* dL_dedge_sh1,
 	 float* dL_dsh,
 	 float* dL_dpoints2D,
 	 float* dL_dvertice_depth,
@@ -491,6 +503,11 @@
 	 // opacity and RGB of triangles from per-pixel loss gradients.
 	 // If we were given precomputed colors and not SHs, use them.
 	 const float* color_ptr = (colors_precomp != nullptr) ? colors_precomp : geomState.rgb;
+	 if (edge_detail_dim == 4)
+	 {
+		 CHECK_CUDA(FORWARD::computeVertexSH1Factors(
+			 V, vertices, (glm::vec3*)campos, edge_sh1), debug)
+	 }
 	 CHECK_CUDA(BACKWARD::render(
 		 tile_grid,
 		 block,
@@ -512,6 +529,8 @@
 		 texels,
 		 texel_order,
 		 edge_details,
+		 edge_detail_dim,
+		 edge_sh1,
 		 face_edge_ids,
 		 imgState.accum_alpha,
 		 imgState.n_contrib,
@@ -525,10 +544,9 @@
 		 dL_dcolor,
 		 dL_dtexels,
 		 dL_dedge_details,
+		 dL_dedge_sh1,
 		 dL_dpoints2D,
 		 dL_dvertice_depth), debug)
- 
-
 	if (colors_precomp == nullptr) {
 		// Compute vertex color gradients in parallel
 		CHECK_CUDA(BACKWARD::computeVertexColorGradients(
@@ -548,6 +566,13 @@
 			dL_dvertice_depth
 		), debug)
 	}
+
+	 if (edge_detail_dim == 4)
+	 {
+		 CHECK_CUDA(BACKWARD::computeVertexSH1Gradients(
+			 V, vertices, (glm::vec3*)campos, dL_dedge_sh1,
+			 (glm::vec3*)dL_dvertices3D), debug)
+	 }
 
 
 	 // Take care of the rest of preprocessing. Was the precomputed covariance

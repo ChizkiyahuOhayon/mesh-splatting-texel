@@ -88,6 +88,12 @@
 		float* vertex_depth, 
 		const float* viewmatrix,
 		const glm::vec3* cam_pos);
+
+	void computeVertexSH1Factors(
+		int V,
+		const float* vertices,
+		const glm::vec3* cam_pos,
+		float* edge_sh1);
  
 	 // Main rasterization method.
 	 void render(
@@ -111,6 +117,8 @@
 		 const float* texels,
 		 const int texel_order,
 		 const float* edge_details,
+		 const int edge_detail_dim,
+		 const float* edge_sh1,
 		 const int* face_edge_ids,
 		 const float4* conic_opacity,
 		 const float* depths,

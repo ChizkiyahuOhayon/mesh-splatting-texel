@@ -14,6 +14,7 @@ import torch
 RIDGE_EXPONENTS = tuple(range(-6, 3))
 DEFAULT_FOLDS = 4
 DEFAULT_BETA_SE = 1.0
+SH_C1 = 0.4886025119029199
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,62 @@ def edge_basis(barycentric):
     _require_shape(barycentric, (3,), "barycentric")
     a, b, c = barycentric.unbind(dim=-1)
     return 4.0 * torch.stack((a * b, b * c, c * a), dim=-1)
+
+
+def vertex_sh1_factors(vertices, camera_position):
+    """Evaluate the stock real degree-one SH factors at mesh vertices.
+
+    The returned columns match stock SH coefficient slots 1, 2, and 3:
+    ``(-C1*y, C1*z, -C1*x)`` for the normalized camera-to-vertex direction.
+    """
+    if not torch.is_tensor(vertices):
+        vertices = torch.as_tensor(vertices)
+    if not torch.is_tensor(camera_position):
+        camera_position = torch.as_tensor(
+            camera_position, dtype=vertices.dtype, device=vertices.device
+        )
+    _require_shape(vertices, (3,), "vertices")
+    if camera_position.shape != (3,):
+        raise ValueError(
+            f"camera_position must have shape (3,), got {tuple(camera_position.shape)}"
+        )
+    if not vertices.is_floating_point() or not camera_position.is_floating_point():
+        raise TypeError("vertices and camera_position must be floating point")
+    direction = vertices - camera_position
+    norm = torch.linalg.vector_norm(direction, dim=-1, keepdim=True)
+    if bool((norm == 0).any()):
+        raise ValueError("a mesh vertex coincides with the camera position")
+    x, y, z = (direction / norm).unbind(dim=-1)
+    return SH_C1 * torch.stack((-y, z, -x), dim=-1)
+
+
+def p2_sh1_edge_radiance(barycentric, vertex_factors, coefficients, local_edge):
+    """Evaluate one ``P2-detail x (DC + SH1)`` RGB edge group.
+
+    ``coefficients`` has rows ``(DC, SH1[-1], SH1[0], SH1[1])`` and RGB
+    columns.  This dense reference is the oracle for the native carrier.
+    """
+    if not torch.is_tensor(barycentric):
+        barycentric = torch.as_tensor(barycentric)
+    if not torch.is_tensor(vertex_factors):
+        vertex_factors = torch.as_tensor(vertex_factors)
+    if not torch.is_tensor(coefficients):
+        coefficients = torch.as_tensor(coefficients)
+    if barycentric.shape != (3,):
+        raise ValueError(f"barycentric must have shape (3,), got {tuple(barycentric.shape)}")
+    if vertex_factors.shape != (3, 3):
+        raise ValueError(
+            f"vertex_factors must have shape (3, 3), got {tuple(vertex_factors.shape)}"
+        )
+    if coefficients.shape != (4, 3):
+        raise ValueError(
+            f"coefficients must have shape (4, 3), got {tuple(coefficients.shape)}"
+        )
+    if local_edge not in (0, 1, 2):
+        raise ValueError(f"local_edge must be 0, 1, or 2, got {local_edge}")
+    angular = barycentric @ vertex_factors
+    edge_color = coefficients[0] + angular @ coefficients[1:]
+    return edge_basis(barycentric)[local_edge] * edge_color
 
 
 def deterministic_camera_folds(camera_names, fold_count=DEFAULT_FOLDS):

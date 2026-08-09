@@ -26,6 +26,36 @@
  #include <cooperative_groups.h>
  #include <cooperative_groups/reduce.h>
  namespace cg = cooperative_groups;
+
+ __global__ void computeVertexSH1GradientsCUDA(
+	 int V,
+	 const float* vertices,
+	 const glm::vec3* campos,
+	 const float* dL_dedge_sh1,
+	 glm::vec3* dL_dvertices3D)
+ {
+	 auto idx = cg::this_grid().thread_rank();
+	 if (idx >= V)
+		 return;
+
+	 glm::vec3 direction_orig(
+		 vertices[3 * idx] - campos->x,
+		 vertices[3 * idx + 1] - campos->y,
+		 vertices[3 * idx + 2] - campos->z);
+	 const float length = glm::length(direction_orig);
+	 const glm::vec3 direction = direction_orig / length;
+	 const glm::vec3 factor_gradient(
+		 dL_dedge_sh1[3 * idx],
+		 dL_dedge_sh1[3 * idx + 1],
+		 dL_dedge_sh1[3 * idx + 2]);
+	 const glm::vec3 direction_gradient(
+		 -SH_C1 * factor_gradient.z,
+		 -SH_C1 * factor_gradient.x,
+		  SH_C1 * factor_gradient.y);
+	 const glm::vec3 position_gradient =
+		 (direction_gradient - direction * glm::dot(direction, direction_gradient)) / length;
+	 dL_dvertices3D[idx] += position_gradient;
+ }
  
  __device__ void circumcenter_backward(float3 A, float3 B, float3 C, float3 dU, float3* dA, float3* dB, float3* dC) {
     // Forward recomputation
@@ -565,6 +595,8 @@
 	 const float* __restrict__ texels,
 	 const int texel_order,
 	 const float* __restrict__ edge_details,
+	 const int edge_detail_dim,
+	 const float* __restrict__ edge_sh1,
 	 const int* __restrict__ face_edge_ids,
 	 const float* __restrict__ final_Ts,
 	 const uint32_t* __restrict__ n_contrib,
@@ -578,6 +610,7 @@
 	 float* __restrict__ dL_dcolors,
 	 float* __restrict__ dL_dtexels,
 	 float* __restrict__ dL_dedge_details,
+	 float* __restrict__ dL_dedge_sh1,
 	 float* __restrict__ dL_dpoints2D,
 	 float* __restrict__ dL_dvertice_depth)
  {
@@ -778,9 +811,29 @@
 			 const float edge_basis_ab = 4.0f * wA * wB;
 			 const float edge_basis_bc = 4.0f * wB * wC;
 			 const float edge_basis_ca = 4.0f * wC * wA;
+			 const int edge_ids[3] = {edge_id_ab, edge_id_bc, edge_id_ca};
+			 const float edge_bases[3] = {edge_basis_ab, edge_basis_bc, edge_basis_ca};
+			 const float edge_basis_derivatives[3][3] = {
+				{4.0f * wB, 4.0f * wA, 0.0f},
+				{0.0f, 4.0f * wC, 4.0f * wB},
+				{4.0f * wC, 0.0f, 4.0f * wA}
+			 };
+			 float sh1_vertex[3][3] = {{0.0f}};
+			 float sh1_interp[3] = {0.0f, 0.0f, 0.0f};
+			 if (edge_detail_dim == 4) {
+				const int vertex_ids[3] = {vertex_idx0, vertex_idx1, vertex_idx2};
+				const float weights[3] = {wA, wB, wC};
+				for (int vertex = 0; vertex < 3; ++vertex) {
+					for (int k = 0; k < 3; ++k) {
+						sh1_vertex[vertex][k] = edge_sh1[3 * vertex_ids[vertex] + k];
+						sh1_interp[k] += weights[vertex] * sh1_vertex[vertex][k];
+					}
+				}
+			 }
 
 			 float interp_color[C];
 			 float sum0 = 0, sum1 = 0, sum2 = 0;
+			 float sh1_gradient[3][3] = {{0.0f}};
 			 for (int ch = 0; ch < C; ++ch) {
 				float dL_dcolor_ch = dchannel_dcolor * dL_dpixel[ch];
 				float c0 = colors[vertex_idx0 * C + ch];
@@ -790,16 +843,30 @@
 				interp_color[ch] = wA * c0 + wB * c1 + wC * c2;
 				if (texel_base >= 0)
 					interp_color[ch] += texels[texel_base + ch];
-				const float edge_ab = edge_id_ab >= 0 ? edge_details[edge_id_ab * C + ch] : 0.0f;
-				const float edge_bc = edge_id_bc >= 0 ? edge_details[edge_id_bc * C + ch] : 0.0f;
-				const float edge_ca = edge_id_ca >= 0 ? edge_details[edge_id_ca * C + ch] : 0.0f;
-				interp_color[ch] += edge_basis_ab * edge_ab
-					+ edge_basis_bc * edge_bc
-					+ edge_basis_ca * edge_ca;
+				float derivative[3] = {c0, c1, c2};
+				for (int local_edge = 0; local_edge < 3; ++local_edge) {
+					const int edge_id = edge_ids[local_edge];
+					if (edge_id < 0)
+						continue;
+					const int detail_base = edge_id * edge_detail_dim * C;
+					float edge_color = edge_details[detail_base + ch];
+					float edge_color_derivative[3] = {0.0f, 0.0f, 0.0f};
+					for (int k = 1; k < edge_detail_dim; ++k) {
+						const float coefficient = edge_details[detail_base + k * C + ch];
+						edge_color += sh1_interp[k - 1] * coefficient;
+						for (int vertex = 0; vertex < 3; ++vertex)
+							edge_color_derivative[vertex] += sh1_vertex[vertex][k - 1] * coefficient;
+					}
+					interp_color[ch] += edge_bases[local_edge] * edge_color;
+					for (int vertex = 0; vertex < 3; ++vertex) {
+						derivative[vertex] += edge_basis_derivatives[local_edge][vertex] * edge_color
+							+ edge_bases[local_edge] * edge_color_derivative[vertex];
+					}
+				}
 
-				sum0 += dL_dcolor_ch * (c0 + 4.0f * (wB * edge_ab + wC * edge_ca)); // for db2 / wA
-				sum1 += dL_dcolor_ch * (c1 + 4.0f * (wA * edge_ab + wC * edge_bc)); // for db0 / wB
-				sum2 += dL_dcolor_ch * (c2 + 4.0f * (wB * edge_bc + wA * edge_ca)); // for db1 / wC
+				sum0 += dL_dcolor_ch * derivative[0]; // for db2 / wA
+				sum1 += dL_dcolor_ch * derivative[1]; // for db0 / wB
+				sum2 += dL_dcolor_ch * derivative[2]; // for db1 / wC
 			 }
 
 			 float dL_dalpha = 0.0f;
@@ -829,16 +896,32 @@
 				if (texel_base >= 0)
 					atomicAdd(&dL_dtexels[texel_base + ch],
 							  dchannel_dcolor * dL_dchannel);
-				if (edge_id_ab >= 0)
-					atomicAdd(&dL_dedge_details[edge_id_ab * C + ch],
-							  edge_basis_ab * dchannel_dcolor * dL_dchannel);
-				if (edge_id_bc >= 0)
-					atomicAdd(&dL_dedge_details[edge_id_bc * C + ch],
-							  edge_basis_bc * dchannel_dcolor * dL_dchannel);
-				if (edge_id_ca >= 0)
-					atomicAdd(&dL_dedge_details[edge_id_ca * C + ch],
-							  edge_basis_ca * dchannel_dcolor * dL_dchannel);
+				const float direct_gradient = dchannel_dcolor * dL_dchannel;
+				for (int local_edge = 0; local_edge < 3; ++local_edge) {
+					const int edge_id = edge_ids[local_edge];
+					if (edge_id < 0)
+						continue;
+					const int detail_base = edge_id * edge_detail_dim * C;
+					atomicAdd(&dL_dedge_details[detail_base + ch],
+						  edge_bases[local_edge] * direct_gradient);
+					for (int k = 1; k < edge_detail_dim; ++k) {
+						atomicAdd(&dL_dedge_details[detail_base + k * C + ch],
+							  edge_bases[local_edge] * sh1_interp[k - 1] * direct_gradient);
+						const float factor_gradient = edge_bases[local_edge]
+							* edge_details[detail_base + k * C + ch] * direct_gradient;
+						sh1_gradient[0][k - 1] += wA * factor_gradient;
+						sh1_gradient[1][k - 1] += wB * factor_gradient;
+						sh1_gradient[2][k - 1] += wC * factor_gradient;
+					}
+				}
 			 } 
+			 if (edge_detail_dim == 4) {
+				const int vertex_ids[3] = {vertex_idx0, vertex_idx1, vertex_idx2};
+				for (int vertex = 0; vertex < 3; ++vertex)
+					for (int k = 0; k < 3; ++k)
+						atomicAdd(&dL_dedge_sh1[3 * vertex_ids[vertex] + k],
+							  sh1_gradient[vertex][k]);
+			 }
 
 			 float depth_interp = wA * depth_vertex_0 + wB * depth_vertex_1 + wC * depth_vertex_2;
 			 float weight_here = alpha * T;
@@ -1085,6 +1168,8 @@
 	 const float* texels,
 	 const int texel_order,
 	 const float* edge_details,
+	 const int edge_detail_dim,
+	 const float* edge_sh1,
 	 const int* face_edge_ids,
 	 const float* final_Ts,
 	 const uint32_t* n_contrib,
@@ -1098,6 +1183,7 @@
 	 float* dL_dcolors,
 	 float* dL_dtexels,
 	 float* dL_dedge_details,
+	 float* dL_dedge_sh1,
 	 float* dL_dpoints2D,
 	 float* dL_dvertice_depth
 	)
@@ -1121,6 +1207,8 @@
 		 texels,
 		 texel_order,
 		 edge_details,
+		 edge_detail_dim,
+		 edge_sh1,
 		 face_edge_ids,
 		 final_Ts,
 		 n_contrib,
@@ -1134,7 +1222,19 @@
 		 dL_dcolors,
 		 dL_dtexels,
 		 dL_dedge_details,
+		 dL_dedge_sh1,
 		 dL_dpoints2D,
 		 dL_dvertice_depth
 		 );
+ }
+
+ void BACKWARD::computeVertexSH1Gradients(
+	 int V,
+	 const float* vertices,
+	 const glm::vec3* campos,
+	 const float* dL_dedge_sh1,
+	 glm::vec3* dL_dvertices3D)
+ {
+	 computeVertexSH1GradientsCUDA<<<(V + 255) / 256, 256>>>(
+		 V, vertices, campos, dL_dedge_sh1, dL_dvertices3D);
  }

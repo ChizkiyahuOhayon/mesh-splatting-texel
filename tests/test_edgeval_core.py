@@ -8,6 +8,8 @@ from edgeval_core import (
     deterministic_camera_folds,
     edge_basis,
     exact_squared_loss_gain,
+    p2_sh1_edge_radiance,
+    vertex_sh1_factors,
 )
 
 
@@ -58,6 +60,58 @@ class EdgeBasisTest(unittest.TestCase):
         forward = edge_basis(torch.tensor([0.25, 0.75, 0.0]))[0]
         reversed_ = edge_basis(torch.tensor([0.75, 0.25, 0.0]))[0]
         self.assertEqual(float(forward), float(reversed_))
+
+
+class AngularEdgeBasisTest(unittest.TestCase):
+    def test_stock_degree_one_factor_convention(self):
+        factors = vertex_sh1_factors(
+            torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+            torch.zeros(3),
+        )
+        c1 = 0.4886025119029199
+        expected = torch.tensor([[0.0, 0.0, -c1], [-c1, 0.0, 0.0], [0.0, c1, 0.0]])
+        self.assertTrue(torch.allclose(factors, expected))
+
+    def test_vertices_activate_no_angular_edge_detail(self):
+        factors = torch.randn(3, 3, generator=torch.Generator().manual_seed(3))
+        coefficients = torch.randn(4, 3, generator=torch.Generator().manual_seed(5))
+        for vertex in torch.eye(3):
+            value = p2_sh1_edge_radiance(vertex, factors, coefficients, 0)
+            self.assertTrue(torch.equal(value, torch.zeros(3)))
+
+    def test_shared_edge_is_continuous_under_reversed_orientation(self):
+        endpoints = torch.tensor([[0.0, 0.0, 2.0], [1.0, 0.0, 2.0]])
+        camera = torch.tensor([0.2, -0.4, 0.1])
+        factors_left = vertex_sh1_factors(
+            torch.cat((endpoints, torch.tensor([[0.0, 1.0, 2.0]]))), camera
+        )
+        factors_right = vertex_sh1_factors(
+            torch.cat((endpoints.flip(0), torch.tensor([[0.0, -1.0, 2.0]]))), camera
+        )
+        coefficients = torch.arange(12, dtype=torch.float32).reshape(4, 3) / 11.0
+        left = p2_sh1_edge_radiance(
+            torch.tensor([0.25, 0.75, 0.0]), factors_left, coefficients, 0
+        )
+        right = p2_sh1_edge_radiance(
+            torch.tensor([0.75, 0.25, 0.0]), factors_right, coefficients, 0
+        )
+        self.assertTrue(torch.allclose(left, right, atol=0.0, rtol=0.0))
+
+    def test_camera_motion_changes_only_angular_rows(self):
+        vertices = torch.tensor([[-0.5, 0.0, 2.0], [0.5, 0.0, 2.0], [0.0, 0.7, 2.0]])
+        coefficients = torch.zeros(4, 3)
+        coefficients[1:, :] = torch.eye(3)
+        barycentric = torch.tensor([0.5, 0.5, 0.0])
+        first = p2_sh1_edge_radiance(
+            barycentric, vertex_sh1_factors(vertices, torch.zeros(3)), coefficients, 0
+        )
+        second = p2_sh1_edge_radiance(
+            barycentric,
+            vertex_sh1_factors(vertices, torch.tensor([0.7, -0.2, 0.1])),
+            coefficients,
+            0,
+        )
+        self.assertFalse(torch.equal(first, second))
 
 
 class CameraFoldTest(unittest.TestCase):

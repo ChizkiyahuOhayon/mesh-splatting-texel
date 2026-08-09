@@ -84,7 +84,7 @@
 	 return glm::max(result, 0.0f);
  }
  
- __global__ void computeVertexColorsCUDA(
+__global__ void computeVertexColorsCUDA(
     int V, int D, int M,
     const float* vertices,
     const float* shs,
@@ -120,6 +120,26 @@
 	// instead of the z coordinate as depth, lets take the distance to the camera
 	//vertex_depth[idx] = __fsqrt_rn(p_view.x * p_view.x + p_view.y * p_view.y + p_view.z * p_view.z);
 	vertex_depth[idx] = p_view.z;
+}
+
+__global__ void computeVertexSH1FactorsCUDA(
+    int V,
+    const float* vertices,
+    const glm::vec3* cam_pos,
+    float* edge_sh1)
+{
+    auto idx = cg::this_grid().thread_rank();
+    if (idx >= V)
+        return;
+
+    glm::vec3 direction(
+        vertices[3 * idx] - cam_pos->x,
+        vertices[3 * idx + 1] - cam_pos->y,
+        vertices[3 * idx + 2] - cam_pos->z);
+    direction /= glm::length(direction);
+    edge_sh1[3 * idx + 0] = -SH_C1 * direction.y;
+    edge_sh1[3 * idx + 1] =  SH_C1 * direction.z;
+    edge_sh1[3 * idx + 2] = -SH_C1 * direction.x;
 }
 
 
@@ -547,6 +567,8 @@
 	 const float* __restrict__ texels,
 	 const int texel_order,
 	 const float* __restrict__ edge_details,
+	 const int edge_detail_dim,
+	 const float* __restrict__ edge_sh1,
 	 const int* __restrict__ face_edge_ids,
 	 const float4* __restrict__ conic_opacity,
 	 const float* __restrict__ depths,
@@ -788,6 +810,16 @@
 			 const float edge_basis_ab = 4.0f * wA * wB;
 			 const float edge_basis_bc = 4.0f * wB * wC;
 			 const float edge_basis_ca = 4.0f * wC * wA;
+			 const int edge_ids[3] = {edge_id_ab, edge_id_bc, edge_id_ca};
+			 const float edge_bases[3] = {edge_basis_ab, edge_basis_bc, edge_basis_ca};
+			 float sh1_interp[3] = {0.0f, 0.0f, 0.0f};
+			 if (edge_detail_dim == 4) {
+				for (int k = 0; k < 3; ++k) {
+					sh1_interp[k] = wA * edge_sh1[3 * vertex_idx0 + k]
+						+ wB * edge_sh1[3 * vertex_idx1 + k]
+						+ wC * edge_sh1[3 * vertex_idx2 + k];
+				}
+			 }
 
 			 for (int ch = 0; ch < CHANNELS; ++ch) {
 				// Access colors per vertex (not per triangle)
@@ -798,12 +830,17 @@
 				float interp = wA * c0 + wB * c1 + wC * c2;
 				if (texel_base >= 0)
 					interp += texels[texel_base + ch];
-				if (edge_id_ab >= 0)
-					interp += edge_basis_ab * edge_details[edge_id_ab * CHANNELS + ch];
-				if (edge_id_bc >= 0)
-					interp += edge_basis_bc * edge_details[edge_id_bc * CHANNELS + ch];
-				if (edge_id_ca >= 0)
-					interp += edge_basis_ca * edge_details[edge_id_ca * CHANNELS + ch];
+				for (int local_edge = 0; local_edge < 3; ++local_edge) {
+					const int edge_id = edge_ids[local_edge];
+					if (edge_id < 0)
+						continue;
+					const int detail_base = edge_id * edge_detail_dim * CHANNELS;
+					float edge_color = edge_details[detail_base + ch];
+					for (int k = 1; k < edge_detail_dim; ++k)
+						edge_color += sh1_interp[k - 1]
+							* edge_details[detail_base + k * CHANNELS + ch];
+					interp += edge_bases[local_edge] * edge_color;
+				}
 				C[ch] += interp * alpha * T;
 			 } 
 
@@ -865,6 +902,8 @@
 	 const float* texels,
 	 const int texel_order,
 	 const float* edge_details,
+	 const int edge_detail_dim,
+	 const float* edge_sh1,
 	 const int* face_edge_ids,
 	 const float4* conic_opacity,
 	 const float* depths,
@@ -898,6 +937,8 @@
 		 texels,
 		 texel_order,
 		 edge_details,
+		 edge_detail_dim,
+		 edge_sh1,
 		 face_edge_ids,
 		 conic_opacity,
 		 depths,
@@ -911,6 +952,16 @@
 		 max_blending,
 		 was_rendered
 		 );
+ }
+
+ void FORWARD::computeVertexSH1Factors(
+    int V,
+    const float* vertices,
+    const glm::vec3* cam_pos,
+    float* edge_sh1)
+ {
+	computeVertexSH1FactorsCUDA<<<(V + 255) / 256, 256>>>(
+		V, vertices, cam_pos, edge_sh1);
  }
 
 
