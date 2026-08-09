@@ -564,6 +564,8 @@
 	 const float* __restrict__ colors,
 	 const float* __restrict__ texels,
 	 const int texel_order,
+	 const float* __restrict__ edge_details,
+	 const int* __restrict__ face_edge_ids,
 	 const float* __restrict__ final_Ts,
 	 const uint32_t* __restrict__ n_contrib,
 	 const float* __restrict__ dL_dpixels,
@@ -575,6 +577,7 @@
 	 float* __restrict__ dL_dnormal3D,
 	 float* __restrict__ dL_dcolors,
 	 float* __restrict__ dL_dtexels,
+	 float* __restrict__ dL_dedge_details,
 	 float* __restrict__ dL_dpoints2D,
 	 float* __restrict__ dL_dvertice_depth)
  {
@@ -769,6 +772,12 @@
 				 ? -1
 				 : (j_id * texelSlots(texel_order)
 					+ texelSlot(wA, wB, wC, texel_order)) * C;
+			 const int edge_id_ab = edge_details == nullptr ? -1 : face_edge_ids[3 * j_id + 0];
+			 const int edge_id_bc = edge_details == nullptr ? -1 : face_edge_ids[3 * j_id + 1];
+			 const int edge_id_ca = edge_details == nullptr ? -1 : face_edge_ids[3 * j_id + 2];
+			 const float edge_basis_ab = 4.0f * wA * wB;
+			 const float edge_basis_bc = 4.0f * wB * wC;
+			 const float edge_basis_ca = 4.0f * wC * wA;
 
 			 float interp_color[C];
 			 float sum0 = 0, sum1 = 0, sum2 = 0;
@@ -781,10 +790,16 @@
 				interp_color[ch] = wA * c0 + wB * c1 + wC * c2;
 				if (texel_base >= 0)
 					interp_color[ch] += texels[texel_base + ch];
+				const float edge_ab = edge_id_ab >= 0 ? edge_details[edge_id_ab * C + ch] : 0.0f;
+				const float edge_bc = edge_id_bc >= 0 ? edge_details[edge_id_bc * C + ch] : 0.0f;
+				const float edge_ca = edge_id_ca >= 0 ? edge_details[edge_id_ca * C + ch] : 0.0f;
+				interp_color[ch] += edge_basis_ab * edge_ab
+					+ edge_basis_bc * edge_bc
+					+ edge_basis_ca * edge_ca;
 
-				sum0 += dL_dcolor_ch * c0; // for db2
-				sum1 += dL_dcolor_ch * c1; // for db0
-				sum2 += dL_dcolor_ch * c2; // for db1
+				sum0 += dL_dcolor_ch * (c0 + 4.0f * (wB * edge_ab + wC * edge_ca)); // for db2 / wA
+				sum1 += dL_dcolor_ch * (c1 + 4.0f * (wA * edge_ab + wC * edge_bc)); // for db0 / wB
+				sum2 += dL_dcolor_ch * (c2 + 4.0f * (wB * edge_bc + wA * edge_ca)); // for db1 / wC
 			 }
 
 			 float dL_dalpha = 0.0f;
@@ -814,6 +829,15 @@
 				if (texel_base >= 0)
 					atomicAdd(&dL_dtexels[texel_base + ch],
 							  dchannel_dcolor * dL_dchannel);
+				if (edge_id_ab >= 0)
+					atomicAdd(&dL_dedge_details[edge_id_ab * C + ch],
+							  edge_basis_ab * dchannel_dcolor * dL_dchannel);
+				if (edge_id_bc >= 0)
+					atomicAdd(&dL_dedge_details[edge_id_bc * C + ch],
+							  edge_basis_bc * dchannel_dcolor * dL_dchannel);
+				if (edge_id_ca >= 0)
+					atomicAdd(&dL_dedge_details[edge_id_ca * C + ch],
+							  edge_basis_ca * dchannel_dcolor * dL_dchannel);
 			 } 
 
 			 float depth_interp = wA * depth_vertex_0 + wB * depth_vertex_1 + wC * depth_vertex_2;
@@ -1060,6 +1084,8 @@
 	 const float* colors,
 	 const float* texels,
 	 const int texel_order,
+	 const float* edge_details,
+	 const int* face_edge_ids,
 	 const float* final_Ts,
 	 const uint32_t* n_contrib,
 	 const float* dL_dpixels,
@@ -1071,6 +1097,7 @@
 	 float* dL_dnormal3D,
 	 float* dL_dcolors,
 	 float* dL_dtexels,
+	 float* dL_dedge_details,
 	 float* dL_dpoints2D,
 	 float* dL_dvertice_depth
 	)
@@ -1093,6 +1120,8 @@
 		 colors,
 		 texels,
 		 texel_order,
+		 edge_details,
+		 face_edge_ids,
 		 final_Ts,
 		 n_contrib,
 		 dL_dpixels,
@@ -1104,6 +1133,7 @@
 		 dL_dnormal3D,
 		 dL_dcolors,
 		 dL_dtexels,
+		 dL_dedge_details,
 		 dL_dpoints2D,
 		 dL_dvertice_depth
 		 );

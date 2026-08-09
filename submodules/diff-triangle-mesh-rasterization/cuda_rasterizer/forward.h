@@ -110,6 +110,8 @@
 		 const float* features,
 		 const float* texels,
 		 const int texel_order,
+		 const float* edge_details,
+		 const int* face_edge_ids,
 		 const float4* conic_opacity,
 		 const float* depths,
 		 const float2* phi_center,

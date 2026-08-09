@@ -36,6 +36,8 @@ RasterizetrianglesCUDA(
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
 	const int texel_order,
+	const torch::Tensor& edge_details,
+	const torch::Tensor& face_edge_ids,
 	const torch::Tensor& window_source,
 	const torch::Tensor& donor_indices,
 	const int donor_mode,
@@ -52,7 +54,7 @@ RasterizetrianglesCUDA(
 	const bool prefiltered,
 	const bool debug);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizetrianglesBackwardCUDA(
  	const torch::Tensor& background,
 	const torch::Tensor& vertices,
@@ -63,6 +65,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
 	const int texel_order,
+	const torch::Tensor& edge_details,
+	const torch::Tensor& face_edge_ids,
 	const torch::Tensor& viewmatrix,
     const torch::Tensor& projmatrix,
 	const float tan_fovx, 

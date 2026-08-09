@@ -101,7 +101,7 @@ def compute_image_2d_pytorch_exact(vertices, projmatrix, W, H):
     return image_2D_pytorch
 
 
-def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, window_donors = None):
+def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, window_donors = None, edge_details = None, face_edge_ids = None):
     """
     Render the scene. 
     
@@ -188,6 +188,19 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
                 image_2D_pytorch, triangles_indices, order).detach()
             texels = filter_texel_detail(texels, texel_footprint_weights)
 
+    if (edge_details is None) != (face_edge_ids is None):
+        raise ValueError("edge_details and face_edge_ids must be provided together")
+    if edge_details is not None:
+        n_faces = triangles_indices.shape[0]
+        if not (edge_details.dim() == 2 and edge_details.shape[1] == 3):
+            raise ValueError(f"edge_details must be [E, 3], got {tuple(edge_details.shape)}")
+        if not (face_edge_ids.dim() == 2 and face_edge_ids.shape == (n_faces, 3)):
+            raise ValueError(
+                f"face_edge_ids must be [{n_faces}, 3], got {tuple(face_edge_ids.shape)}"
+            )
+        edge_details = edge_details.to(device=vertices.device, dtype=torch.float32).contiguous()
+        face_edge_ids = face_edge_ids.to(device=vertices.device, dtype=torch.int32).contiguous()
+
     # Rasterize visible triangles to image, obtain their radii (on screen).
     rendered_image, radii, scaling, allmap, max_blending, was_rendered  = rasterizer(
         vertices=vertices,
@@ -198,6 +211,8 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         colors_precomp = colors_precomp,
         scaling = scaling,
         texels = texels,
+        edge_details = edge_details,
+        face_edge_ids = face_edge_ids,
         window_donors = window_donors,
        )
 

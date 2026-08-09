@@ -546,6 +546,8 @@
 	 const float* __restrict__ features,
 	 const float* __restrict__ texels,
 	 const int texel_order,
+	 const float* __restrict__ edge_details,
+	 const int* __restrict__ face_edge_ids,
 	 const float4* __restrict__ conic_opacity,
 	 const float* __restrict__ depths,
 	 const float2* __restrict__ phi_center,
@@ -780,6 +782,12 @@
 				 ? -1
 				 : (j_id * texelSlots(texel_order)
 					+ texelSlot(wA, wB, wC, texel_order)) * CHANNELS;
+			 const int edge_id_ab = edge_details == nullptr ? -1 : face_edge_ids[3 * j_id + 0];
+			 const int edge_id_bc = edge_details == nullptr ? -1 : face_edge_ids[3 * j_id + 1];
+			 const int edge_id_ca = edge_details == nullptr ? -1 : face_edge_ids[3 * j_id + 2];
+			 const float edge_basis_ab = 4.0f * wA * wB;
+			 const float edge_basis_bc = 4.0f * wB * wC;
+			 const float edge_basis_ca = 4.0f * wC * wA;
 
 			 for (int ch = 0; ch < CHANNELS; ++ch) {
 				// Access colors per vertex (not per triangle)
@@ -790,6 +798,12 @@
 				float interp = wA * c0 + wB * c1 + wC * c2;
 				if (texel_base >= 0)
 					interp += texels[texel_base + ch];
+				if (edge_id_ab >= 0)
+					interp += edge_basis_ab * edge_details[edge_id_ab * CHANNELS + ch];
+				if (edge_id_bc >= 0)
+					interp += edge_basis_bc * edge_details[edge_id_bc * CHANNELS + ch];
+				if (edge_id_ca >= 0)
+					interp += edge_basis_ca * edge_details[edge_id_ca * CHANNELS + ch];
 				C[ch] += interp * alpha * T;
 			 } 
 
@@ -850,6 +864,8 @@
 	 const float* colors,
 	 const float* texels,
 	 const int texel_order,
+	 const float* edge_details,
+	 const int* face_edge_ids,
 	 const float4* conic_opacity,
 	 const float* depths,
 	 const float2* phi_center,
@@ -881,6 +897,8 @@
 		 colors,
 		 texels,
 		 texel_order,
+		 edge_details,
+		 face_edge_ids,
 		 conic_opacity,
 		 depths,
 		 phi_center,

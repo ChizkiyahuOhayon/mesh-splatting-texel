@@ -55,6 +55,8 @@ RasterizetrianglesCUDA(
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
 	const int texel_order,
+	const torch::Tensor& edge_details,
+	const torch::Tensor& face_edge_ids,
 	const torch::Tensor& window_source,
 	const torch::Tensor& donor_indices,
 	const int donor_mode,
@@ -92,6 +94,31 @@ RasterizetrianglesCUDA(
     TORCH_CHECK(texels.size(2) == 3, "texels must have 3 channels, got ", texels.size(2));
     TORCH_CHECK(texels.is_cuda() && texels.is_contiguous(), "texels must be contiguous CUDA");
     TORCH_CHECK(texels.scalar_type() == torch::kFloat32, "texels must be float32");
+  }
+  const bool edge_details_enabled = edge_details.numel() > 0 || face_edge_ids.numel() > 0;
+  if (edge_details_enabled) {
+    TORCH_CHECK(P > 0, "edge_details require at least one triangle");
+    TORCH_CHECK(edge_details.dim() == 2 && edge_details.size(1) == NUM_CHANNELS,
+                "edge_details must be [E, 3], got ", edge_details.sizes());
+    TORCH_CHECK(edge_details.size(0) > 0,
+                "edge_details must contain at least one row when enabled");
+    TORCH_CHECK(face_edge_ids.dim() == 2 && face_edge_ids.size(0) == P && face_edge_ids.size(1) == 3,
+                "face_edge_ids must be [F, 3] with F = ", P, ", got ", face_edge_ids.sizes());
+    TORCH_CHECK(edge_details.is_cuda() && edge_details.is_contiguous(),
+                "edge_details must be contiguous CUDA");
+    TORCH_CHECK(face_edge_ids.is_cuda() && face_edge_ids.is_contiguous(),
+                "face_edge_ids must be contiguous CUDA");
+    TORCH_CHECK(edge_details.scalar_type() == torch::kFloat32,
+                "edge_details must be float32");
+    TORCH_CHECK(face_edge_ids.scalar_type() == torch::kInt32,
+                "face_edge_ids must be int32");
+    TORCH_CHECK(donor_mode == 0,
+                "edge_details cannot be combined with RITS window donors");
+    const int min_edge_id = face_edge_ids.min().item<int>();
+    const int max_edge_id = face_edge_ids.max().item<int>();
+    TORCH_CHECK(min_edge_id >= -1 && max_edge_id < edge_details.size(0),
+                "face_edge_ids values must lie in [-1, E), got [", min_edge_id,
+                ", ", max_edge_id, "] for E = ", edge_details.size(0));
   }
   const int V = vertices.size(0); 
   const int H = image_height;
@@ -145,6 +172,8 @@ RasterizetrianglesCUDA(
 		colors.contiguous().data_ptr<float>(), 
 		texel_order > 0 ? texels.contiguous().data_ptr<float>() : nullptr,
 		texel_order,
+		edge_details_enabled ? edge_details.contiguous().data_ptr<float>() : nullptr,
+		edge_details_enabled ? face_edge_ids.contiguous().data_ptr<int>() : nullptr,
 		donor_mode != 0 ? window_source.contiguous().data_ptr<int>() : nullptr,
 		donor_mode != 0 ? donor_indices.contiguous().data_ptr<int>() : nullptr,
 		donor_mode,
@@ -165,7 +194,7 @@ RasterizetrianglesCUDA(
   return std::make_tuple(rendered, out_color, out_others, radii, was_rendered, geomBuffer, binningBuffer, imgBuffer, scaling, max_blending);
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizetrianglesBackwardCUDA(
  	const torch::Tensor& background,
 	const torch::Tensor& vertices,
@@ -176,6 +205,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
 	const int texel_order,
+	const torch::Tensor& edge_details,
+	const torch::Tensor& face_edge_ids,
 	const torch::Tensor& viewmatrix,
     const torch::Tensor& projmatrix,
 	const float tan_fovx,
@@ -216,6 +247,32 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
   torch::Tensor dL_dtexels = texel_order > 0
       ? torch::zeros_like(texels)
       : torch::zeros({0}, vertices.options());
+  const bool edge_details_enabled = edge_details.numel() > 0 || face_edge_ids.numel() > 0;
+  if (edge_details_enabled) {
+    TORCH_CHECK(P > 0, "edge_details require at least one triangle");
+    TORCH_CHECK(edge_details.dim() == 2 && edge_details.size(1) == NUM_CHANNELS,
+                "edge_details must be [E, 3], got ", edge_details.sizes());
+    TORCH_CHECK(edge_details.size(0) > 0,
+                "edge_details must contain at least one row when enabled");
+    TORCH_CHECK(face_edge_ids.dim() == 2 && face_edge_ids.size(0) == P && face_edge_ids.size(1) == 3,
+                "face_edge_ids must be [F, 3] with F = ", P, ", got ", face_edge_ids.sizes());
+    TORCH_CHECK(edge_details.is_cuda() && edge_details.is_contiguous(),
+                "edge_details must be contiguous CUDA");
+    TORCH_CHECK(face_edge_ids.is_cuda() && face_edge_ids.is_contiguous(),
+                "face_edge_ids must be contiguous CUDA");
+    TORCH_CHECK(edge_details.scalar_type() == torch::kFloat32,
+                "edge_details must be float32");
+    TORCH_CHECK(face_edge_ids.scalar_type() == torch::kInt32,
+                "face_edge_ids must be int32");
+    const int min_edge_id = face_edge_ids.min().item<int>();
+    const int max_edge_id = face_edge_ids.max().item<int>();
+    TORCH_CHECK(min_edge_id >= -1 && max_edge_id < edge_details.size(0),
+                "face_edge_ids values must lie in [-1, E), got [", min_edge_id,
+                ", ", max_edge_id, "] for E = ", edge_details.size(0));
+  }
+  torch::Tensor dL_dedge_details = edge_details_enabled
+      ? torch::zeros_like(edge_details)
+      : torch::zeros({0}, vertices.options());
   torch::Tensor dL_dopacity = torch::zeros({P, 1}, vertices.options());
   torch::Tensor dL_dsh = torch::zeros({V, M, 3}, vertices.options());
 
@@ -238,6 +295,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  colors.contiguous().data_ptr<float>(),
 	  texel_order > 0 ? texels.contiguous().data_ptr<float>() : nullptr,
 	  texel_order,
+	  edge_details_enabled ? edge_details.contiguous().data_ptr<float>() : nullptr,
+	  edge_details_enabled ? face_edge_ids.contiguous().data_ptr<int>() : nullptr,
 	  viewmatrix.contiguous().data_ptr<float>(),
 	  projmatrix.contiguous().data_ptr<float>(),
 	  campos.contiguous().data_ptr<float>(),
@@ -258,13 +317,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  dL_dopacity.contiguous().data_ptr<float>(),
 	  dL_dcolors.contiguous().data_ptr<float>(),
 	  texel_order > 0 ? dL_dtexels.contiguous().data_ptr<float>() : nullptr,
+	  edge_details_enabled ? dL_dedge_details.contiguous().data_ptr<float>() : nullptr,
 	  dL_dsh.contiguous().data_ptr<float>(),
 	  dL_dpoints2D.contiguous().data_ptr<float>(),
 	  dL_dvertice_depth.contiguous().data_ptr<float>(),
 	  debug);
   }
 
-  return std::make_tuple(dL_dvertices3D, dL_dvertice_weight, dL_dcolors, dL_dsh, dL_dtexels);
+  return std::make_tuple(dL_dvertices3D, dL_dvertice_weight, dL_dcolors, dL_dsh, dL_dtexels, dL_dedge_details);
 }
 
 torch::Tensor markVisible(

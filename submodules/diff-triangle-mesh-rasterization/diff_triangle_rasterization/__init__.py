@@ -37,6 +37,8 @@ def rasterize_triangles(
     scaling,
     raster_settings,
     texels=None,
+    edge_details=None,
+    face_edge_ids=None,
     window_donors=None,
 ):
     return _RasterizeTriangles.apply(
@@ -49,6 +51,8 @@ def rasterize_triangles(
         scaling,
         raster_settings,
         texels,
+        edge_details,
+        face_edge_ids,
         window_donors,
     )
 
@@ -65,6 +69,8 @@ class _RasterizeTriangles(torch.autograd.Function):
         scaling,
         raster_settings,
         texels,
+        edge_details,
+        face_edge_ids,
         window_donors,
     ):
         # texel_order 0 disables the carrier entirely: the C++ side then receives a
@@ -74,6 +80,12 @@ class _RasterizeTriangles(torch.autograd.Function):
         if texels is None:
             texels = torch.zeros(0, device=vertices.device, dtype=vertices.dtype)
             texel_order = 0
+
+        if (edge_details is None) != (face_edge_ids is None):
+            raise ValueError("edge_details and face_edge_ids must be provided together")
+        if edge_details is None:
+            edge_details = torch.zeros(0, device=vertices.device, dtype=vertices.dtype)
+            face_edge_ids = torch.zeros(0, device=vertices.device, dtype=torch.int32)
 
         # RITS window donors: (window_source [F], donor_indices [D, 3], donor_mode).
         # donor_mode 0 hands the C++ side null pointers, keeping the original code
@@ -94,6 +106,8 @@ class _RasterizeTriangles(torch.autograd.Function):
             colors_precomp,
             texels,
             texel_order,
+            edge_details,
+            face_edge_ids,
             window_source,
             donor_indices,
             donor_mode,
@@ -129,8 +143,9 @@ class _RasterizeTriangles(torch.autograd.Function):
         ctx.num_rendered = num_rendered
         ctx.sigma = sigma
         ctx.texel_order = texel_order
+        ctx.edge_details_enabled = edge_details.numel() > 0
         ctx.donor_mode = donor_mode
-        ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels)
+        ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels, edge_details, face_edge_ids)
         return color, radii, scaling, depth, max_blending, was_rendered
 
     @staticmethod
@@ -145,7 +160,7 @@ class _RasterizeTriangles(torch.autograd.Function):
             raise NotImplementedError(
                 "backward through active window donors is not implemented; "
                 "RITS-D0 is a forward-only diagnostic (see experiments/rits_d0)")
-        vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels = ctx.saved_tensors
+        vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels, edge_details, face_edge_ids = ctx.saved_tensors
 
         # Restructure args as C++ method expects them
         args = (raster_settings.bg,
@@ -157,6 +172,8 @@ class _RasterizeTriangles(torch.autograd.Function):
                 colors_precomp, 
                 texels,
                 texel_order,
+                edge_details,
+                face_edge_ids,
                 raster_settings.viewmatrix, 
                 raster_settings.projmatrix, 
                 raster_settings.tanfovx, 
@@ -176,13 +193,13 @@ class _RasterizeTriangles(torch.autograd.Function):
         if raster_settings.debug:
             cpu_args = cpu_deep_copy_tuple(args) # Copy them before they can be corrupted
             try:
-                grad_vertices, grad_vertice_weights, grad_colors_precomp, grad_sh, grad_texels = _C.rasterize_triangles_backward(*args)
+                grad_vertices, grad_vertice_weights, grad_colors_precomp, grad_sh, grad_texels, grad_edge_details = _C.rasterize_triangles_backward(*args)
             except Exception as ex:
                 torch.save(cpu_args, "snapshot_bw.dump")
                 print("\nAn error occured in backward. Writing snapshot_bw.dump for debugging.\n")
                 raise ex
         else:
-             grad_vertices, grad_vertice_weights, grad_colors_precomp, grad_sh, grad_texels = _C.rasterize_triangles_backward(*args)
+             grad_vertices, grad_vertice_weights, grad_colors_precomp, grad_sh, grad_texels, grad_edge_details = _C.rasterize_triangles_backward(*args)
 
 
         grads = (
@@ -195,6 +212,8 @@ class _RasterizeTriangles(torch.autograd.Function):
             None,  # scaling
             None,  # raster_settings
             grad_texels if texel_order > 0 else None,
+            grad_edge_details if ctx.edge_details_enabled else None,
+            None,  # face_edge_ids
             None,  # window_donors
         )
 
@@ -233,7 +252,7 @@ class TriangleRasterizer(nn.Module):
             
         return visible
 
-    def forward(self, vertices, triangles_indices, vertex_weights, sigma, scaling,  shs = None, colors_precomp = None, texels = None, window_donors = None):
+    def forward(self, vertices, triangles_indices, vertex_weights, sigma, scaling,  shs = None, colors_precomp = None, texels = None, edge_details = None, face_edge_ids = None, window_donors = None):
 
         raster_settings = self.raster_settings
 
@@ -257,6 +276,8 @@ class TriangleRasterizer(nn.Module):
             scaling,
             raster_settings,
             texels,
+            edge_details,
+            face_edge_ids,
             window_donors,
         )
 

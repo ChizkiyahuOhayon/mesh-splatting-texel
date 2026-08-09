@@ -50,6 +50,8 @@
 		 const float* colors,
 		 const float* texels,
 		 const int texel_order,
+		 const float* edge_details,
+		 const int* face_edge_ids,
 		 const float* final_Ts,
 		 const uint32_t* n_contrib,
 		 const float* dL_dpixels,
@@ -61,6 +63,7 @@
 		 float* dL_dnormal3D,
 		 float* dL_dcolors,
 		 float* dL_dtexels,
+		 float* dL_dedge_details,
 		 float* dL_dpoints2D,
 		 float* dL_dvertice_depth);
 
