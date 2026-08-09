@@ -1,8 +1,11 @@
 # EdgeVal-E0 server runbook
 
 This gate rebuilds the native renderer, runs the exact mathematical-core tests,
-and executes one CUDA forward/backward fixture on exclusive physical GPU 1. It
-does not access Garden and does not train a model.
+and executes one CUDA forward/backward fixture on the selected exclusive
+physical GPU. It does not access Garden and does not train a model. Persistent
+evidence is written to NAS; pip and compiler temporary files use an isolated
+local `/tmp` directory because NAS does not support pip's metadata-file
+operations on this server.
 
 ```bash
 cd /home/smbu/dy/mesh-splatting-texel
@@ -12,8 +15,8 @@ git rev-parse HEAD
 git status --short
 
 export NAS_ROOT=/home/smbu/dy/nas/meshsplatting_smbu
-export EDGEVAL_E0_RUN_SUFFIX=01
-export EDGEVAL_E0_GPU=1
+export EDGEVAL_E0_RUN_SUFFIX=02
+export EDGEVAL_E0_GPU=2
 
 bash experiments/edgeval_e0/run_gpu1.sh
 ```
@@ -21,7 +24,7 @@ bash experiments/edgeval_e0/run_gpu1.sh
 Return the complete sealed evidence:
 
 ```bash
-OUT="$NAS_ROOT/experiments/edgeval_e0_01"
+OUT="$NAS_ROOT/experiments/edgeval_e0_02"
 cat "$OUT/result.json"
 cat "$OUT/manifest.json"
 cat "$OUT/SHA256SUMS"

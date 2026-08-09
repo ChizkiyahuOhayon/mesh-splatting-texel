@@ -7,8 +7,6 @@ RUN_SUFFIX="${EDGEVAL_E0_RUN_SUFFIX:-01}"
 GPU_ID="${EDGEVAL_E0_GPU:-1}"
 MIN_FREE_MIB=40000
 OUT="${NAS_ROOT}/experiments/edgeval_e0_${RUN_SUFFIX}"
-TMP_ROOT="${NAS_ROOT}/tmp"
-TORCH_EXTENSIONS_DIR="${NAS_ROOT}/torch_extensions"
 
 if [[ ! "${GPU_ID}" =~ ^[0-9]+$ ]]; then
   echo "EDGEVAL_E0_GPU must be a non-negative physical GPU index." >&2
@@ -37,13 +35,27 @@ if [[ ! "${FREE_MIB}" =~ ^[0-9]+$ ]] || [[ -n "${PROCESSES}" ]] || [[ "${FREE_MI
   exit 2
 fi
 
-mkdir -p "${NAS_ROOT}/experiments" "${TMP_ROOT}" "${TORCH_EXTENSIONS_DIR}"
+mkdir -p "${NAS_ROOT}/experiments"
 mkdir "${OUT}"
+LOCAL_BUILD_ROOT="$(mktemp -d /tmp/edgeval-e0.XXXXXX)"
+case "${LOCAL_BUILD_ROOT}" in
+  /tmp/edgeval-e0.*) ;;
+  *)
+    echo "Refusing unexpected local build path: ${LOCAL_BUILD_ROOT}" >&2
+    exit 2
+    ;;
+esac
+cleanup_local_build() {
+  rm -rf -- "${LOCAL_BUILD_ROOT}"
+}
+trap cleanup_local_build EXIT
+mkdir "${LOCAL_BUILD_ROOT}/tmp" "${LOCAL_BUILD_ROOT}/torch_extensions"
+
 export CUDA_VISIBLE_DEVICES="${GPU_ID}"
-export TMPDIR="${TMP_ROOT}"
-export TMP="${TMP_ROOT}"
-export TEMP="${TMP_ROOT}"
-export TORCH_EXTENSIONS_DIR
+export TMPDIR="${LOCAL_BUILD_ROOT}/tmp"
+export TMP="${LOCAL_BUILD_ROOT}/tmp"
+export TEMP="${LOCAL_BUILD_ROOT}/tmp"
+export TORCH_EXTENSIONS_DIR="${LOCAL_BUILD_ROOT}/torch_extensions"
 export PYTHONDONTWRITEBYTECODE=1
 export EDGEVAL_SOURCE_REVISION="$(git rev-parse HEAD)"
 
