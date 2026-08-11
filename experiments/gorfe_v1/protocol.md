@@ -10,6 +10,11 @@ target access, it fixes the byte serialization of camera identities, the
 direction of an odd-length circular permutation, and the ordering of random
 hashes.  It changes no scientific object, threshold, candidate, or outcome.
 
+Protocol revision 2 is another pre-data executability clarification.  The SH1
+rank threshold was already fixed below as `1e-10 * trace(H)/3`; revision 2 copies
+the same value into `protocol_constants.json` so implementation code has one
+machine-readable source.  It changes no value, threshold, candidate, or outcome.
+
 V1 asks one narrow question: on a frozen connected MeshSplatting checkpoint,
 does an exact renderer-affine value estimated without one camera fold predict
 the independent squared-error reduction on that unseen fold better than simpler

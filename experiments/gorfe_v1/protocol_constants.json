@@ -53,7 +53,7 @@
   "permutation_collapse_fraction": 0.5,
   "permutation_direction": "value_at_sorted_i_moves_to_i_plus_floor_n_over_2_mod_n",
   "permutation_small_budget_jaccard_max": 0.1,
-  "protocol_revision": 1,
+  "protocol_revision": 2,
   "random_priority_order": "unsigned_sha256_descending",
   "rank_mean_rho_min": 0.05,
   "render_scaling": 4,
@@ -70,6 +70,7 @@
     "garden",
     "room"
   ],
+  "sh1_rank_relative_trace_threshold": 1e-10,
   "top_budget_control_margin": 1.1,
   "torch_cuda_build": "12.6",
   "torch_version": "2.7.1+cu126",
