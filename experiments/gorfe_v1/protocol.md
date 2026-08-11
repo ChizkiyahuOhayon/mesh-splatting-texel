@@ -15,6 +15,12 @@ rank threshold was already fixed below as `1e-10 * trace(H)/3`; revision 2 copie
 the same value into `protocol_constants.json` so implementation code has one
 machine-readable source.  It changes no value, threshold, candidate, or outcome.
 
+Protocol revision 3 clarifies the already intended `was_rendered` boundary.
+The native sparse exporter cannot receive it or use it to create, filter, or
+weight a row.  After native export has completed, the Python gate may compare
+the replay's aggregate accepted-fragment count with `sum(was_rendered)` solely
+as a fail-closed postcondition.  This changes no design row or statistic.
+
 V1 asks one narrow question: on a frozen connected MeshSplatting checkpoint,
 does an exact renderer-affine value estimated without one camera fold predict
 the independent squared-error reduction on that unseen fold better than simpler
@@ -78,7 +84,9 @@ three RGB coefficients.  SH1 excludes DC, has `q=3`, and nine RGB coefficients.
 The exporter replays the actual forward order and semantics: identical hard
 inside test, depth-sorted point list, `alpha <= 0.999`, `alpha < 1/255` skip,
 `T(1-alpha) < 1e-4` termination, screen-space barycentrics, and SH1 convention.
-It must not use dominant-face maps, `was_rendered`, or the backward kernel.  The
+It must not use dominant-face maps, `was_rendered`, or the backward kernel to
+create, filter, or weight the sparse design.  `was_rendered` may be consulted
+only after native export for the aggregate postcondition described above.  The
 backward kernel has a different alpha cap and is not an exact forward oracle.
 
 All fragments from both incident faces, all depths, and all 16 high-resolution

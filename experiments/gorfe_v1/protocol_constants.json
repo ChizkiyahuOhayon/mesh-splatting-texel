@@ -53,7 +53,7 @@
   "permutation_collapse_fraction": 0.5,
   "permutation_direction": "value_at_sorted_i_moves_to_i_plus_floor_n_over_2_mod_n",
   "permutation_small_budget_jaccard_max": 0.1,
-  "protocol_revision": 2,
+  "protocol_revision": 3,
   "random_priority_order": "unsigned_sha256_descending",
   "rank_mean_rho_min": 0.05,
   "render_scaling": 4,
