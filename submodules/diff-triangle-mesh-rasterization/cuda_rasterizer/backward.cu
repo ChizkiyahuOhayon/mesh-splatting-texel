@@ -245,7 +245,7 @@
  }
  
 
- __global__ void computeVertexColorsCUDA(
+__global__ void computeVertexColorsCUDA(
     int V, int D, int M,
 	int W, int H,
 	const float* viewmatrix,
@@ -280,14 +280,50 @@
 		(glm::vec3*)dL_dvertices3D, 
 		(glm::vec3*)dL_dsh
 	);
+}
 
-	float3 dL_ddepht = {0.0f, 0.0f, dL_dvertice_depth[idx]};
-	float3 transposed_dL_ddepth = transformPoint4x3Transpose(dL_ddepht, viewmatrix);
 
-	dL_dvertices3D[idx].x = transposed_dL_ddepth.x;
-	dL_dvertices3D[idx].y = transposed_dL_ddepth.y;
-	dL_dvertices3D[idx].z = transposed_dL_ddepth.z;
+__global__ void computeVertexGeometryGradientsCUDA(
+	int V,
+	int W,
+	int H,
+	const float* viewmatrix,
+	const float* projmatrix,
+	const float* vertices,
+	const float* dL_dpoints2D,
+	const float* dL_dvertice_depth,
+	glm::vec3* dL_dvertices3D)
+{
+	auto idx = cg::this_grid().thread_rank();
+	if (idx >= V)
+		return;
 
+	const float3 vertex = {
+		vertices[3 * idx],
+		vertices[3 * idx + 1],
+		vertices[3 * idx + 2]};
+	const float4 p_hom = transformPoint4x4(vertex, projmatrix);
+	const float inv_w = 1.0f / (p_hom.w + 0.0000001f);
+	const float dL_dndc_x = 0.5f * W * dL_dpoints2D[2 * idx];
+	const float dL_dndc_y = 0.5f * H * dL_dpoints2D[2 * idx + 1];
+	const float dL_dhom_x = dL_dndc_x * inv_w;
+	const float dL_dhom_y = dL_dndc_y * inv_w;
+	const float dL_dhom_w =
+		-(dL_dndc_x * p_hom.x + dL_dndc_y * p_hom.y) * inv_w * inv_w;
+
+	const glm::vec3 projection_gradient(
+		projmatrix[0] * dL_dhom_x + projmatrix[1] * dL_dhom_y
+			+ projmatrix[3] * dL_dhom_w,
+		projmatrix[4] * dL_dhom_x + projmatrix[5] * dL_dhom_y
+			+ projmatrix[7] * dL_dhom_w,
+		projmatrix[8] * dL_dhom_x + projmatrix[9] * dL_dhom_y
+			+ projmatrix[11] * dL_dhom_w);
+	const float3 dL_ddepth = {0.0f, 0.0f, dL_dvertice_depth[idx]};
+	const float3 depth_gradient = transformPoint4x3Transpose(dL_ddepth, viewmatrix);
+
+	dL_dvertices3D[idx].x += projection_gradient.x + depth_gradient.x;
+	dL_dvertices3D[idx].y += projection_gradient.y + depth_gradient.y;
+	dL_dvertices3D[idx].z += projection_gradient.z + depth_gradient.z;
 }
 
  
@@ -1127,7 +1163,7 @@
  }
 
  // Add this to the FORWARD namespace implementation
- void BACKWARD::computeVertexColorGradients(
+void BACKWARD::computeVertexColorGradients(
     int V, int D, int M,
 	int W, int H,
 	const float* viewmatrix,
@@ -1146,6 +1182,22 @@
     computeVertexColorsCUDA<<<(V + 255) / 256, 256>>>(
         V, D, M, W, H, viewmatrix, projmatrix, vertices, shs, clamped, campos, dL_dcolor, dL_dpoints2D, (glm::vec3*)dL_dvertices3D, dL_dsh, dL_dvertice_depth
     );
+}
+
+ void BACKWARD::computeVertexGeometryGradients(
+	int V,
+	int W,
+	int H,
+	const float* viewmatrix,
+	const float* projmatrix,
+	const float* vertices,
+	const float* dL_dpoints2D,
+	const float* dL_dvertice_depth,
+	glm::vec3* dL_dvertices3D)
+ {
+	computeVertexGeometryGradientsCUDA<<<(V + 255) / 256, 256>>>(
+		V, W, H, viewmatrix, projmatrix, vertices, dL_dpoints2D,
+		dL_dvertice_depth, dL_dvertices3D);
  }
  
  void BACKWARD::render(

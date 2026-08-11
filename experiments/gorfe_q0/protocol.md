@@ -1,6 +1,6 @@
 # GoRFE-Q0 — angular-carrier representation gate
 
-Status: revised after attempt 02 and frozen before any scene score.  This gate
+Status: revised after attempts 02 and 03 and frozen before any scene score.  This gate
 observes no Garden or Room data.
 
 Attempt 02 showed that the original full-image vertex probe crossed the
@@ -12,6 +12,14 @@ the vertex derivative on the fixed interior window `[30:35, 30:35]`.  The
 fixture, coordinate, epsilon, tolerance, coefficients, and all other checks
 remain unchanged.  The full-image discrepancy and support change remain in the
 result as diagnostics; attempt 02 remains a failure rather than being relabeled.
+
+Attempt 03 confirmed one changed silhouette pixel but still failed on the fixed
+interior window.  Code tracing found that barycentric derivatives reached
+`dL_dpoints2D` but were never propagated through the perspective projection to
+3D vertices when precomputed vertex colors were used.  Revision 2 implements
+that missing Jacobian and adds the zero-detail parent's interior vertex gradient
+as a decision control.  It does not alter the fixture, window, coordinate,
+epsilon, tolerance, coefficients, or any earlier check.
 
 ## Object
 
@@ -38,6 +46,9 @@ barycentric coordinates, and the normalized camera-to-vertex direction.
   derivative is finite and matches central difference within `5e-2`, including
   barycentric, P2-basis, and normalized-direction paths without a visibility
   membership change.
+- The zero-detail parent on the same interior window also matches its vertex
+  finite difference within `5e-2`, directly testing the repaired perspective
+  Jacobian without relying on cancellation from the angular carrier.
 - The original full-image vertex comparison and the number of parent-support
   pixels changed by the perturbation are reported as non-decision diagnostics.
 - The full CPU unit-test suite passes after rebuilding the extension.

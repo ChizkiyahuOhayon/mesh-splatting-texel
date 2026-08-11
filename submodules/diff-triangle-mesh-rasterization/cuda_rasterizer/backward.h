@@ -90,8 +90,19 @@
         const float* dL_dcolor,
 		const float* dL_dpoints2D,
         glm::vec3* dL_dvertices3D,
-        float* dL_dsh,
+		float* dL_dsh,
 		const float* dL_dvertice_depth);
+
+	 void computeVertexGeometryGradients(
+		int V,
+		int W,
+		int H,
+		const float* view,
+		const float* proj,
+		const float* vertices,
+		const float* dL_dpoints2D,
+		const float* dL_dvertice_depth,
+		glm::vec3* dL_dvertices3D);
  
 	 void preprocess(
 		 int P, int D, int M,

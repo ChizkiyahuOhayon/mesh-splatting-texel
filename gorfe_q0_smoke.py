@@ -214,6 +214,9 @@ def run():
     vertex_gradient = _vertex_gradient_check(
         first_rasterizer, detail, face_edge_ids, _interior_probe
     )
+    parent_vertex_gradient = _vertex_gradient_check(
+        first_rasterizer, zero_detail, face_edge_ids, _interior_probe
+    )
     full_image_vertex_diagnostic = _vertex_gradient_check(
         first_rasterizer, detail, face_edge_ids, _probe
     )
@@ -232,6 +235,10 @@ def run():
         "second_camera_coefficient_gradient_matches_central_difference": second_gradient["matches"],
         "vertex_gradient_is_finite": vertex_gradient["finite"],
         "vertex_gradient_matches_central_difference": vertex_gradient["matches"],
+        "parent_vertex_gradient_is_finite": parent_vertex_gradient["finite"],
+        "parent_vertex_gradient_matches_central_difference": parent_vertex_gradient[
+            "matches"
+        ],
     }
     result = {
         "experiment": "GoRFE-Q0",
@@ -252,6 +259,7 @@ def run():
             "max_relative_error"
         ],
         "vertex_gradient_check": vertex_gradient,
+        "parent_vertex_gradient_check": parent_vertex_gradient,
         "vertex_gradient_probe_window": {
             "rows": [INTERIOR_ROWS.start, INTERIOR_ROWS.stop],
             "columns": [INTERIOR_COLUMNS.start, INTERIOR_COLUMNS.stop],

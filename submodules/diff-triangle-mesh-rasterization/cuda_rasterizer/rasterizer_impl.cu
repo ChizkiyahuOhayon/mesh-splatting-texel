@@ -566,6 +566,16 @@
 			dL_dvertice_depth
 		), debug)
 	}
+	CHECK_CUDA(BACKWARD::computeVertexGeometryGradients(
+		V,
+		width, height,
+		viewmatrix,
+		projmatrix,
+		vertices,
+		dL_dpoints2D,
+		dL_dvertice_depth,
+		(glm::vec3*)dL_dvertices3D
+	), debug)
 
 	 if (edge_detail_dim == 4)
 	 {
