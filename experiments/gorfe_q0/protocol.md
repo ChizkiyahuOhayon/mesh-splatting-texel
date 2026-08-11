@@ -1,7 +1,8 @@
 # GoRFE-Q0 — angular-carrier representation gate
 
-Status: revised after attempts 02 and 03 and frozen before any scene score.  This gate
-observes no Garden or Room data.
+Status: **passed on attempt 04** at source `6f7b03d`; revised after attempts 02
+and 03 and frozen before any scene score.  This gate observes no Garden or Room
+data.
 
 Attempt 02 showed that the original full-image vertex probe crossed the
 rasterizer's discrete visibility boundary: a `2e-4` perturbation changed the
