@@ -4,6 +4,12 @@ Status: **PREREGISTERED — no Garden or Room target pixel or V1 score has been
 read**.  This protocol and `protocol_constants.json` are committed before the
 native exporter, scene evaluator, or decision code is implemented.
 
+Protocol revision 1 is a pre-data executability clarification: after independent
+review of the initial protocol commit and before any scene implementation or
+target access, it fixes the byte serialization of camera identities, the
+direction of an odd-length circular permutation, and the ordering of random
+hashes.  It changes no scientific object, threshold, candidate, or outcome.
+
 V1 asks one narrow question: on a frozen connected MeshSplatting checkpoint,
 does an exact renderer-affine value estimated without one camera fold predict
 the independent squared-error reduction on that unseen fold better than simpler
@@ -104,7 +110,11 @@ residual, gain, loss, or outcome.
 Cameras have unique immutable `image_name` values, sorted by UTF-8 bytes; fold is
 `sorted_training_rank mod 4`.  Garden fold sizes must be `[41,40,40,40]` and Room
 fold sizes `[68,68,68,68]`.  The name-to-fold map and its SHA-256 are sealed in
-the preparation manifest.
+the preparation manifest.  A name-list hash serializes every sorted,
+extension-stripped name as its UTF-8 bytes followed by `0x0a`, including the last
+name; this is the encoding used by the four locked dataset hashes.  A fold-map
+hash uses UTF-8 canonical JSON with sorted keys, compact separators, and
+`ensure_ascii=False`.
 
 ## Sufficient statistics and ridge convention
 
@@ -174,10 +184,13 @@ All control scores for outer fold `k` use only `T_k`:
 - `rhs_norm`: Frobenius norm `||b_g,T_k||_F`;
 - `coverage`: `n_g,T_k`;
 - `random_id`: SHA-256 of the domain string
-  `GoRFE-V1-random|scene|k|type|u|v` interpreted as an unsigned priority;
+  `GoRFE-V1-random|scene|k|type|u|v`, with `k,u,v` in canonical base-ten ASCII
+  and type exactly `DC` or `SH1`, interpreted as an unsigned big-endian integer
+  priority; larger integers rank first;
 - `permuted_value`: within each type and outer fold, sort by canonical key and
-  circularly move primary values by `floor(N_type/2)`.  This preserves the value
-  multiset and type/cost distribution while breaking edge identity.
+  move the value at sorted position `i` to
+  `(i + floor(N_type/2)) mod N_type`.  This preserves the value multiset and
+  type/cost distribution while breaking edge identity.
 
 One cost unit is one RGB coefficient row: DC costs one and SH1 costs three.  It
 corresponds to three trainable scalars (12 float32 coefficient bytes); topology,
