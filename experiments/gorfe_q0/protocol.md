@@ -1,6 +1,17 @@
 # GoRFE-Q0 — angular-carrier representation gate
 
-Status: frozen before any scene score.  This gate observes no Garden or Room data.
+Status: revised after attempt 02 and frozen before any scene score.  This gate
+observes no Garden or Room data.
+
+Attempt 02 showed that the original full-image vertex probe crossed the
+rasterizer's discrete visibility boundary: a `2e-4` perturbation changed the
+set of covered pixels.  MeshSplatting's native backward, like standard hard
+rasterizers, differentiates the fixed-coverage branch and does not define a
+gradient for that discrete membership jump.  Revision 1 therefore evaluates
+the vertex derivative on the fixed interior window `[30:35, 30:35]`.  The
+fixture, coordinate, epsilon, tolerance, coefficients, and all other checks
+remain unchanged.  The full-image discrepancy and support change remain in the
+result as diagnostics; attempt 02 remains a failure rather than being relabeled.
 
 ## Object
 
@@ -23,8 +34,12 @@ barycentric coordinates, and the normalized camera-to-vertex direction.
 - The dense CPU definition is identical on a shared edge under reversed incident-face orientation.
 - All 12 coefficient derivatives are finite and match central differences at
   both cameras with maximum relative error at most `5e-3`; scale is clamped to 1.
-- Vertex `(0,0)` analytic derivative is finite and matches central difference
-  within `5e-2`, including both rasterization and normalized-direction paths.
+- On the fixed interior window `[30:35, 30:35]`, vertex `(0,0)` analytic
+  derivative is finite and matches central difference within `5e-2`, including
+  barycentric, P2-basis, and normalized-direction paths without a visibility
+  membership change.
+- The original full-image vertex comparison and the number of parent-support
+  pixels changed by the perturbation are reported as non-decision diagnostics.
 - The full CPU unit-test suite passes after rebuilding the extension.
 
 Every Boolean must be true.  Failure stops P2-SH1 and does not invalidate the

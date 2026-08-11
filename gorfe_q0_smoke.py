@@ -18,6 +18,8 @@ COEFFICIENT_EPSILON = 1e-3
 COEFFICIENT_RELATIVE_TOLERANCE = 5e-3
 VERTEX_EPSILON = 2e-4
 VERTEX_RELATIVE_TOLERANCE = 5e-2
+INTERIOR_ROWS = slice(30, 35)
+INTERIOR_COLUMNS = slice(30, 35)
 
 
 def _sha256(tensor):
@@ -84,6 +86,12 @@ def _probe(image):
     return (image * channels[:, None, None]).sum()
 
 
+def _interior_probe(image):
+    channels = PROBE_CHANNELS.to(device=image.device)
+    window = image[:, INTERIOR_ROWS, INTERIOR_COLUMNS]
+    return (window * channels[:, None, None]).sum()
+
+
 def _coefficient_gradient_check(rasterizer, detail, face_edge_ids):
     variable = detail.detach().clone().requires_grad_(True)
     rendered, vertices = _render(rasterizer, variable, face_edge_ids)
@@ -114,10 +122,10 @@ def _coefficient_gradient_check(rasterizer, detail, face_edge_ids):
     }
 
 
-def _vertex_gradient_check(rasterizer, detail, face_edge_ids):
+def _vertex_gradient_check(rasterizer, detail, face_edge_ids, probe):
     variable = detail.detach().clone().requires_grad_(True)
     rendered, vertices = _render(rasterizer, variable, face_edge_ids)
-    (analytic_vertices,) = torch.autograd.grad(_probe(rendered), vertices)
+    (analytic_vertices,) = torch.autograd.grad(probe(rendered), vertices)
     coordinate = (0, 0)
     with torch.no_grad():
         plus = _default_vertices(vertices.device)
@@ -125,8 +133,8 @@ def _vertex_gradient_check(rasterizer, detail, face_edge_ids):
         plus[coordinate] += VERTEX_EPSILON
         minus[coordinate] -= VERTEX_EPSILON
         finite_difference = (
-            _probe(_render(rasterizer, detail, face_edge_ids, plus)[0])
-            - _probe(_render(rasterizer, detail, face_edge_ids, minus)[0])
+            probe(_render(rasterizer, detail, face_edge_ids, plus)[0])
+            - probe(_render(rasterizer, detail, face_edge_ids, minus)[0])
         ) / (2.0 * VERTEX_EPSILON)
     analytic = analytic_vertices[coordinate]
     scale = torch.maximum(analytic.abs(), finite_difference.abs()).clamp_min(1.0)
@@ -140,6 +148,20 @@ def _vertex_gradient_check(rasterizer, detail, face_edge_ids):
         "finite": finite,
         "matches": finite and relative_error <= VERTEX_RELATIVE_TOLERANCE,
     }
+
+
+def _support_change(rasterizer, face_edge_ids, device):
+    coordinate = (0, 0)
+    plus = _default_vertices(device)
+    minus = _default_vertices(device)
+    plus[coordinate] += VERTEX_EPSILON
+    minus[coordinate] -= VERTEX_EPSILON
+    zero_detail = torch.zeros((1, 4, 3), dtype=torch.float32, device=device)
+    plus_render = _render(rasterizer, zero_detail, face_edge_ids, plus)[0]
+    minus_render = _render(rasterizer, zero_detail, face_edge_ids, minus)[0]
+    plus_support = plus_render.abs().sum(dim=0) > 0
+    minus_support = minus_render.abs().sum(dim=0) > 0
+    return int(torch.count_nonzero(plus_support != minus_support))
 
 
 def _continuity_check():
@@ -189,7 +211,13 @@ def run():
     second_render = _render(second_rasterizer, detail, face_edge_ids)[0]
     first_gradient = _coefficient_gradient_check(first_rasterizer, detail, face_edge_ids)
     second_gradient = _coefficient_gradient_check(second_rasterizer, detail, face_edge_ids)
-    vertex_gradient = _vertex_gradient_check(first_rasterizer, detail, face_edge_ids)
+    vertex_gradient = _vertex_gradient_check(
+        first_rasterizer, detail, face_edge_ids, _interior_probe
+    )
+    full_image_vertex_diagnostic = _vertex_gradient_check(
+        first_rasterizer, detail, face_edge_ids, _probe
+    )
+    support_changed_pixels = _support_change(first_rasterizer, face_edge_ids, device)
     continuous, boundary_value = _continuity_check()
 
     checks = {
@@ -224,6 +252,12 @@ def run():
             "max_relative_error"
         ],
         "vertex_gradient_check": vertex_gradient,
+        "vertex_gradient_probe_window": {
+            "rows": [INTERIOR_ROWS.start, INTERIOR_ROWS.stop],
+            "columns": [INTERIOR_COLUMNS.start, INTERIOR_COLUMNS.stop],
+        },
+        "full_image_vertex_gradient_diagnostic": full_image_vertex_diagnostic,
+        "parent_support_changed_pixels_under_vertex_probe": support_changed_pixels,
         "first_camera_analytic_gradient": first_gradient["analytic"].detach().cpu().tolist(),
         "first_camera_finite_difference_gradient": first_gradient[
             "finite_difference"
