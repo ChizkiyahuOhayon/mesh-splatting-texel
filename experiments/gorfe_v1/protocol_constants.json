@@ -1,0 +1,73 @@
+{
+  "budgets_cost_units": [
+    4096,
+    16384
+  ],
+  "camera_folds": 4,
+  "candidate_cap_edges": 131072,
+  "candidate_hash_seed_uint64": 15111065706836454659,
+  "checkpoint_iteration": 30000,
+  "checkpoint_sigma": 0.0001,
+  "checkpoint_sigma_abs_tolerance": 1e-12,
+  "checkpoint_texel_order": 0,
+  "checkpoint_vertex_sh_degree": 3,
+  "cost_units": {
+    "dc": 1,
+    "sh1": 3
+  },
+  "dataset_name_hashes": {
+    "garden": {
+      "test": "efad2e5e2dbfef071d2ef98a91541706d4d829ec8d2170daf9edf7a5d1aa0230",
+      "train": "858a34eeaf9cc908e211fa85cbdcf838c1faabb8b1cdac9fa95ddd93c7e59c85"
+    },
+    "room": {
+      "test": "11e26e6e9a03d85d860a1bc33561ad202f41cde1fb46146bbf1871a4211c8864",
+      "train": "8deb3b03226f31f24ef870f935a02a435cef0d70ab585faf1d61ba8256253f51"
+    }
+  },
+  "dataset_view_counts": {
+    "garden": {
+      "test": 24,
+      "train": 161
+    },
+    "room": {
+      "test": 39,
+      "train": 272
+    }
+  },
+  "family_minimum_cost_units": 65536,
+  "gcv_negative_rss_relative_tolerance": 1e-10,
+  "gcv_ridge_exponents": [
+    -6,
+    -5,
+    -4,
+    -3,
+    -2,
+    -1,
+    0,
+    1,
+    2
+  ],
+  "minimum_fold_support_cameras": 4,
+  "minimum_fold_support_pixels": 32,
+  "permutation_collapse_fraction": 0.5,
+  "permutation_small_budget_jaccard_max": 0.1,
+  "rank_mean_rho_min": 0.05,
+  "render_scaling": 4,
+  "resource_limits": {
+    "artifact_bytes_per_scene": 536870912,
+    "cuda_allocated_bytes": 40802189312,
+    "gpu_free_mib_at_start": 40000,
+    "host_peak_rss_bytes": 68719476736,
+    "physical_gpu_used_mib": 42000,
+    "raw_rows_per_camera": 2147483647,
+    "wall_seconds_per_scene": 21600
+  },
+  "scene_names": [
+    "garden",
+    "room"
+  ],
+  "top_budget_control_margin": 1.1,
+  "torch_cuda_build": "12.6",
+  "torch_version": "2.7.1+cu126"
+}
