@@ -36,3 +36,7 @@ The runner refuses an existing output directory or a dirty tracked checkout,
 requires an exclusive physical GPU with at least 40,000 MiB free, builds in a
 validated local `/tmp` directory, and writes the build log, full tests, result,
 manifest, extension hash, environment, `DONE`, and `SHA256SUMS` to NAS.
+Before reserving an attempt suffix it requires the locked environment
+`torch 2.7.1+cu126` with CUDA `12.6`; unit discovery fixes the repository root
+as its top-level directory so installed packages named `tests` cannot shadow
+the project suite.

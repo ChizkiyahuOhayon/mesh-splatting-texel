@@ -215,7 +215,7 @@ def _gcv_select(gram, rhs, rss, observations, exponents):
     """Select ridge per batch row; exact ties choose the larger ridge."""
     ridge = _ridge_candidates(gram, exponents)
     valid = (
-        torch.isfinite(gram).all(dim=(-2, -1))
+        torch.isfinite(gram).all(dim=-1).all(dim=-1)
         & torch.isfinite(rhs).all(dim=-1)
         & torch.isfinite(rss)
         & (gram.diagonal(dim1=-2, dim2=-1).sum(-1) > 0)
