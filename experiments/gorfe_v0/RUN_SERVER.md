@@ -1,7 +1,10 @@
-# GoRFE-V0 server command
+# GoRFE-V0 server command — sealed
 
-V0 is a synthetic CPU/float64 integrity gate.  It deliberately does not reserve
-GPU 3 and does not read a scene or checkpoint.
+Attempt `_01` passed at source
+`126121dfdeaaebbec6dd978d7f90101425b815ea`. Do not rerun or overwrite it. V0
+is a synthetic CPU/float64 integrity gate; it reserved no GPU and read no scene
+or checkpoint. The commands below are retained only as the exact reproduction
+record.
 
 ```bash
 cd ~/dy/mesh-splatting-texel

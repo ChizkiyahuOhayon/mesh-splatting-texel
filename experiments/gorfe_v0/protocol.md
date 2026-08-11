@@ -1,7 +1,9 @@
 # GoRFE-V0 — exact sparse-design integrity gate
 
-Status: **frozen before implementation**.  This gate is synthetic and must not
-read Garden, Room, or any other scene pixels.
+Status: **passed on attempt 01** at source
+`126121dfdeaaebbec6dd978d7f90101425b815ea`. The protocol was frozen before
+implementation and the gate read no Garden, Room, or other scene pixels. The
+sealed record is `experiments/gorfe_v0/analysis_01.md`.
 
 ## Object
 
