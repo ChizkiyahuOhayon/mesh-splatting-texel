@@ -101,7 +101,7 @@ def compute_image_2d_pytorch_exact(vertices, projmatrix, W, H):
     return image_2D_pytorch
 
 
-def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, window_donors = None, edge_details = None, face_edge_ids = None):
+def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, window_donors = None, edge_details = None, face_edge_ids = None, gorfe_face_edge_ids = None, gorfe_edge_count = None):
     """
     Render the scene. 
     
@@ -205,20 +205,68 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         edge_details = edge_details.to(device=vertices.device, dtype=torch.float32).contiguous()
         face_edge_ids = face_edge_ids.to(device=vertices.device, dtype=torch.int32).contiguous()
 
+    if gorfe_face_edge_ids is not None:
+        if edge_details is not None or window_donors is not None:
+            raise ValueError("GoRFE design export requires the unmodified parent render")
+        if pc.scaling != 4:
+            raise ValueError("GoRFE-V1 design export is locked to scaling=4")
+        if not isinstance(gorfe_edge_count, int) or gorfe_edge_count < 0:
+            raise ValueError("gorfe_edge_count must be a nonnegative integer")
+        n_faces = triangles_indices.shape[0]
+        if gorfe_face_edge_ids.shape != (n_faces, 3):
+            raise ValueError(
+                f"gorfe_face_edge_ids must be [{n_faces}, 3], got "
+                f"{tuple(gorfe_face_edge_ids.shape)}"
+            )
+        gorfe_face_edge_ids = gorfe_face_edge_ids.to(
+            device=vertices.device, dtype=torch.int32
+        ).contiguous()
+
     # Rasterize visible triangles to image, obtain their radii (on screen).
-    rendered_image, radii, scaling, allmap, max_blending, was_rendered  = rasterizer(
+    raster_args = dict(
         vertices=vertices,
         triangles_indices=triangles_indices,
         vertex_weights=vertex_weights.squeeze(),
         sigma=sigma,
-        shs = shs,
-        colors_precomp = colors_precomp,
-        scaling = scaling,
-        texels = texels,
-        edge_details = edge_details,
-        face_edge_ids = face_edge_ids,
-        window_donors = window_donors,
-       )
+        shs=shs,
+        colors_precomp=colors_precomp,
+        scaling=scaling,
+        texels=texels,
+        edge_details=edge_details,
+        face_edge_ids=face_edge_ids,
+        window_donors=window_donors,
+    )
+    gorfe_rows = None
+    if gorfe_face_edge_ids is None:
+        rendered_image, radii, scaling, allmap, max_blending, was_rendered = rasterizer(
+            **raster_args
+        )
+    else:
+        (
+            rendered_image,
+            radii,
+            scaling,
+            allmap,
+            max_blending,
+            was_rendered,
+            gorfe_pixel_ids,
+            gorfe_group_ids,
+            gorfe_features,
+            gorfe_diagnostics,
+        ) = rasterizer.forward_with_gorfe_design(
+            **raster_args,
+            gorfe_face_edge_ids=gorfe_face_edge_ids,
+            gorfe_edge_count=gorfe_edge_count,
+            output_height=H_init,
+            output_width=W_init,
+            output_scaling=pc.scaling,
+        )
+        gorfe_rows = {
+            "pixel_ids": gorfe_pixel_ids,
+            "group_ids": gorfe_group_ids,
+            "features": gorfe_features,
+            "diagnostics": gorfe_diagnostics,
+        }
 
     radii = radii[:vertex_index]
     scaling = scaling[:vertex_index]
@@ -252,6 +300,8 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
             "triangle_was_rendered": was_rendered,
             "texel_footprint_weights": texel_footprint_weights
             }
+    if gorfe_rows is not None:
+        rets["gorfe_design"] = gorfe_rows
 
     # additional regularizations
     render_alpha = allmap[1:2]

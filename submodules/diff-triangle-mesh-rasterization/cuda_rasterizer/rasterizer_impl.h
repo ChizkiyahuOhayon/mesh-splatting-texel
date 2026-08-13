@@ -111,7 +111,7 @@
 
 	 // Specialization for GeometryState
 	 template<>
-	 size_t required<GeometryState>(size_t P, size_t total_nb_points, size_t V, bool with_donors)
+	 inline size_t required<GeometryState>(size_t P, size_t total_nb_points, size_t V, bool with_donors)
 	 {
 		 char* size = nullptr;
 		 GeometryState::fromChunk(size, P, total_nb_points, V, with_donors);

@@ -54,6 +54,25 @@ RasterizetrianglesCUDA(
 	const bool prefiltered,
 	const bool debug);
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+ExportGoRFERowsCUDA(
+	const torch::Tensor& vertices,
+	const torch::Tensor& triangles_indices,
+	const float sigma,
+	const torch::Tensor& face_edge_ids,
+	const int64_t edge_count,
+	const int image_height,
+	const int image_width,
+	const int output_height,
+	const int output_width,
+	const int output_scaling,
+	const torch::Tensor& campos,
+	const torch::Tensor& geomBuffer,
+	const int64_t num_rendered,
+	const torch::Tensor& binningBuffer,
+	const torch::Tensor& imageBuffer,
+	const bool debug);
+
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizetrianglesBackwardCUDA(
  	const torch::Tensor& background,

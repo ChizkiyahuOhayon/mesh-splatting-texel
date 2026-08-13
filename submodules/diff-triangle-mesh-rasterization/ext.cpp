@@ -25,6 +25,7 @@
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("rasterize_triangles", &RasterizetrianglesCUDA);
+  m.def("export_gorfe_rows", &ExportGoRFERowsCUDA);
   m.def("rasterize_triangles_backward", &RasterizetrianglesBackwardCUDA);
   m.def("mark_visible", &markVisible);
   m.def("compute_relocation", &ComputeRelocationCUDA);

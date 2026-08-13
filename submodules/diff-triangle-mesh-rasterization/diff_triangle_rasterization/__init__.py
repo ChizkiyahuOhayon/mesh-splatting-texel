@@ -56,6 +56,75 @@ def rasterize_triangles(
         window_donors,
     )
 
+_GORFE_DIAGNOSTIC_NAMES = (
+    "raw_rows",
+    "count_alpha_accepted_fragments",
+    "count_blended_fragments",
+    "write_alpha_accepted_fragments",
+    "write_blended_fragments",
+    "replay_transmittance_mismatch_pixels",
+    "replay_last_contributor_mismatch_pixels",
+    "count_write_mismatch_pixels",
+    "write_overflow_rows",
+    "high_resolution_pixels",
+    "output_pixels",
+    "replay_passes",
+)
+
+
+def export_gorfe_rows(
+    vertices,
+    triangles_indices,
+    sigma,
+    gorfe_face_edge_ids,
+    gorfe_edge_count,
+    image_height,
+    image_width,
+    output_height,
+    output_width,
+    output_scaling,
+    campos,
+    geom_buffer,
+    num_rendered,
+    binning_buffer,
+    image_buffer,
+    debug=False,
+):
+    """Replay one completed forward pass and export its exact sparse design.
+
+    This low-level API intentionally requires the three opaque buffers and the
+    per-face acceptance counts returned by that same native forward call.  It
+    never invokes preprocessing or sorting again, and never changes renderer
+    state.
+    """
+    pixel_ids, group_ids, features, diagnostic_tensor = _C.export_gorfe_rows(
+        vertices,
+        triangles_indices,
+        sigma,
+        gorfe_face_edge_ids,
+        gorfe_edge_count,
+        image_height,
+        image_width,
+        output_height,
+        output_width,
+        output_scaling,
+        campos,
+        geom_buffer,
+        num_rendered,
+        binning_buffer,
+        image_buffer,
+        debug,
+    )
+    values = diagnostic_tensor.detach().cpu().tolist()
+    if len(values) != len(_GORFE_DIAGNOSTIC_NAMES):
+        raise RuntimeError(
+            "native GoRFE diagnostics have an unexpected length: "
+            f"{len(values)} != {len(_GORFE_DIAGNOSTIC_NAMES)}"
+        )
+    diagnostics = dict(zip(_GORFE_DIAGNOSTIC_NAMES, map(int, values)))
+    return pixel_ids, group_ids, features, diagnostics
+
+
 class _RasterizeTriangles(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -279,6 +348,151 @@ class TriangleRasterizer(nn.Module):
             edge_details,
             face_edge_ids,
             window_donors,
+        )
+
+    @torch.no_grad()
+    def forward_with_gorfe_design(
+        self,
+        vertices,
+        triangles_indices,
+        vertex_weights,
+        sigma,
+        scaling,
+        gorfe_face_edge_ids,
+        gorfe_edge_count,
+        output_height,
+        output_width,
+        output_scaling,
+        shs=None,
+        colors_precomp=None,
+        texels=None,
+        edge_details=None,
+        face_edge_ids=None,
+        window_donors=None,
+    ):
+        """Render once, then replay its saved state for GoRFE sparse rows.
+
+        This is an evaluation-only sibling of :meth:`forward`.  The native
+        forward is called with exactly the normal argument contract, and only
+        after it returns are its opaque buffers passed to ``export_gorfe_rows``.
+        The ordinary ``forward`` method and its six-item return remain unchanged.
+        """
+        raster_settings = self.raster_settings
+        if (shs is None and colors_precomp is None) or (
+            shs is not None and colors_precomp is not None
+        ):
+            raise ValueError("provide exactly one of shs or colors_precomp")
+        if window_donors is not None:
+            raise ValueError("GoRFE design export does not support RITS window donors")
+        if texels is not None or (getattr(raster_settings, "texel_order", 0) or 0) != 0:
+            raise ValueError("GoRFE design export requires the frozen texel-free parent")
+        if edge_details is not None or face_edge_ids is not None:
+            raise ValueError("GoRFE design export requires the frozen edge-detail-free parent")
+        if output_scaling != 4:
+            raise ValueError(
+                f"GoRFE-V1 output_scaling must equal 4, got {output_scaling}"
+            )
+        if raster_settings.image_height != output_height * output_scaling:
+            raise ValueError("high-resolution image_height is not exactly 4x output_height")
+        if raster_settings.image_width != output_width * output_scaling:
+            raise ValueError("high-resolution image_width is not exactly 4x output_width")
+        if not isinstance(gorfe_edge_count, int) or gorfe_edge_count < 0:
+            raise ValueError("gorfe_edge_count must be a nonnegative integer")
+
+        texel_order = 0
+        texels = torch.zeros(0, device=vertices.device, dtype=vertices.dtype)
+        edge_details = torch.zeros(0, device=vertices.device, dtype=vertices.dtype)
+        face_edge_ids = torch.zeros(0, device=vertices.device, dtype=torch.int32)
+
+        empty = torch.zeros(0, device=vertices.device, dtype=torch.int32)
+        window_source, donor_indices, donor_mode = empty, empty, 0
+        if shs is None:
+            shs = torch.Tensor([])
+        if colors_precomp is None:
+            colors_precomp = torch.Tensor([])
+
+        args = (
+            raster_settings.bg,
+            vertices,
+            triangles_indices,
+            vertex_weights,
+            sigma,
+            colors_precomp,
+            texels,
+            texel_order,
+            edge_details,
+            face_edge_ids,
+            window_source,
+            donor_indices,
+            donor_mode,
+            scaling,
+            raster_settings.viewmatrix,
+            raster_settings.projmatrix,
+            raster_settings.tanfovx,
+            raster_settings.tanfovy,
+            raster_settings.image_height,
+            raster_settings.image_width,
+            shs,
+            raster_settings.sh_degree,
+            raster_settings.campos,
+            raster_settings.prefiltered,
+            raster_settings.debug,
+        )
+        (
+            num_rendered,
+            color,
+            depth,
+            radii,
+            was_rendered,
+            geom_buffer,
+            binning_buffer,
+            image_buffer,
+            output_scaling_tensor,
+            max_blending,
+        ) = _C.rasterize_triangles(*args)
+
+        pixel_ids, group_ids, features, diagnostics = export_gorfe_rows(
+            vertices=vertices,
+            triangles_indices=triangles_indices,
+            sigma=sigma,
+            gorfe_face_edge_ids=gorfe_face_edge_ids,
+            gorfe_edge_count=gorfe_edge_count,
+            image_height=raster_settings.image_height,
+            image_width=raster_settings.image_width,
+            output_height=output_height,
+            output_width=output_width,
+            output_scaling=output_scaling,
+            campos=raster_settings.campos,
+            geom_buffer=geom_buffer,
+            num_rendered=num_rendered,
+            binning_buffer=binning_buffer,
+            image_buffer=image_buffer,
+            debug=raster_settings.debug,
+        )
+        # `was_rendered` is never passed to the native exporter and cannot
+        # influence sparse rows.  It is consulted only after export as an
+        # independent saved-forward integrity check required by the V1 gate.
+        forward_alpha_accepted = int(
+            was_rendered.sum(dtype=torch.int64).detach().cpu().item()
+        )
+        if diagnostics["count_alpha_accepted_fragments"] != forward_alpha_accepted:
+            raise RuntimeError(
+                "GoRFE replay alpha-accepted count disagrees with forward: "
+                f"{diagnostics['count_alpha_accepted_fragments']} versus "
+                f"{forward_alpha_accepted}"
+            )
+        diagnostics["forward_alpha_accepted_fragments"] = forward_alpha_accepted
+        return (
+            color,
+            radii,
+            output_scaling_tensor,
+            depth,
+            max_blending,
+            was_rendered,
+            pixel_ids,
+            group_ids,
+            features,
+            diagnostics,
         )
 
 

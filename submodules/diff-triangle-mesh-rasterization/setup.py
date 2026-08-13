@@ -34,6 +34,7 @@ setup(
             sources=[
             "cuda_rasterizer/rasterizer_impl.cu",
             "cuda_rasterizer/forward.cu",
+            "cuda_rasterizer/gorfe.cu",
             "cuda_rasterizer/backward.cu",
             "cuda_rasterizer/utils.cu",
             "cuda_rasterizer/adam.cu",

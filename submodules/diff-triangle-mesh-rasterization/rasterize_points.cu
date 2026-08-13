@@ -28,12 +28,20 @@
 #include <tuple>
 #include <stdio.h>
 #include <cuda_runtime_api.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <memory>
 #include "cuda_rasterizer/config.h"
 #include "cuda_rasterizer/rasterizer.h"
+#include "cuda_rasterizer/rasterizer_impl.h"
+#include "cuda_rasterizer/forward.h"
+#include "cuda_rasterizer/gorfe.h"
 #include <fstream>
 #include <string>
 #include <functional>
+#include <array>
+#include <cmath>
+#include <limits>
 #include "cuda_rasterizer/utils.h"
 #include "cuda_rasterizer/adam.h"
 
@@ -202,6 +210,235 @@ RasterizetrianglesCUDA(
 		debug);
   }
   return std::make_tuple(rendered, out_color, out_others, radii, was_rendered, geomBuffer, binningBuffer, imgBuffer, scaling, max_blending);
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+ExportGoRFERowsCUDA(
+	const torch::Tensor& vertices,
+	const torch::Tensor& triangles_indices,
+	const float sigma,
+	const torch::Tensor& face_edge_ids,
+	const int64_t edge_count,
+	const int image_height,
+	const int image_width,
+	const int output_height,
+	const int output_width,
+	const int output_scaling,
+	const torch::Tensor& campos,
+	const torch::Tensor& geomBuffer,
+	const int64_t num_rendered,
+	const torch::Tensor& binningBuffer,
+	const torch::Tensor& imageBuffer,
+	const bool debug)
+{
+	TORCH_CHECK(std::isfinite(sigma), "GoRFE sigma must be finite, got ", sigma);
+	TORCH_CHECK(vertices.is_cuda() && vertices.is_contiguous(),
+		"vertices must be contiguous CUDA");
+	TORCH_CHECK(vertices.scalar_type() == torch::kFloat32
+		&& vertices.dim() == 2 && vertices.size(1) == 3,
+		"vertices must be float32 [V, 3], got ", vertices.sizes());
+	TORCH_CHECK(triangles_indices.is_cuda() && triangles_indices.is_contiguous(),
+		"triangles_indices must be contiguous CUDA");
+	TORCH_CHECK(triangles_indices.scalar_type() == torch::kInt32
+		&& triangles_indices.dim() == 2 && triangles_indices.size(1) == 3,
+		"triangles_indices must be int32 [F, 3], got ", triangles_indices.sizes());
+	const int64_t P64 = triangles_indices.size(0);
+	const int64_t V64 = vertices.size(0);
+	TORCH_CHECK(P64 > 0 && P64 <= std::numeric_limits<int>::max() / 3,
+		"GoRFE export requires 1..INT_MAX faces, got ", P64);
+	TORCH_CHECK(V64 > 0 && V64 <= std::numeric_limits<int>::max(),
+		"GoRFE export requires 1..INT_MAX vertices, got ", V64);
+	const int P = static_cast<int>(P64);
+	const int V = static_cast<int>(V64);
+
+	TORCH_CHECK(face_edge_ids.is_cuda() && face_edge_ids.is_contiguous(),
+		"GoRFE face_edge_ids must be contiguous CUDA");
+	TORCH_CHECK(face_edge_ids.scalar_type() == torch::kInt32
+		&& face_edge_ids.dim() == 2
+		&& face_edge_ids.size(0) == P && face_edge_ids.size(1) == 3,
+		"GoRFE face_edge_ids must be int32 [F, 3] with F = ", P,
+		", got ", face_edge_ids.sizes());
+	TORCH_CHECK(edge_count >= 0 && edge_count <= std::numeric_limits<int>::max(),
+		"GoRFE edge_count must be in [0, INT_MAX], got ", edge_count);
+	const int min_edge_id = face_edge_ids.min().item<int>();
+	const int max_edge_id = face_edge_ids.max().item<int>();
+	TORCH_CHECK(min_edge_id >= -1 && max_edge_id < edge_count,
+		"GoRFE face_edge_ids values must lie in [-1, edge_count), got [",
+		min_edge_id, ", ", max_edge_id, "] for edge_count = ", edge_count);
+
+	TORCH_CHECK(image_height > 0 && image_width > 0
+		&& output_height > 0 && output_width > 0,
+		"GoRFE image dimensions must be positive");
+	TORCH_CHECK(output_scaling == 4,
+		"GoRFE-V1 output_scaling must equal 4, got ", output_scaling);
+	TORCH_CHECK(static_cast<int64_t>(image_height)
+			== static_cast<int64_t>(output_height) * output_scaling
+		&& static_cast<int64_t>(image_width)
+			== static_cast<int64_t>(output_width) * output_scaling,
+		"GoRFE high-resolution dimensions must be exactly 4x output: got ",
+		image_height, "x", image_width, " and ", output_height, "x", output_width);
+	const int64_t high_pixels = static_cast<int64_t>(image_height) * image_width;
+	const int64_t output_pixels = static_cast<int64_t>(output_height) * output_width;
+	TORCH_CHECK(high_pixels > 0 && high_pixels <= std::numeric_limits<uint32_t>::max(),
+		"GoRFE high-resolution pixel count exceeds uint32 range: ", high_pixels);
+	TORCH_CHECK(output_pixels > 0 && output_pixels < (int64_t{1} << 31),
+		"GoRFE output pixel count must be below 2^31, got ", output_pixels);
+
+	TORCH_CHECK(campos.is_cuda() && campos.is_contiguous()
+		&& campos.scalar_type() == torch::kFloat32 && campos.numel() == 3,
+		"campos must be contiguous CUDA float32 with three elements");
+	TORCH_CHECK(vertices.get_device() == triangles_indices.get_device()
+		&& vertices.get_device() == face_edge_ids.get_device()
+		&& vertices.get_device() == campos.get_device(),
+		"all GoRFE tensor inputs must be on the same CUDA device");
+
+	auto check_buffer = [&](const torch::Tensor& buffer, const char* name) {
+		TORCH_CHECK(buffer.is_cuda() && buffer.is_contiguous()
+			&& buffer.scalar_type() == torch::kUInt8,
+			name, " must be a contiguous CUDA uint8 forward buffer");
+		TORCH_CHECK(buffer.get_device() == vertices.get_device(),
+			name, " must be on the same CUDA device as vertices");
+	};
+	check_buffer(geomBuffer, "geomBuffer");
+	check_buffer(binningBuffer, "binningBuffer");
+	check_buffer(imageBuffer, "imageBuffer");
+	TORCH_CHECK(num_rendered >= 0 && num_rendered <= std::numeric_limits<int>::max(),
+		"num_rendered must be in [0, INT_MAX], got ", num_rendered);
+	c10::cuda::CUDAGuard device_guard(vertices.device());
+	const cudaStream_t stream = at::cuda::getCurrentCUDAStream(vertices.get_device());
+
+	const int total_nb_points = P * 3;
+	const size_t expected_geom = CudaRasterizer::required<CudaRasterizer::GeometryState>(
+		P, total_nb_points, V, false);
+	const size_t expected_binning = CudaRasterizer::required<CudaRasterizer::BinningState>(
+		num_rendered, 0, 0, false);
+	const size_t expected_image = CudaRasterizer::required<CudaRasterizer::ImageState>(
+		high_pixels, 0, 0, false);
+	TORCH_CHECK(static_cast<size_t>(geomBuffer.numel()) == expected_geom,
+		"geomBuffer size does not match the declared forward state");
+	TORCH_CHECK(static_cast<size_t>(binningBuffer.numel()) == expected_binning,
+		"binningBuffer size does not match the declared forward state");
+	TORCH_CHECK(static_cast<size_t>(imageBuffer.numel()) == expected_image,
+		"imageBuffer size does not match the declared forward state");
+
+	char* geom_chunk = reinterpret_cast<char*>(geomBuffer.data_ptr<uint8_t>());
+	char* binning_chunk = reinterpret_cast<char*>(binningBuffer.data_ptr<uint8_t>());
+	char* image_chunk = reinterpret_cast<char*>(imageBuffer.data_ptr<uint8_t>());
+	auto geom = CudaRasterizer::GeometryState::fromChunk(
+		geom_chunk, P, total_nb_points, V, false);
+	auto binning = CudaRasterizer::BinningState::fromChunk(
+		binning_chunk, static_cast<size_t>(num_rendered));
+	auto image = CudaRasterizer::ImageState::fromChunk(
+		image_chunk, static_cast<size_t>(high_pixels));
+
+	auto int_options = vertices.options().dtype(torch::kInt32);
+	auto long_options = vertices.options().dtype(torch::kInt64);
+	auto float_options = vertices.options().dtype(torch::kFloat32);
+	torch::Tensor row_counts = torch::zeros({high_pixels}, int_options);
+	torch::Tensor diagnostics = torch::zeros({GORFE::DIAGNOSTIC_COUNT}, long_options);
+
+	// The legacy renderer launches its forward kernels on the CUDA default
+	// stream.  The public API calls this routine immediately after that forward;
+	// synchronize once so the opaque state is immutable before replay starts.
+	TORCH_CHECK(cudaDeviceSynchronize() == cudaSuccess,
+		"GoRFE could not synchronize the completed forward state");
+	GORFE::countRows(
+		image_width, image_height, output_width, output_height,
+		image.ranges, binning.point_list, geom.normals, geom.offsets,
+		geom.conic_opacity, geom.phi_center, geom.p_image,
+		triangles_indices.data_ptr<int>(), face_edge_ids.data_ptr<int>(), sigma,
+		image.accum_alpha, image.n_contrib, row_counts.data_ptr<int32_t>(),
+		diagnostics.data_ptr<int64_t>(), stream);
+	cudaError_t launch_error = cudaGetLastError();
+	TORCH_CHECK(launch_error == cudaSuccess,
+		"GoRFE count kernel launch failed: ", cudaGetErrorString(launch_error));
+
+	const int32_t minimum_pixel_rows = row_counts.min().item<int32_t>();
+	TORCH_CHECK(minimum_pixel_rows >= 0,
+		"GoRFE per-pixel row count overflowed int32");
+	const int64_t raw_rows = row_counts.sum(torch::kInt64).item<int64_t>();
+	TORCH_CHECK(raw_rows >= 0 && raw_rows < (int64_t{1} << 31),
+		"GoRFE raw row count must be below 2^31, got ", raw_rows);
+	torch::Tensor inclusive_offsets = torch::cumsum(row_counts, 0, torch::kInt32);
+	if (high_pixels > 0)
+	{
+		const int32_t scanned_rows = inclusive_offsets[high_pixels - 1].item<int32_t>();
+		TORCH_CHECK(static_cast<int64_t>(scanned_rows) == raw_rows,
+			"GoRFE int32 scan total disagrees with int64 row total: ",
+			scanned_rows, " versus ", raw_rows);
+	}
+
+	torch::Tensor low_pixel_ids = torch::empty({raw_rows}, int_options);
+	torch::Tensor group_ids = torch::empty({raw_rows}, int_options);
+	torch::Tensor features = torch::empty({raw_rows, 4}, float_options);
+	torch::Tensor vertex_sh1 = torch::empty({V, 3}, float_options);
+	FORWARD::computeVertexSH1Factors(
+		V, vertices.data_ptr<float>(),
+		reinterpret_cast<const glm::vec3*>(campos.data_ptr<float>()),
+		vertex_sh1.data_ptr<float>());
+	launch_error = cudaGetLastError();
+	TORCH_CHECK(launch_error == cudaSuccess,
+		"GoRFE SH1-factor kernel launch failed: ", cudaGetErrorString(launch_error));
+	// computeVertexSH1Factors is part of the stock renderer and launches on its
+	// legacy default stream.  Complete it before the current-stream replay uses
+	// the factors; this path is evaluation-only and prioritises exact ordering.
+	TORCH_CHECK(cudaDeviceSynchronize() == cudaSuccess,
+		"GoRFE SH1-factor computation failed during synchronization");
+
+	GORFE::writeRows(
+		image_width, image_height, output_width, output_height,
+		image.ranges, binning.point_list, geom.normals, geom.offsets,
+		geom.conic_opacity, geom.phi_center, geom.p_image,
+		triangles_indices.data_ptr<int>(), face_edge_ids.data_ptr<int>(),
+		vertex_sh1.data_ptr<float>(), sigma, row_counts.data_ptr<int32_t>(),
+		inclusive_offsets.data_ptr<int32_t>(), raw_rows,
+		low_pixel_ids.data_ptr<int32_t>(), group_ids.data_ptr<int32_t>(),
+		features.data_ptr<float>(), diagnostics.data_ptr<int64_t>(), stream);
+	launch_error = cudaGetLastError();
+	TORCH_CHECK(launch_error == cudaSuccess,
+		"GoRFE write kernel launch failed: ", cudaGetErrorString(launch_error));
+	// The replay uses PyTorch's current (typically non-blocking) stream.  A
+	// synchronous cudaMemcpy on the legacy default stream is not a cross-stream
+	// dependency, so complete the write explicitly before reading diagnostics.
+	TORCH_CHECK(cudaStreamSynchronize(stream) == cudaSuccess,
+		"GoRFE write kernel failed during synchronization");
+
+	std::array<int64_t, GORFE::DIAGNOSTIC_COUNT> host_diagnostics{};
+	TORCH_CHECK(cudaMemcpy(
+		host_diagnostics.data(), diagnostics.data_ptr<int64_t>(),
+		sizeof(int64_t) * GORFE::DIAGNOSTIC_COUNT,
+		cudaMemcpyDeviceToHost) == cudaSuccess,
+		"failed to retrieve GoRFE replay diagnostics");
+	host_diagnostics[0] = raw_rows;
+	host_diagnostics[9] = high_pixels;
+	host_diagnostics[10] = output_pixels;
+	host_diagnostics[11] = 2;
+	TORCH_CHECK(host_diagnostics[1] == host_diagnostics[3],
+		"GoRFE count/write alpha-accepted counts disagree: ",
+		host_diagnostics[1], " versus ", host_diagnostics[3]);
+	TORCH_CHECK(host_diagnostics[2] == host_diagnostics[4],
+		"GoRFE count/write blended-fragment counts disagree: ",
+		host_diagnostics[2], " versus ", host_diagnostics[4]);
+	TORCH_CHECK(host_diagnostics[5] == 0,
+		"GoRFE replay transmittance disagrees with forward for ",
+		host_diagnostics[5], " pixels");
+	TORCH_CHECK(host_diagnostics[6] == 0,
+		"GoRFE replay contributor count disagrees with forward for ",
+		host_diagnostics[6], " pixels");
+	TORCH_CHECK(host_diagnostics[7] == 0,
+		"GoRFE count/write row counts disagree for ", host_diagnostics[7], " pixels");
+	TORCH_CHECK(host_diagnostics[8] == 0,
+		"GoRFE write attempted ", host_diagnostics[8], " rows outside its allocation");
+	TORCH_CHECK(cudaMemcpy(
+		diagnostics.data_ptr<int64_t>(), host_diagnostics.data(),
+		sizeof(int64_t) * GORFE::DIAGNOSTIC_COUNT,
+		cudaMemcpyHostToDevice) == cudaSuccess,
+		"failed to finalize GoRFE replay diagnostics");
+
+	if (debug)
+		TORCH_CHECK(cudaDeviceSynchronize() == cudaSuccess,
+			"GoRFE replay failed during debug synchronization");
+	return std::make_tuple(low_pixel_ids, group_ids, features, diagnostics);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
