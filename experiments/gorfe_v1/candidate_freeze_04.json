@@ -1,0 +1,84 @@
+{
+  "constants_sha256": "1c80b449da659e073c54c3b1714a8348ba5a197b260351a12f18827079e1282b",
+  "preparation_artifacts": {
+    "DONE": {
+      "bytes": 9,
+      "sha256": "37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1"
+    },
+    "SHA256SUMS": {
+      "bytes": 3552,
+      "sha256": "c6552077bff5f38f5a0a7f423e4b68ee8e48f4d8d27a29b92db6f502646bd05f"
+    },
+    "build_log": {
+      "bytes": 1275,
+      "sha256": "66702206aaa86d948ed48b716bf044d564cfbedd2f317b08488dcd589b64d7d7"
+    },
+    "garden_DONE": {
+      "bytes": 9,
+      "sha256": "37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1"
+    },
+    "garden_candidate_manifest_json": {
+      "bytes": 164845,
+      "sha256": "a76eae4f7f64ccbbaa3929c231dcd88f0820c8fd5c947069a4228219c1ba0676"
+    },
+    "garden_candidate_state_pt": {
+      "bytes": 205860909,
+      "sha256": "f47fb6c0e24dcd73ee90f9ae57cc04ecd21af6f54cbabb3e7b33cfed728910b1"
+    },
+    "garden_result_json": {
+      "bytes": 1937,
+      "sha256": "c1e62f0a52e8a630650b15f1abac6ea4871a7abd4d2613fc7f5104cdc7450311"
+    },
+    "gpu_txt": {
+      "bytes": 36,
+      "sha256": "d95d7815fdae58ef8fb875342d96206d027bfcb8d147bfc0ff72784da97517db"
+    },
+    "manifest_json": {
+      "bytes": 5839,
+      "sha256": "f1d5548f8e56c9085d7f28b52ebacc6b2832b16db5e91b145a41a04fa0e840b4"
+    },
+    "native_extension_so": {
+      "bytes": 2347512,
+      "sha256": "894169cfba6d65c0be4c7bff32f74d06b086f9cea822289f2a3d11fd2ed8f29e"
+    },
+    "native_result_json": {
+      "bytes": 3630,
+      "sha256": "c30ab28e3bebb0c7bc8878f258f675412c6b34a2bec0a758dd274421806b646b"
+    },
+    "native_smoke_log": {
+      "bytes": 3630,
+      "sha256": "c30ab28e3bebb0c7bc8878f258f675412c6b34a2bec0a758dd274421806b646b"
+    },
+    "native_wheel": {
+      "bytes": 803568,
+      "sha256": "cea2fadbf88161659c2f9ebde322134e563998d37b30ff76076c20ef2c422df8"
+    },
+    "python_env_txt": {
+      "bytes": 283,
+      "sha256": "fc77bee1fe40761b54cff209ceb5ca9561d362f795687d7c437a99cddcad2d92"
+    },
+    "room_DONE": {
+      "bytes": 9,
+      "sha256": "37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1"
+    },
+    "room_candidate_manifest_json": {
+      "bytes": 273293,
+      "sha256": "efe70d8a61d5ded12dc3117aef2df08873eb3fab433c9ab0638a258005a6509d"
+    },
+    "room_candidate_state_pt": {
+      "bytes": 189965037,
+      "sha256": "1e4010112f4db64ccd00053db1cb91881febfdf71ff47278dbdbc7b1ddc6adb4"
+    },
+    "room_result_json": {
+      "bytes": 1937,
+      "sha256": "b98f6ccd8674d8bc1f3de0774ab20322e8f6d27396f49afef9fc59c9f816ae48"
+    },
+    "tests_log": {
+      "bytes": 47435,
+      "sha256": "c90c337ed0f45d4b240963ad0104e5e80ae289ecb63512fcb2daf06405124b16"
+    }
+  },
+  "protocol_sha256": "9f242dfc9a3ba09f0b1ad7b7cf985ae97a7245d06e53d1986ee3f374ba23016f",
+  "schema": "gorfe-v1-candidate-freeze-v1",
+  "source_revision": "3a26acb10bf129a2eb4ca4b8956aa70029dcffbb"
+}
