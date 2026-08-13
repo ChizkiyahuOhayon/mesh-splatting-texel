@@ -755,7 +755,7 @@ def build_candidate_topology(
             candidate_edge_indices=empty_long,
             candidate_edges=torch.empty((0, 2), dtype=torch.int64),
             candidate_hashes=np.empty(0, dtype=np.uint64),
-            candidate_incident_face_counts=torch.empty((0,), dtype=torch.uint8),
+            candidate_incident_face_counts=torch.empty((0,), dtype=torch.int32),
             face_candidate_edges=torch.empty((0, 3), dtype=torch.int32),
         )
     if stride > torch.iinfo(torch.int64).max // stride:
@@ -765,21 +765,13 @@ def build_candidate_topology(
     unique_keys, incident_counts = torch.unique(
         face_keys.reshape(-1), sorted=True, return_counts=True
     )
-    nonmanifold = incident_counts > 2
-    if bool(nonmanifold.any()):
-        row = int(torch.nonzero(nonmanifold, as_tuple=False)[0, 0])
-        key = int(unique_keys[row])
-        raise ValueError(
-            f"non-manifold edge ({key // stride}, {key % stride}) has "
-            f"{int(incident_counts[row])} incident faces"
-        )
     edge_count = int(unique_keys.numel())
     selected_np, hashes = select_splitmix64_indices(
         edge_count, seed=seed, cap=cap, chunk_size=hash_chunk_size
     )
     selected = torch.from_numpy(selected_np.copy()).to(torch.int64)
     candidate_keys = unique_keys[selected]
-    candidate_counts = incident_counts[selected].to(torch.uint8)
+    candidate_counts = incident_counts[selected].to(torch.int32)
     candidate_edges = torch.stack((candidate_keys // stride, candidate_keys % stride), dim=1)
     del unique_keys, incident_counts
 

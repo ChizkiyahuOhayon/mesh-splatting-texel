@@ -8,7 +8,8 @@ from gorfe_v1_evaluate_core import EligibilityMasks
 from gorfe_v1_stream import CarrierStatistics, StreamStatistics
 
 
-SCHEMA = "gorfe-v1-candidate-state-v1"
+SCHEMA = "gorfe-v1-candidate-state-v2"
+CANDIDATE_MANIFEST_SCHEMA = "gorfe-v1-candidate-manifest-v2"
 
 
 def _carrier_to_payload(carrier):
@@ -112,7 +113,7 @@ def load_candidate_state(path, *, expected_scene, expected_face_count=None):
         or value["candidate_hashes"].shape != (groups,)
         or value["candidate_hashes"].dtype != torch.uint64
         or value["candidate_incident_face_counts"].shape != (groups,)
-        or value["candidate_incident_face_counts"].dtype != torch.uint8
+        or value["candidate_incident_face_counts"].dtype != torch.int32
     ):
         raise ValueError("candidate index/hash/incidence tensors have invalid contracts")
     if groups > edge_count:
@@ -142,8 +143,8 @@ def load_candidate_state(path, *, expected_scene, expected_face_count=None):
     ):
         raise ValueError("candidate endpoints or vertex_stride are inconsistent")
     incidences = value["candidate_incident_face_counts"]
-    if bool((incidences < 1).any()) or bool((incidences > 2).any()):
-        raise ValueError("candidate incidence counts must be one or two")
+    if bool((incidences < 1).any()):
+        raise ValueError("candidate incidence counts must be positive")
     face_map = value["face_candidate_edges"]
     if face_map.ndim != 2 or face_map.shape[1] != 3:
         raise ValueError("face_candidate_edges must have shape [F,3]")

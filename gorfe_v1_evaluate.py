@@ -39,7 +39,11 @@ from gorfe_v1_resources import (
     query_gpu_memory,
 )
 from gorfe_v1_scene import load_frozen_triangle_model, load_training_rgb, make_target_free_minicam
-from gorfe_v1_state import load_candidate_state, stream_to_payload
+from gorfe_v1_state import (
+    CANDIDATE_MANIFEST_SCHEMA,
+    load_candidate_state,
+    stream_to_payload,
+)
 from gorfe_v1_stream import GoRFEV1Accumulator
 from gorfe_v1_prepare_core import load_validated_checkpoint
 
@@ -308,7 +312,7 @@ def run_scene(
     candidate_state_path = prepare_root / scene / "candidate_state.pt"
     candidate_manifest = _load_json(candidate_manifest_path)
     if (
-        candidate_manifest.get("schema") != "gorfe-v1-candidate-manifest-v1"
+        candidate_manifest.get("schema") != CANDIDATE_MANIFEST_SCHEMA
         or candidate_manifest.get("scene") != scene
         or candidate_manifest.get("source_revision") != implementation_revision
     ):

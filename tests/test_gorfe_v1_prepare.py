@@ -125,7 +125,7 @@ class PrepareSceneTest(unittest.TestCase):
             candidate_edge_indices=torch.tensor([0], dtype=torch.int64),
             candidate_edges=torch.tensor([[0, 1]], dtype=torch.int64),
             candidate_hashes=np.array([7], dtype=np.uint64),
-            candidate_incident_face_counts=torch.tensor([1], dtype=torch.uint8),
+            candidate_incident_face_counts=torch.tensor([1], dtype=torch.int32),
             face_candidate_edges=torch.tensor([[0, -1, -1]], dtype=torch.int32),
         )
         self.runtime = {
@@ -276,11 +276,39 @@ class PrepareSceneTest(unittest.TestCase):
         self.assertEqual(len(manifest["cameras"]), 16)
         self.assertEqual(manifest["cameras"][0]["reduction"]["input_rows"], 32)
         self.assertEqual(manifest["cameras"][0]["reduction"]["reduced_rows"], 32)
+        self.assertEqual(manifest["topology"]["candidate_incidence_histogram"], {"1": 1})
+        self.assertEqual(
+            manifest["topology"]["incidence_greater_than_two_candidate_count"], 0
+        )
+        self.assertEqual(manifest["topology"]["maximum_candidate_incidence"], 1)
         self.assertEqual(manifest["resources"]["persistent_artifact_bytes"], prepare.directory_bytes(self.output))
         # Endpoint tensors have exactly one persisted source; JSON artifacts hold
         # only the candidate-state identity and aggregate topology counts.
         self.assertNotIn("candidate_edges", (self.output / "candidate_manifest.json").read_text())
         self.assertNotIn("candidate_edges", (self.output / "result.json").read_text())
+
+    def test_topology_summary_records_the_complete_incidence_distribution(self):
+        topology = SimpleNamespace(
+            edge_count=8,
+            vertex_stride=6,
+            candidate_edges=torch.empty((5, 2), dtype=torch.int64),
+            candidate_incident_face_counts=torch.tensor(
+                [1, 2, 3, 3, 1], dtype=torch.int32
+            ),
+            face_candidate_edges=torch.tensor(
+                [[0, 1, 1], [2, 2, 2], [3, 3, 3], [4, -1, -1]],
+                dtype=torch.int32,
+            ),
+        )
+        summary = prepare._topology_summary(topology, face_count=4, cap=5, seed=7)
+        self.assertEqual(
+            summary["candidate_incidence_histogram"], {"1": 2, "2": 1, "3": 2}
+        )
+        self.assertEqual(summary["incidence_one_candidate_count"], 2)
+        self.assertEqual(summary["incidence_two_candidate_count"], 1)
+        self.assertEqual(summary["incidence_greater_than_two_candidate_count"], 2)
+        self.assertEqual(summary["maximum_candidate_incidence"], 3)
+        self.assertEqual(summary["mapped_face_local_slots"], 10)
 
     def test_preflight_failure_leaves_no_output_directory(self):
         with self._patched(), mock.patch.object(

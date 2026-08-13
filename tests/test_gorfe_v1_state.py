@@ -30,9 +30,9 @@ class CandidateStateTest(unittest.TestCase):
             candidate_edge_indices=torch.tensor([1, 6], dtype=torch.int64),
             candidate_edges=torch.tensor([[0, 1], [3, 4]], dtype=torch.int64),
             candidate_hashes=np.array([2, 9], dtype=np.uint64),
-            candidate_incident_face_counts=torch.tensor([1, 2], dtype=torch.uint8),
+            candidate_incident_face_counts=torch.tensor([1, 3], dtype=torch.int32),
             face_candidate_edges=torch.tensor(
-                [[0, -1, 1], [-1, -1, 1]], dtype=torch.int32
+                [[0, -1, 1], [-1, -1, 1], [1, -1, -1]], dtype=torch.int32
             ),
         )
         statistics = StreamStatistics(
@@ -49,6 +49,7 @@ class CandidateStateTest(unittest.TestCase):
             torch.save(payload, path)
             loaded, restored, masks = load_candidate_state(path, expected_scene="garden")
         self.assertTrue(torch.equal(loaded["candidate_edges"], topology.candidate_edges))
+        self.assertEqual(int(loaded["candidate_incident_face_counts"][1]), 3)
         self.assertTrue(torch.equal(restored.sh1.gram, statistics.sh1.gram))
         self.assertTrue(torch.equal(masks.dc, eligibility.dc))
         self.assertTrue(torch.equal(masks.sh1, eligibility.sh1))
@@ -60,7 +61,7 @@ class CandidateStateTest(unittest.TestCase):
             candidate_edge_indices=torch.tensor([0], dtype=torch.int64),
             candidate_edges=torch.tensor([[0, 1]], dtype=torch.int64),
             candidate_hashes=np.array([7], dtype=np.uint64),
-            candidate_incident_face_counts=torch.tensor([1], dtype=torch.uint8),
+            candidate_incident_face_counts=torch.tensor([1], dtype=torch.int32),
             face_candidate_edges=torch.tensor([[0, -1, -1]], dtype=torch.int32),
         )
         statistics = StreamStatistics(
@@ -86,7 +87,7 @@ class CandidateStateTest(unittest.TestCase):
             candidate_edge_indices=torch.empty(0, dtype=torch.int64),
             candidate_edges=torch.empty((0, 2), dtype=torch.int64),
             candidate_hashes=np.empty(0, dtype=np.uint64),
-            candidate_incident_face_counts=torch.empty(0, dtype=torch.uint8),
+            candidate_incident_face_counts=torch.empty(0, dtype=torch.int32),
             face_candidate_edges=torch.empty((0, 3), dtype=torch.int32),
         )
         statistics = StreamStatistics(

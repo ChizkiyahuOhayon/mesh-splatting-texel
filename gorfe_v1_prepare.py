@@ -50,6 +50,7 @@ from gorfe_v1_resources import (
     host_peak_rss_bytes,
 )
 from gorfe_v1_scene import load_frozen_triangle_model, make_target_free_minicam
+from gorfe_v1_state import CANDIDATE_MANIFEST_SCHEMA
 from gorfe_v1_state import SCHEMA as CANDIDATE_STATE_SCHEMA
 from gorfe_v1_state import candidate_state_payload
 from gorfe_v1_stream import GoRFEV1Accumulator
@@ -60,7 +61,6 @@ PROTOCOL_PATH = REPOSITORY_ROOT / "experiments" / "gorfe_v1" / "protocol.md"
 CONSTANTS_PATH = (
     REPOSITORY_ROOT / "experiments" / "gorfe_v1" / "protocol_constants.json"
 )
-CANDIDATE_MANIFEST_SCHEMA = "gorfe-v1-candidate-manifest-v1"
 PREPARE_RESULT_SCHEMA = "gorfe-v1-prepare-result-v1"
 
 
@@ -366,6 +366,10 @@ def _eligibility_summary(eligibility) -> dict[str, Any]:
 
 def _topology_summary(topology, *, face_count: int, cap: int, seed: int) -> dict[str, Any]:
     incidents = topology.candidate_incident_face_counts
+    values, counts = torch.unique(incidents, sorted=True, return_counts=True)
+    incidence_histogram = {
+        str(int(value)): int(count) for value, count in zip(values, counts)
+    }
     return {
         "face_count": int(face_count),
         "edge_count": int(topology.edge_count),
@@ -373,8 +377,11 @@ def _topology_summary(topology, *, face_count: int, cap: int, seed: int) -> dict
         "candidate_cap": int(cap),
         "candidate_seed_uint64": int(seed),
         "vertex_stride": int(topology.vertex_stride),
-        "boundary_candidate_count": int((incidents == 1).sum()),
-        "interior_candidate_count": int((incidents == 2).sum()),
+        "candidate_incidence_histogram": incidence_histogram,
+        "incidence_one_candidate_count": int((incidents == 1).sum()),
+        "incidence_two_candidate_count": int((incidents == 2).sum()),
+        "incidence_greater_than_two_candidate_count": int((incidents > 2).sum()),
+        "maximum_candidate_incidence": int(incidents.max()) if incidents.numel() else 0,
         "mapped_face_local_slots": int((topology.face_candidate_edges >= 0).sum()),
     }
 

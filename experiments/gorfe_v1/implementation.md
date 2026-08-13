@@ -14,8 +14,9 @@ prospective selector gate, not a training run or a quality claim.
 ## Implementation map
 
 - `gorfe_v1_prepare_core.py`, `gorfe_v1_scene.py`: COLMAP-only camera identity,
-  explicit iteration-30000 checkpoint validation, canonical candidate
-  topology, official-split guard, and target-decode sentinel.
+  explicit iteration-30000 checkpoint validation, canonical edge-star
+  candidates for arbitrary positive incidence, official-split guard, and
+  target-decode sentinel.
 - `cuda_rasterizer/gorfe.{h,cu}` and `rasterize_points.cu`: two-pass replay of
   the saved forward buffers.  The native exporter receives no target,
   dominant-face map, backward state, or `was_rendered` tensor.
@@ -40,16 +41,22 @@ targets.  Its generated candidate-freeze JSON must be reviewed and committed as
 rejects any other tracked delta from the implementation revision and must not be
 run before that commit.
 
-## Verification completed locally
+## Verification completed
 
-- 315 pure-Python repository tests under warnings-as-errors;
+- 321 pure-Python repository tests under warnings-as-errors;
 - Python bytecode compilation, shell syntax, and `git diff --check`;
 - locked Garden/Room train/test counts, name hashes, and four-fold sizes from
   local COLMAP metadata without image decode;
+- a checkpoint-only Garden/Room topology census that motivated and fixed the
+  complete edge-star contract before target access;
 - independent float64 GCV oracle checks for both feature dimensions.
 
-The local machine has no NVIDIA CUDA compiler or A40.  Therefore native wheel
-compilation, forward-replay bitwise checks, sparse/carrier equivalence, physical
-GPU peak monitoring, and real-scene preparation remain mandatory server gates.
-No V1 pass/fail or MeshSplatting improvement is claimed before those artifacts
-exist.
+The repaired native wheel also passed every registered A40 gate in target-free
+Prepare attempt `_02`: all six parent outputs were bitwise unchanged, replay
+diagnostics were exact, both depth layers reduced into the same edge groups,
+sparse/carrier reconstruction agreed to `7.79e-8`, and the squared-loss
+gradient identity error was zero.  The subsequent topology census and edge-star
+implementation changed no CUDA exporter code, but a fresh Prepare attempt must
+still rebuild and rerun that gate before sealing candidates.  Real-scene
+preparation remains pending.  No V1 pass/fail or MeshSplatting improvement is
+claimed before the complete frozen artifacts exist.

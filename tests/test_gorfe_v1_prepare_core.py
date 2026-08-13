@@ -196,6 +196,7 @@ class SplitMixAndTopologyTest(unittest.TestCase):
         self.assertEqual(int(topology.face_candidate_edges[0, 0]), 0)
         self.assertEqual(int(topology.face_candidate_edges[1, 0]), 0)
         self.assertEqual(int(topology.candidate_incident_face_counts[0]), 2)
+        self.assertEqual(topology.candidate_incident_face_counts.dtype, torch.int32)
 
     def test_compact_map_uses_minus_one_for_non_candidates(self):
         faces = torch.tensor([[0, 1, 2], [1, 0, 3]], dtype=torch.int64)
@@ -207,10 +208,19 @@ class SplitMixAndTopologyTest(unittest.TestCase):
         )
         self.assertTrue(bool((topology.face_candidate_edges >= -1).all()))
 
-    def test_nonmanifold_and_repeated_vertex_faces_are_refused(self):
-        nonmanifold = torch.tensor([[0, 1, 2], [1, 0, 3], [0, 1, 4]], dtype=torch.int64)
-        with self.assertRaisesRegex(ValueError, r"non-manifold edge \(0, 1\)"):
-            build_candidate_topology(nonmanifold, seed=SEED)
+    def test_nonmanifold_star_maps_all_incident_faces_to_one_candidate(self):
+        faces = torch.tensor([[0, 1, 2], [1, 0, 3], [0, 1, 4]], dtype=torch.int64)
+        topology = build_candidate_topology(faces, seed=SEED, cap=10, chunk_faces=1)
+        matches = torch.nonzero(
+            (topology.candidate_edges == torch.tensor([0, 1])).all(dim=1),
+            as_tuple=False,
+        ).flatten()
+        self.assertEqual(matches.numel(), 1)
+        group = int(matches[0])
+        self.assertEqual(int(topology.candidate_incident_face_counts[group]), 3)
+        self.assertEqual(int((topology.face_candidate_edges == group).sum()), 3)
+
+    def test_repeated_vertex_faces_are_refused(self):
         with self.assertRaisesRegex(ValueError, "repeats a vertex"):
             build_candidate_topology(torch.tensor([[0, 0, 1]], dtype=torch.int64), seed=SEED)
 
@@ -218,6 +228,7 @@ class SplitMixAndTopologyTest(unittest.TestCase):
         result = build_candidate_topology(torch.empty((0, 3), dtype=torch.int32), seed=SEED)
         self.assertEqual(result.edge_count, 0)
         self.assertEqual(result.face_candidate_edges.dtype, torch.int32)
+        self.assertEqual(result.candidate_incident_face_counts.dtype, torch.int32)
         self.assertEqual(result.candidate_edges.shape, (0, 2))
 
 
