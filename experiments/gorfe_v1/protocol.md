@@ -1,8 +1,8 @@
 # GoRFE-V1 — prospective real-scene value gate
 
 Status: **PREREGISTERED — no Garden or Room target pixel or V1 score has been
-read**.  This protocol and `protocol_constants.json` are committed before the
-native exporter, scene evaluator, or decision code is implemented.
+read**.  The initial protocol and `protocol_constants.json` were committed
+before the native exporter, scene evaluator, or decision code was implemented.
 
 Protocol revision 1 is a pre-data executability clarification: after independent
 review of the initial protocol commit and before any scene implementation or
@@ -20,6 +20,21 @@ The native sparse exporter cannot receive it or use it to create, filter, or
 weight a row.  After native export has completed, the Python gate may compare
 the replay's aggregate accepted-fragment count with `sum(was_rendered)` solely
 as a fail-closed postcondition.  This changes no design row or statistic.
+
+Protocol revision 4 is a target-free representation-domain correction.  Prepare
+attempt `_02` stopped before camera rendering because the sealed Garden face
+complex is non-manifold.  A checkpoint-only census, with no camera metadata,
+image path, RGB, residual, loss, or score access, then established that 20.085%
+of Garden and 18.895% of Room canonical edges have more than two incident
+faces.  All such incidences are distinct face rows; neither checkpoint has a
+repeated-vertex face or a duplicate incident face.  Excluding these edges would
+remove 36.243% and 35.282% of all face-local edge slots, so they are part of the
+declared MeshSplatting representation rather than rare corruptions.  Revision 4
+therefore defines the input as a non-manifold simplicial 2-complex and shares
+one canonical edge coefficient across its complete incident-face star.  It
+changes no target-derived object, candidate cap or priority, fold, support rule,
+cost, GCV convention, budget, control, threshold, or outcome.  The census
+artifact and its SHA-256 are recorded in `analysis_topology_census_01.md`.
 
 V1 asks one narrow question: on a frozen connected MeshSplatting checkpoint,
 does an exact renderer-affine value estimated without one camera fold predict
@@ -65,7 +80,13 @@ target access before the freeze makes the attempt invalid.
 
 Canonical undirected edges are lexicographically sorted endpoint pairs `(u,v)`,
 `u<v`.  Face-local columns are `(v0,v1)`, `(v1,v2)`, `(v2,v0)`.  Repeated-vertex
-faces and edges incident to more than two faces are invalid.
+faces are invalid.  No manifold assumption is made: for edge `e`, its star
+`star(e)` is the set of every face row incident to its two endpoints, and one
+edge coefficient is shared by the complete star for any incidence at least one.
+For a point on the common edge with coordinate `t`, every incident face
+restricts the P2 basis to the same `4t(1-t)` trace; it is zero at both endpoints.
+Thus the carrier is C0 on the branching edge even when `|star(e)|>2`, without
+requiring a face orientation or an arbitrary pairing of incident faces.
 
 For one high-resolution sample `h`, accepted fragment `a`, and local edge `e`,
 the spatial basis is `psi_ae=4 lambda_i lambda_j`.  The native forward blending
@@ -89,11 +110,12 @@ create, filter, or weight the sparse design.  `was_rendered` may be consulted
 only after native export for the aggregate postcondition described above.  The
 backward kernel has a different alpha cap and is not an exact forward oracle.
 
-All fragments from both incident faces, all depths, and all 16 high-resolution
-samples are summed for the same final-resolution `(camera,pixel,edge)` *before*
-an outer product is formed.  COO rows are candidate-filtered on CUDA, reduced a
-complete camera at a time in float64, and immediately discarded.  A dense
-`pixel x candidate` matrix and persisted raw COO are forbidden.
+All fragments from every face in `star(e)`, all depths, and all 16
+high-resolution samples are summed for the same final-resolution
+`(camera,pixel,edge)` *before* an outer product is formed.  COO rows are
+candidate-filtered on CUDA, reduced a complete camera at a time in float64, and
+immediately discarded.  A dense `pixel x candidate` matrix and persisted raw
+COO are forbidden.
 
 ## Target-free candidate freeze
 
@@ -110,6 +132,12 @@ h = z xor (z >> 31)
 with the unsigned seed in `protocol_constants.json`.  Select the smallest
 `min(E, 131072)` values of `h`; SplitMix64 is bijective, and endpoint order is a
 defensive tie break.  No rejected candidate is replaced after support is known.
+`E` includes every canonical edge regardless of incidence.  Incidence cannot
+filter or reprioritize candidates, and one DC or SH1 group has the same active
+coefficient cost for every incidence.  The preparation manifest records the
+candidate incidence histogram, counts at incidence one, two, and greater than
+two, and maximum incidence.  Candidate-state incidence counts use signed int32
+and must exactly equal the number of mapped face-local slots for each group.
 
 The target-free exporter then determines support separately for DC and SH1.  A
 duplicate-reduced feature that is exactly zero is not support.  A group is
@@ -289,7 +317,9 @@ Before real-scene evaluation is authorized, tests must establish:
 1. default exporter-off rendering and Q0 behavior are bitwise unchanged;
 2. replay transmittance and accepted-fragment count match the saved forward;
 3. a synthetic single-triangle DC/SH1 design matches the analytic formula;
-4. shared-edge, multi-depth, and 4x subpixel duplicates are reduced before Gram,
+4. a synthetic edge with at least three incident faces maps every face-local
+   occurrence to one compact group and survives candidate-state round-trip;
+   shared-edge, multi-depth, and 4x subpixel duplicates are reduced before Gram,
    and a deliberately per-fragment Gram fails;
 5. sparse design times arbitrary coefficients matches the active Q0 carrier's
    area-downsampled correction, and squared-loss gradient equals `-2b`;
