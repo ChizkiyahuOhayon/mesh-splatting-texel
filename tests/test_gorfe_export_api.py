@@ -166,6 +166,37 @@ class GoRFEExportAPITest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "accepted count disagrees"):
                 self.rasterizer.forward_with_gorfe_design(**self._arguments())
 
+    def test_noncontiguous_camera_center_is_normalized_for_native_export(self):
+        camera_center = torch.arange(6, dtype=torch.float32).reshape(3, 2)[:, 0]
+        self.assertFalse(camera_center.is_contiguous())
+        original_settings = self.rasterizer.raster_settings
+        self.rasterizer.raster_settings = original_settings._replace(
+            campos=camera_center
+        )
+        captured = {}
+
+        def fake_export(*args):
+            captured["campos"] = args[10]
+            return (
+                torch.tensor([0], dtype=torch.int32),
+                torch.tensor([0], dtype=torch.int32),
+                torch.ones((1, 4), dtype=torch.float32),
+                DIAGNOSTICS.clone(),
+            )
+
+        try:
+            with mock.patch.object(
+                dtr._C, "rasterize_triangles", self._forward_result, create=True
+            ), mock.patch.object(
+                dtr._C, "export_gorfe_rows", fake_export, create=True
+            ):
+                self.rasterizer.forward_with_gorfe_design(**self._arguments())
+        finally:
+            self.rasterizer.raster_settings = original_settings
+
+        self.assertTrue(captured["campos"].is_contiguous())
+        self.assertTrue(torch.equal(captured["campos"], camera_center))
+
     def test_non_parent_inputs_fail_before_native_forward(self):
         with mock.patch.object(
             dtr._C,

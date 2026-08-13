@@ -43,7 +43,8 @@ run before that commit.
 
 ## Verification completed
 
-- 321 pure-Python repository tests under warnings-as-errors;
+- 322 pure-Python repository tests under warnings-as-errors, including the
+  established non-contiguous camera-center layout at the exporter boundary;
 - Python bytecode compilation, shell syntax, and `git diff --check`;
 - locked Garden/Room train/test counts, name hashes, and four-fold sizes from
   local COLMAP metadata without image decode;

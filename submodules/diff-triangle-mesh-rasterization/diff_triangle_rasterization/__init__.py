@@ -97,6 +97,10 @@ def export_gorfe_rows(
     never invokes preprocessing or sorting again, and never changes renderer
     state.
     """
+    # Match the ordinary renderer boundary, which reads campos through a
+    # contiguous copy.  Real camera centers are row slices of an inverse 4x4
+    # transform and therefore need not already have contiguous storage.
+    campos = campos.contiguous()
     pixel_ids, group_ids, features, diagnostic_tensor = _C.export_gorfe_rows(
         vertices,
         triangles_indices,
