@@ -644,7 +644,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 float median_depth = {0};
 	 float median_contributor = {-1};
 
-	 int pixel_influence;
+	 int pixel_influence = -1;
  
 	 // Iterate over batches until all done or range is complete
 	 for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)

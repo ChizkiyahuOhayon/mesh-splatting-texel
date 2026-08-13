@@ -172,6 +172,17 @@ def run():
         }
         for index, name in enumerate(parent_output_names)
     }
+    parent_alpha = ordinary[3][1]
+    parent_face_id = ordinary[3][6]
+    no_contribution = parent_alpha == 0
+    valid_contribution = parent_alpha > 0
+    face_id_sentinel_is_exact = bool(
+        no_contribution.any()
+        and valid_contribution.any()
+        and torch.all(parent_face_id[no_contribution] == -1)
+        and torch.all(parent_face_id[valid_contribution] >= 0)
+        and torch.all(parent_face_id[valid_contribution] < 2)
+    )
 
     reduced_pixels, reduced_groups, reduced_features = reduce_camera_design(
         pixel_ids, group_ids, raw_features, 1
@@ -270,6 +281,9 @@ def run():
     checks = {
         "exporter_off_all_six_parent_outputs_are_bitwise_unchanged": all(
             parent_output_bitwise.values()
+        ),
+        "background_face_ids_use_the_negative_one_sentinel": (
+            face_id_sentinel_is_exact
         ),
         "blank_candidate_map_exports_zero_rows": all(
             tensor.numel() == 0 for tensor in blank[6:9]
