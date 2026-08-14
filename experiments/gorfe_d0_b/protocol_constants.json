@@ -1,0 +1,22 @@
+{
+  "additive_state_absolute_tolerance": 1e-12,
+  "budgets_cost_units": [4096, 16384],
+  "camera_folds": 4,
+  "controls": ["random_id", "rhs_norm", "same_view_gain"],
+  "families": ["SH1", "MIXED"],
+  "minimum_directional_folds": 3,
+  "numeric_relative_tolerance": 1e-9,
+  "protocol_revision": 1,
+  "resource_limits": {
+    "artifact_bytes_per_scene": 2147483648,
+    "cuda_allocated_bytes": 40802189312,
+    "gpu_free_mib_at_start": 40000,
+    "host_peak_rss_bytes": 68719476736,
+    "physical_gpu_used_mib": 42000,
+    "wall_seconds_per_scene": 21600
+  },
+  "scenes": ["garden", "room"],
+  "selectors": ["primary", "random_id", "rhs_norm", "same_view_gain"],
+  "torch_cuda_build": "12.6",
+  "torch_version": "2.7.1+cu126"
+}
