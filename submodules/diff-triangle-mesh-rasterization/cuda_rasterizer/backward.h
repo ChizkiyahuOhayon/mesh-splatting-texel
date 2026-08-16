@@ -38,6 +38,7 @@
 		 int W, int H,
 		 const float* bg_color,
 		 const float sigma,
+		 const float* sigma_face,
 		 const int* triangles_indices,
 		 const float2* normals,
 		 const float* offsets,
@@ -68,7 +69,8 @@
 		 float* dL_dedge_details,
 		 float* dL_dedge_sh1,
 		 float* dL_dpoints2D,
-		 float* dL_dvertice_depth);
+		 float* dL_dvertice_depth,
+		 float* dL_dsigma_face);
 
 	 void computeVertexSH1Gradients(
 		 int V,

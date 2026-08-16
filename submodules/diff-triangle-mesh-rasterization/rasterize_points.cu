@@ -60,6 +60,7 @@ RasterizetrianglesCUDA(
 	const torch::Tensor& triangles_indices,
 	const torch::Tensor& vertex_weights,
 	const float sigma,
+	const torch::Tensor& sigma_face,
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
 	const int texel_order,
@@ -183,6 +184,7 @@ RasterizetrianglesCUDA(
 		triangles_indices.contiguous().data_ptr<int>(),
 		vertex_weights.contiguous().data_ptr<float>(),
 		sigma,
+		sigma_face.numel() > 0 ? sigma_face.contiguous().data_ptr<float>() : nullptr,
 		total_nb_points,
 		sh.contiguous().data_ptr<float>(),
 		colors.contiguous().data_ptr<float>(), 
@@ -441,13 +443,14 @@ ExportGoRFERowsCUDA(
 	return std::make_tuple(low_pixel_ids, group_ids, features, diagnostics);
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizetrianglesBackwardCUDA(
  	const torch::Tensor& background,
 	const torch::Tensor& vertices,
 	const torch::Tensor& triangles_indices,
 	const torch::Tensor& vertex_weights,
     const float sigma,
+	const torch::Tensor& sigma_face,
 	const torch::Tensor& radii,
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
@@ -538,6 +541,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
   torch::Tensor dL_dnormal3D = torch::zeros({P, 3}, vertices.options());
 
   torch::Tensor dL_dvertice_depth = torch::zeros({V}, vertices.options());
+  // Empty unless the caller supplied per-face exponents, so the published path
+  // allocates nothing extra for it.
+  torch::Tensor dL_dsigma_face = torch::zeros_like(sigma_face);
   
   if(P != 0)
   {  
@@ -548,6 +554,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  triangles_indices.contiguous().data_ptr<int>(),
 	  vertex_weights.contiguous().data_ptr<float>(),
 	  sigma,
+	  sigma_face.numel() > 0 ? sigma_face.contiguous().data_ptr<float>() : nullptr,
 	  total_nb_points,
 	  sh.contiguous().data_ptr<float>(),
 	  colors.contiguous().data_ptr<float>(),
@@ -582,10 +589,11 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  dL_dsh.contiguous().data_ptr<float>(),
 	  dL_dpoints2D.contiguous().data_ptr<float>(),
 	  dL_dvertice_depth.contiguous().data_ptr<float>(),
+	  sigma_face.numel() > 0 ? dL_dsigma_face.contiguous().data_ptr<float>() : nullptr,
 	  debug);
   }
 
-  return std::make_tuple(dL_dvertices3D, dL_dvertice_weight, dL_dcolors, dL_dsh, dL_dtexels, dL_dedge_details);
+  return std::make_tuple(dL_dvertices3D, dL_dvertice_weight, dL_dcolors, dL_dsh, dL_dtexels, dL_dedge_details, dL_dsigma_face);
 }
 
 torch::Tensor markVisible(

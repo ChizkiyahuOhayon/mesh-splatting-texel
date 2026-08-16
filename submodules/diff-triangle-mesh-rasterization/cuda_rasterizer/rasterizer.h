@@ -50,6 +50,7 @@ namespace CudaRasterizer
 			const int* triangles_indices,
 			const float* vertex_weights,
 			const float sigma,
+			const float* sigma_face,
 			const int total_nb_points,
 			const float* shs,
 			const float* colors_precomp,
@@ -83,6 +84,7 @@ namespace CudaRasterizer
 			const int* triangles_indices,
 			const float* vertex_weights,
 			const float sigma,
+			const float* sigma_face,
 			const int total_nb_points,
 			const float* shs,
 			const float* colors_precomp,
@@ -116,6 +118,7 @@ namespace CudaRasterizer
 			float* dL_dsh,
 			float* dL_dpoints2D,
 			float* dL_dvertice_depth,
+			float* dL_dsigma_face,
 			bool debug);
 	};
 };

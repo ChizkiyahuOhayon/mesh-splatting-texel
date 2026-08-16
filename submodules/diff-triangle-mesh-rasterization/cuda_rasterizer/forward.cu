@@ -563,6 +563,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float* __restrict__ vertex_depth, 
 	 const int* __restrict__ triangles_indices,
 	 const float sigma,
+	 const float* __restrict__ sigma_face,
 	 const float* __restrict__ features,
 	 const float* __restrict__ texels,
 	 const int texel_order,
@@ -622,6 +623,10 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 __shared__ float collected_donor_offsets[BLOCK_SIZE * MAX_NB_POINTS];
 	 __shared__ float2 collected_donor_p_images[BLOCK_SIZE * MAX_NB_POINTS];
 	 __shared__ int collected_donor_vidx[BLOCK_SIZE * MAX_NB_POINTS];
+	 // Per-face window exponents. A null pointer means every face shares the
+	 // scheduled scalar `sigma`, which is the published behaviour.
+	 __shared__ float collected_sigma[BLOCK_SIZE];
+	 const bool per_face_sigma = sigma_face != nullptr;
 	 const bool donor_windows_active = (window_source != nullptr) && (donor_mode & FORWARD::DONOR_WINDOW);
 	 const bool donor_appearance_active = (window_source != nullptr) && (donor_mode & FORWARD::DONOR_APPEARANCE);
 	 const bool donors_active = donor_windows_active || donor_appearance_active;
@@ -669,6 +674,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 				collected_p_images[MAX_NB_POINTS * block.thread_rank() + k] = p_image[3 * coll_id + k];
 			}
 			collected_phi_center[block.thread_rank()] = phi_center[coll_id];
+			if (per_face_sigma)
+				collected_sigma[block.thread_rank()] = sigma_face[coll_id];
 			if (donors_active) {
 				int donor_row = window_source[coll_id];
 				collected_donor[block.thread_rank()] = donor_row >= 0;
@@ -735,9 +742,10 @@ __global__ void computeVertexSH1FactorsCUDA(
 
 			 float phi_x = max_val;
 			 float phi_final = phi_x * phi_center_min.x;
-			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma));
- 
-			 float alpha = min(0.999f, con_o.w * Cx); 
+			 float sigma_j = per_face_sigma ? collected_sigma[j] : sigma;
+			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma_j));
+
+			 float alpha = min(0.999f, con_o.w * Cx);
 			 if (alpha < 1.0f / 255.0f)
 				 continue;
 			
@@ -898,6 +906,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float* vertex_depth,
 	 const int* triangles_indices,
 	 const float sigma,
+	 const float* sigma_face,
 	 const float* colors,
 	 const float* texels,
 	 const int texel_order,
@@ -933,6 +942,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 vertex_depth,
 		 triangles_indices,
 		 sigma,
+		 sigma_face,
 		 colors,
 		 texels,
 		 texel_order,

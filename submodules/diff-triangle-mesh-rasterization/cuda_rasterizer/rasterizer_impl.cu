@@ -237,6 +237,7 @@
 	 const int* triangles_indices,
 	 const float* vertex_weights,
 	 const float sigma,
+	 const float* sigma_face,
 	 const int total_nb_points,
 	 const float* shs,
 	 const float* colors_precomp,
@@ -415,6 +416,7 @@
 		 geomState.vertex_depth,
 		 triangles_indices,
 		 sigma,
+		 sigma_face,
 		 feature_ptr,
 		 texels,
 		 texel_order,
@@ -447,6 +449,7 @@
 	 const int* triangles_indices,
 	 const float* vertex_weights,
 	 const float sigma,
+	 const float* sigma_face,
 	 const int total_nb_points,
 	 const float* shs,
 	 const float* colors_precomp,
@@ -480,6 +483,7 @@
 	 float* dL_dsh,
 	 float* dL_dpoints2D,
 	 float* dL_dvertice_depth,
+	 float* dL_dsigma_face,
 	 bool debug)
  {
 	 // Backward never runs with donors (the Python wrapper raises first), so the
@@ -516,6 +520,7 @@
 		 width, height,
 		 background,
 		 sigma,
+		 sigma_face,
 		 triangles_indices,
 		 geomState.normals,
 		 geomState.offsets,
@@ -546,7 +551,8 @@
 		 dL_dedge_details,
 		 dL_dedge_sh1,
 		 dL_dpoints2D,
-		 dL_dvertice_depth), debug)
+		 dL_dvertice_depth,
+		 dL_dsigma_face), debug)
 	if (colors_precomp == nullptr) {
 		// Compute vertex color gradients in parallel
 		CHECK_CUDA(BACKWARD::computeVertexColorGradients(

@@ -33,6 +33,7 @@ RasterizetrianglesCUDA(
 	const torch::Tensor& triangles_indices,
 	const torch::Tensor& vertex_weights,
 	const float sigma,
+	const torch::Tensor& sigma_face,
     const torch::Tensor& colors,
 	const torch::Tensor& texels,
 	const int texel_order,
@@ -73,13 +74,14 @@ ExportGoRFERowsCUDA(
 	const torch::Tensor& imageBuffer,
 	const bool debug);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizetrianglesBackwardCUDA(
  	const torch::Tensor& background,
 	const torch::Tensor& vertices,
 	const torch::Tensor& triangles_indices,
 	const torch::Tensor& vertex_weights,
 	const float sigma,
+	const torch::Tensor& sigma_face,
 	const torch::Tensor& radii,
     const torch::Tensor& colors,
 	const torch::Tensor& texels,

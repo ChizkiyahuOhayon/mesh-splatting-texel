@@ -113,6 +113,7 @@
 		 const float* vertex_depth, 
 		 const int* triangles_indices,
 		 const float sigma,
+		 const float* sigma_face,
 		 const float* features,
 		 const float* texels,
 		 const int texel_order,

@@ -618,6 +618,7 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	 int W, int H,
 	 const float* __restrict__ bg_color,
 	 const float sigma,
+	 const float* __restrict__ sigma_face,
 	 const int* __restrict__ triangles_indices,
 	 const float2* __restrict__ normals,
 	 const float* __restrict__ offsets,
@@ -648,7 +649,8 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	 float* __restrict__ dL_dedge_details,
 	 float* __restrict__ dL_dedge_sh1,
 	 float* __restrict__ dL_dpoints2D,
-	 float* __restrict__ dL_dvertice_depth)
+	 float* __restrict__ dL_dvertice_depth,
+	 float* __restrict__ dL_dsigma_face)
  {
 	 // We rasterize again. Compute necessary block info.
 	 auto block = cg::this_thread_block();
@@ -680,6 +682,9 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	 __shared__ float collected_depths[BLOCK_SIZE];
 	 __shared__ float2 collected_xy[BLOCK_SIZE];
 	 __shared__ float2 collected_phi_center[BLOCK_SIZE];
+	 // Per-face window exponents; a null pointer means the scheduled scalar.
+	 __shared__ float collected_sigma[BLOCK_SIZE];
+	 const bool per_face_sigma = sigma_face != nullptr;
 	 /*
 	 ===================================================================================================
 	 */
@@ -748,6 +753,8 @@ __global__ void computeVertexGeometryGradientsCUDA(
 				collected_p_images[MAX_NB_POINTS * block.thread_rank() + k] = p_image[3 * coll_id + k];
 			}
 			collected_phi_center[block.thread_rank()] = phi_center[coll_id];
+			if (per_face_sigma)
+				collected_sigma[block.thread_rank()] = sigma_face[coll_id];
 		 }
 		 block.sync();
  
@@ -788,7 +795,8 @@ __global__ void computeVertexGeometryGradientsCUDA(
  
 			 float phi_x = max_val;
 			 float phi_final = phi_x * phi_center_min.x;
-			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma));
+			 float sigma_j = per_face_sigma ? collected_sigma[j] : sigma;
+			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma_j));
  
 			 const float alpha = min(0.99f, con_o.w * Cx);
  
@@ -1081,7 +1089,12 @@ __global__ void computeVertexGeometryGradientsCUDA(
 			 const float dL_dC = con_o.w * dL_dalpha;
 			
 			// Calculate gradient w.r.t phi_x 
-			float dL_dphi_x = dL_dC * (sigma / phi_x) * Cx;
+			float dL_dphi_x = dL_dC * (sigma_j / phi_x) * Cx;
+
+			// d(phi ** sigma)/d(sigma). phi_final is in (0, 1] here, so the log is
+			// finite wherever the face contributed at all.
+			if (per_face_sigma)
+				atomicAdd(&(dL_dsigma_face[global_id]), dL_dC * Cx * __logf(phi_final));
  
 			 #pragma unroll
 			 for (int k = 0; k < 3; k++) {
@@ -1207,6 +1220,7 @@ void BACKWARD::computeVertexColorGradients(
 	 int W, int H,
 	 const float* bg_color,
 	 const float sigma,
+	 const float* sigma_face,
 	 const int* triangles_indices,
 	 const float2* normals,
 	 const float* offsets,
@@ -1237,7 +1251,8 @@ void BACKWARD::computeVertexColorGradients(
 	 float* dL_dedge_details,
 	 float* dL_dedge_sh1,
 	 float* dL_dpoints2D,
-	 float* dL_dvertice_depth
+	 float* dL_dvertice_depth,
+	 float* dL_dsigma_face
 	)
  {
 	 renderCUDA<NUM_CHANNELS> << <grid, block >> >(
@@ -1246,6 +1261,7 @@ void BACKWARD::computeVertexColorGradients(
 		 W, H,
 		 bg_color,
 		 sigma,
+		 sigma_face,
 		 triangles_indices,
 		 normals,
 		 offsets,
@@ -1276,7 +1292,8 @@ void BACKWARD::computeVertexColorGradients(
 		 dL_dedge_details,
 		 dL_dedge_sh1,
 		 dL_dpoints2D,
-		 dL_dvertice_depth
+		 dL_dvertice_depth,
+		 dL_dsigma_face
 		 );
  }
 
