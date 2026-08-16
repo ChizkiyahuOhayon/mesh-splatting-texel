@@ -163,6 +163,8 @@ def training(
                 # per-face carrier is well defined. Zero-init keeps the model identical
                 # to the baseline here; everything before this point is untouched.
                 triangles.create_texels(opt.texel_order, opt.texel_lr)
+                # Same moment, same reason: the face set is only now stable.
+                triangles.create_face_hardness(opt.face_hardness, opt.face_hardness_lr)
             need_delaunay = False
 
         # Supersampling
@@ -480,6 +482,9 @@ def training(
                 if triangles.texel_optimizer is not None:
                     triangles.texel_optimizer.step()
                     triangles.texel_optimizer.zero_grad(set_to_none = True)
+                if triangles.face_hardness_optimizer is not None:
+                    triangles.face_hardness_optimizer.step()
+                    triangles.face_hardness_optimizer.zero_grad(set_to_none = True)
 
     # cleaning of triangles that we do not need. `max_blending` is a per-pixel
     # maximum, so the supersampling factor sets how many chances each face gets
@@ -651,6 +656,8 @@ if __name__ == "__main__":
 
     if args.indoor:
         ops = update_indoor(ops)
+    if ops.sigma_schedule not in SCHEDULES:
+        parser.error(f"--sigma_schedule must be one of {SCHEDULES}, got {ops.sigma_schedule!r}")
 
     # Configure and run training
     torch.autograd.set_detect_anomaly(args.detect_anomaly)

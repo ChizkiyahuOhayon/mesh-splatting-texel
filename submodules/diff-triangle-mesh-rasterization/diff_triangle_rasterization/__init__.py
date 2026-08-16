@@ -386,6 +386,7 @@ class TriangleRasterizer(nn.Module):
         edge_details=None,
         face_edge_ids=None,
         window_donors=None,
+        sigma_face=None,
     ):
         """Render once, then replay its saved state for GoRFE sparse rows.
 
@@ -394,6 +395,10 @@ class TriangleRasterizer(nn.Module):
         after it returns are its opaque buffers passed to ``export_gorfe_rows``.
         The ordinary ``forward`` method and its six-item return remain unchanged.
         """
+        if sigma_face is not None:
+            raise NotImplementedError(
+                "the GoRFE row exporter assumes one window exponent per render; "
+                "per-face exponents are not part of its design")
         raster_settings = self.raster_settings
         if (shs is None and colors_precomp is None) or (
             shs is not None and colors_precomp is not None

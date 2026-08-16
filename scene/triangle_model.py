@@ -31,6 +31,8 @@ from simple_knn._C import distCUDA2
 import math
 import rdel
 
+from sota.hardness import INITIAL_ADDED_HARDNESS, face_sigma, raw_from_hardness
+
 
 
 def random_rotation_matrices(num_matrices, device='cpu'):
@@ -158,6 +160,12 @@ class TriangleModel:
         self._texels = torch.empty(0)
         self.texel_order = 0
         self.texel_optimizer = None
+        # Per-face added window hardness (sota/hardness.py). Like the texels it
+        # is face-indexed, lives in its own optimizer, and is allocated only
+        # after the restricted Delaunay rebuild fixes the face set.
+        self._face_hardness = torch.empty(0)
+        self.face_hardness_enabled = False
+        self.face_hardness_optimizer = None
         # ResidualGate per-face geometric-under-resolution signal (RESEARCH_PLAN_v5).
         # Derived (not learned): g_m is refreshed periodically from the photometric
         # residual, so on any topology change we simply re-allocate to the new face
@@ -203,6 +211,11 @@ class TriangleModel:
         # Per-face texel carrier. Without these the checkpoint silently reloads as a
         # plain baseline model: the metrics measured during training would not be
         # reproducible from disk, and render/export would be wrong.
+        # Per-face window hardness, for the same reason: without it the reloaded
+        # model would render at the scheduled sigma and not reproduce training.
+        point_cloud_state_dict["face_hardness_enabled"] = self.face_hardness_enabled
+        if self.face_hardness_enabled:
+            point_cloud_state_dict["face_hardness"] = self._face_hardness
         point_cloud_state_dict["texel_order"] = self.texel_order
         if self.texel_order > 0:
             point_cloud_state_dict["texels"] = self._texels
@@ -332,6 +345,11 @@ class TriangleModel:
         if "g_m" in state:
             self._g_m = state["g_m"].to(device).to(torch.float32)
             self._g_m_ready = True
+        self.face_hardness_enabled = bool(state.get("face_hardness_enabled", False))
+        if self.face_hardness_enabled:
+            self._face_hardness = state["face_hardness"].to(device).to(torch.float32).detach().clone()
+            print(f"[hardness] restored per-face window hardness for "
+                  f"{self._face_hardness.shape[0]:,} faces")
         self.texel_order = int(state.get("texel_order", 0))
         if self.texel_order > 0:
             self._texels = state["texels"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
@@ -775,6 +793,7 @@ class TriangleModel:
             # Without this the final training-time _prune_vertices leaves texels
             # misaligned with faces in the saved model (silent colour corruption).
             self._prune_texels(valid_tris)
+            self._prune_face_hardness(valid_tris)
             remapped = remapped[valid_tris]
             self._triangle_indices = remapped.to(torch.int32).contiguous()
 
@@ -815,6 +834,54 @@ class TriangleModel:
     @property
     def get_texels(self):
         return self._texels if self.texel_order > 0 else None
+
+    def get_face_sigma(self, scheduled_sigma):
+        """Per-face window exponents for this iteration, or None when disabled.
+
+        Every value is at most `scheduled_sigma`, so the model is never softer
+        than the published one and ends at the same opaque endpoint.
+        """
+        if not self.face_hardness_enabled:
+            return None
+        return face_sigma(self._face_hardness, scheduled_sigma)
+
+    def create_face_hardness(self, enabled, lr):
+        """Allocate the per-face hardness carrier, at the scheduled value.
+
+        Allocated right after the restricted Delaunay retriangulation for the
+        same two reasons as the texels: that rebuild destroys any per-face
+        correspondence, and the face count is stable afterwards.
+        """
+        if not enabled:
+            self.face_hardness_enabled = False
+            return
+        F = self._triangle_indices.shape[0]
+        self.face_hardness_enabled = True
+        self._face_hardness = nn.Parameter(
+            torch.full((F,), raw_from_hardness(INITIAL_ADDED_HARDNESS),
+                       dtype=torch.float, device="cuda").requires_grad_(True))
+        self.face_hardness_optimizer = torch.optim.Adam(
+            [{'params': [self._face_hardness], 'lr': lr, "name": "face_hardness"}],
+            eps=1e-15)
+        print(f"[hardness] allocated per-face window hardness for {F:,} faces, lr {lr}")
+
+    def _prune_face_hardness(self, mask):
+        """Keep the hardness carrier aligned when triangles are pruned."""
+        if not self.face_hardness_enabled:
+            return
+        assert mask.dtype == torch.bool and mask.numel() == self._face_hardness.shape[0], (
+            f"hardness prune mask must be a bool mask over the current "
+            f"{self._face_hardness.shape[0]} faces, got shape {tuple(mask.shape)} "
+            f"dtype {mask.dtype}")
+        st = self.face_hardness_optimizer.state.get(self._face_hardness, None)
+        new_t = nn.Parameter(self._face_hardness[mask].detach().requires_grad_(True))
+        if st is not None:
+            st["exp_avg"] = st["exp_avg"][mask]
+            st["exp_avg_sq"] = st["exp_avg_sq"][mask]
+            del self.face_hardness_optimizer.state[self._face_hardness]
+            self.face_hardness_optimizer.state[new_t] = st
+        self.face_hardness_optimizer.param_groups[0]["params"][0] = new_t
+        self._face_hardness = new_t
 
     def create_texels(self, order, lr):
         """Allocate the per-face texel carrier, zero-initialised.
@@ -969,9 +1036,13 @@ class TriangleModel:
             assert self._texels.shape[0] == F, (
                 f"texels has {self._texels.shape[0]} rows, expected {F} faces")
             assert self._texels.shape[1] == self.texel_order ** 2
+        if self.face_hardness_enabled:
+            assert self._face_hardness.shape[0] == F, (
+                f"face hardness has {self._face_hardness.shape[0]} rows, expected {F} faces")
 
     def prune_triangles(self, mask):
         self._prune_texels(mask)
+        self._prune_face_hardness(mask)
         self._triangle_indices = self._triangle_indices[mask]
         self._triangle_indices = self._triangle_indices.to(torch.int32)
         self.image_size = self.image_size[mask]

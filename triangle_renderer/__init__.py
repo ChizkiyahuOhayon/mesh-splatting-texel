@@ -147,6 +147,10 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)
 
     sigma = pc.get_sigma
+    # Per-face window exponents, each at most the scheduled scalar above. None
+    # when the carrier is not allocated, which hands the kernels a null pointer
+    # and takes the original code path (sota/hardness.py).
+    sigma_face = pc.get_face_sigma(sigma) if hasattr(pc, "get_face_sigma") else None
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
@@ -228,6 +232,7 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         triangles_indices=triangles_indices,
         vertex_weights=vertex_weights.squeeze(),
         sigma=sigma,
+        sigma_face=sigma_face,
         shs=shs,
         colors_precomp=colors_precomp,
         scaling=scaling,

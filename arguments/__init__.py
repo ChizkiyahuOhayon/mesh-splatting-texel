@@ -175,6 +175,11 @@ class OptimizationParams(ParamGroup):
         # cannot drift apart.
         self.lr_triangles_points_decay = 0.01
 
+        # Per-face added window hardness (sota/hardness.py). Off by default; the
+        # carrier is allocated after the restricted Delaunay rebuild, like texels.
+        self.face_hardness = False
+        self.face_hardness_lr = 0.01
+
         self.splitt_large_triangles = 100
         self.start_upsampling = 20000
         self.upscaling_factor = 2
