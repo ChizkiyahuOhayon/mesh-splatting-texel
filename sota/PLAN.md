@@ -82,6 +82,41 @@ still unspent, so the constraint tightens only as fast as the optimiser can
 follow. HARD-G0 falsified *early* hardening (`-0.81 dB`) with a linear path and a
 dead learning rate, which is a different arm from either of these.
 
+## The baseline was broken before any of this ran
+
+First `base` run on the 4090: Garden peaked at **20.51 dB around iteration 4000** and
+then decayed monotonically to **11.38 dB** at 30000 — on the training set as well
+(19.81 → 12.36), so it was destruction, not overfitting.
+
+Ruled out by measurement: `fused_ssim` (bit-exact against the reference), the dataset
+(byte-identical to the local copy that produced 24.74 on the A40), supervised normals
+(`normals_4` is an empty directory the reader creates, so the loss never activates),
+the vertex depth loss (clamped at `0.5`, weighted `2.5e-4`, so at most `1e-4` against
+an L1 of `0.2`), `--use_sparse_adam` (same default as upstream), pruning (disabling it
+still left the loss rising, 0.153 at 4.9k to 0.211 at 6.3k), and every default in
+`arguments/__init__.py` (diff against upstream shows additions only).
+
+The cause was **our own commit `6f7b03d`**, made during GoRFE-Q0 on 2026-08-11. Fixing
+a finite-difference check there replaced
+
+    dL_dvertices3D[idx].x = transposed_dL_ddepth.x;          // depth term only
+
+with an **unconditionally executed** kernel
+
+    dL_dvertices3D[idx].x += projection_gradient.x + depth_gradient.x;
+
+adding the screen-space term of the vertex position gradient to the *default* path. It
+is the more correct derivative, but MeshSplatting's learning rates, densification
+thresholds and pruning sizes are all tuned against the published one. The last time
+anyone trained a baseline was HARD-G0 at `81d9f99`, which predates it, so the change
+sat unmeasured for six days.
+
+It is now behind `--screen_space_gradients`, default off. The exact path is worth
+testing as an arm with its own step size — see batch 3.
+
+**The general lesson, and it is the same one this plan is built on:** a change that
+passes a gradient check can still destroy training, and only a training run says so.
+
 ## Batch 1 — Garden, five arms
 
 | arm | change |
