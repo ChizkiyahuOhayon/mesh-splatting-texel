@@ -32,6 +32,10 @@ setup(
     description="Efficient Restricted Delaunay",
     package_dir={"": "src"},
     packages=find_packages(where="src"),  # expects src/effrdel/__init__.py
+    # `rdel` imports these two as top-level modules, but they are loose files
+    # rather than packages, so find_packages never sees them and an install
+    # leaves `rdel` unimportable.
+    py_modules=["tetutils", "intersect"],
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
     zip_safe=False,
