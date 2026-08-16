@@ -39,7 +39,12 @@ printf '%s\n' "$*" > "$OUT/args.txt"
 
 START=$SECONDS
 set +e
-python train.py -s "$DATA_ROOT/$SCENE" -m "$OUT" --eval "${PROTOCOL[@]}" "$@" \
+# -u so the evaluation lines reach the log as they happen rather than sitting in
+# a block buffer that is lost if the run is interrupted. expandable_segments
+# keeps the allocator from fragmenting at the supersampling change, which is
+# where a 24 GB card runs out.
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+python -u train.py -s "$DATA_ROOT/$SCENE" -m "$OUT" --eval "${PROTOCOL[@]}" "$@" \
   > "$OUT/train.log" 2>&1
 STATUS=$?
 set -e
