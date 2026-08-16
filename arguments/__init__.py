@@ -163,6 +163,18 @@ class OptimizationParams(ParamGroup):
 
         self.sigma_start = 0
 
+        # How the window hardens between `sigma_start` and `sigma_until`. All
+        # schedules share the same endpoints; see sota/sigma_schedule.py.
+        #   linear    -- published: linear in sigma, so most of the window's
+        #                area coverage moves in the last few thousand updates
+        #   coverage  -- linear in that coverage
+        #   lrmatched -- linear in the vertex learning-rate budget still unspent
+        self.sigma_schedule = "linear"
+        # Terminal fraction of the initial vertex learning rate. It shapes both
+        # the learning rate itself and the `lrmatched` hardening path, so the two
+        # cannot drift apart.
+        self.lr_triangles_points_decay = 0.01
+
         self.splitt_large_triangles = 100
         self.start_upsampling = 20000
         self.upscaling_factor = 2

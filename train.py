@@ -35,6 +35,7 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams, update_indoor
+from sota.sigma_schedule import SCHEDULES, schedule as sigma_schedule
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -173,13 +174,12 @@ def training(
         iter_start.record()
         triangles.update_learning_rate(iteration)
 
-        # Sigma schedule
-        if iteration < sigma_start:
-            current_sigma = initial_sigma
-        else:
-            progress = (iteration - sigma_start) / (total_iters - sigma_start)
-            progress = min(progress, 1.0)
-            current_sigma = initial_sigma - (initial_sigma - final_sigma) * progress
+        # Sigma schedule. "linear" is the published path; the others keep the same
+        # endpoints but anneal the window's area coverage instead of sigma itself.
+        current_sigma = sigma_schedule(
+            opt.sigma_schedule, iteration, initial_sigma, final_sigma,
+            sigma_start, total_iters, decay=opt.lr_triangles_points_decay,
+        )
         triangles.set_sigma(current_sigma)
 
         # Every 1000 its we increase the levels of SH up to a maximum degree

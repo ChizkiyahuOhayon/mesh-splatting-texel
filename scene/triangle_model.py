@@ -309,7 +309,7 @@ class TriangleModel:
             self.optimizer = torch.optim.Adam(param_groups, lr=0.0, eps=1e-15) # torch.optim.SGD(param_groups, lr=0.0, momentum=0.0)
 
             self.triangle_scheduler_args = get_expon_lr_func(lr_init=training_args.lr_triangles_points_init,
-                                                            lr_final=training_args.lr_triangles_points_init/100,
+                                                            lr_final=training_args.lr_triangles_points_init * training_args.lr_triangles_points_decay,
                                                             lr_delay_mult=training_args.position_lr_delay_mult,
                                                             max_steps=training_args.position_lr_max_steps)
 
@@ -549,7 +549,7 @@ class TriangleModel:
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
 
         self.triangle_scheduler_args = get_expon_lr_func(lr_init=lr_triangles_init,
-                                                        lr_final=lr_triangles_init/100,
+                                                        lr_final=lr_triangles_init * training_args.lr_triangles_points_decay,
                                                         lr_delay_mult=training_args.position_lr_delay_mult,
                                                         max_steps=training_args.position_lr_max_steps)
 
