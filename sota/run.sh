@@ -25,6 +25,13 @@ esac
 
 OUT="$RUNS/${ARM}__${SCENE}"
 [ -e "$OUT/DONE" ] && { echo "== $ARM/$SCENE already done"; exit 0; }
+
+# One GPU, one training at a time. Without this a second invocation deletes the
+# output directory of a run already using it, and the first dies with no error.
+mkdir -p "$RUNS"
+exec 9> "$RUNS/.lock"
+flock -n 9 || { echo "== another sota/run.sh holds $RUNS/.lock; refusing" >&2; exit 1; }
+
 rm -rf "$OUT"; mkdir -p "$OUT"
 
 cd "$REPO"
