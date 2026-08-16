@@ -470,6 +470,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	const int R,
 	const torch::Tensor& binningBuffer,
 	const torch::Tensor& imageBuffer,
+	const bool screen_space_gradients,
 	const bool debug) 
 {
   const int P = triangles_indices.size(0); // number of triangles
@@ -590,6 +591,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  dL_dpoints2D.contiguous().data_ptr<float>(),
 	  dL_dvertice_depth.contiguous().data_ptr<float>(),
 	  sigma_face.numel() > 0 ? dL_dsigma_face.contiguous().data_ptr<float>() : nullptr,
+	  screen_space_gradients,
 	  debug);
   }
 

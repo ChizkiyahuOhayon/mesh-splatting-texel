@@ -142,6 +142,7 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
         prefiltered=False,
         debug=pipe.debug,
         texel_order=getattr(pc, "texel_order", 0),
+        screen_space_gradients=getattr(pipe, "screen_space_gradients", False),
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)

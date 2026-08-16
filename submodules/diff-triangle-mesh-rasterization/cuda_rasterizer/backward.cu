@@ -292,11 +292,28 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	const float* vertices,
 	const float* dL_dpoints2D,
 	const float* dL_dvertice_depth,
-	glm::vec3* dL_dvertices3D)
+	glm::vec3* dL_dvertices3D,
+	bool screen_space_gradients)
 {
 	auto idx = cg::this_grid().thread_rank();
 	if (idx >= V)
 		return;
+
+	const float3 dL_ddepth = {0.0f, 0.0f, dL_dvertice_depth[idx]};
+	const float3 depth_gradient = transformPoint4x3Transpose(dL_ddepth, viewmatrix);
+
+	// The published backward writes the depth term over whatever the spherical
+	// harmonics left in this slot and never propagates dL_dpoints2D through the
+	// perspective projection at all. That is not the exact derivative -- GoRFE-Q0
+	// measured the discrepancy -- but MeshSplatting's learning rates, densification
+	// thresholds and pruning sizes are all tuned against it, so it stays the
+	// default and the exact path is opted into.
+	if (!screen_space_gradients) {
+		dL_dvertices3D[idx].x = depth_gradient.x;
+		dL_dvertices3D[idx].y = depth_gradient.y;
+		dL_dvertices3D[idx].z = depth_gradient.z;
+		return;
+	}
 
 	const float3 vertex = {
 		vertices[3 * idx],
@@ -318,9 +335,6 @@ __global__ void computeVertexGeometryGradientsCUDA(
 			+ projmatrix[7] * dL_dhom_w,
 		projmatrix[8] * dL_dhom_x + projmatrix[9] * dL_dhom_y
 			+ projmatrix[11] * dL_dhom_w);
-	const float3 dL_ddepth = {0.0f, 0.0f, dL_dvertice_depth[idx]};
-	const float3 depth_gradient = transformPoint4x3Transpose(dL_ddepth, viewmatrix);
-
 	dL_dvertices3D[idx].x += projection_gradient.x + depth_gradient.x;
 	dL_dvertices3D[idx].y += projection_gradient.y + depth_gradient.y;
 	dL_dvertices3D[idx].z += projection_gradient.z + depth_gradient.z;
@@ -1206,11 +1220,12 @@ void BACKWARD::computeVertexColorGradients(
 	const float* vertices,
 	const float* dL_dpoints2D,
 	const float* dL_dvertice_depth,
-	glm::vec3* dL_dvertices3D)
+	glm::vec3* dL_dvertices3D,
+	bool screen_space_gradients)
  {
 	computeVertexGeometryGradientsCUDA<<<(V + 255) / 256, 256>>>(
 		V, W, H, viewmatrix, projmatrix, vertices, dL_dpoints2D,
-		dL_dvertice_depth, dL_dvertices3D);
+		dL_dvertice_depth, dL_dvertices3D, screen_space_gradients);
  }
  
  void BACKWARD::render(

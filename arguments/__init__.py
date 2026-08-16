@@ -77,6 +77,10 @@ class PipelineParams(ParamGroup):
         self.depth_ratio = 1.0
         self.debug = False
         self.texel_footprint_filter = False
+        # The published backward drops the screen-space term of the vertex
+        # position gradient. Restoring it is the exact derivative but invalidates
+        # MeshSplatting's tuned learning rates and pruning sizes, so it is opt-in.
+        self.screen_space_gradients = False
         super().__init__(parser, "Pipeline Parameters")
 
 class OptimizationParams(ParamGroup):

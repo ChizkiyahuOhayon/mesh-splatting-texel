@@ -104,7 +104,8 @@
 		const float* vertices,
 		const float* dL_dpoints2D,
 		const float* dL_dvertice_depth,
-		glm::vec3* dL_dvertices3D);
+		glm::vec3* dL_dvertices3D,
+		bool screen_space_gradients);
  
 	 void preprocess(
 		 int P, int D, int M,

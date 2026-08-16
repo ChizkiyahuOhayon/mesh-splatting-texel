@@ -484,6 +484,7 @@
 	 float* dL_dpoints2D,
 	 float* dL_dvertice_depth,
 	 float* dL_dsigma_face,
+	 bool screen_space_gradients,
 	 bool debug)
  {
 	 // Backward never runs with donors (the Python wrapper raises first), so the
@@ -580,7 +581,8 @@
 		vertices,
 		dL_dpoints2D,
 		dL_dvertice_depth,
-		(glm::vec3*)dL_dvertices3D
+		(glm::vec3*)dL_dvertices3D,
+		screen_space_gradients
 	), debug)
 
 	 if (edge_detail_dim == 4)

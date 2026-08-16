@@ -228,6 +228,10 @@ class _RasterizeTriangles(torch.autograd.Function):
         ctx.edge_details_enabled = edge_details.numel() > 0
         ctx.donor_mode = donor_mode
         ctx.per_face_sigma = sigma_face.numel() > 0
+        # False reproduces the published backward, whose vertex position gradient
+        # carries only the depth term. See cuda_rasterizer/backward.cu.
+        ctx.screen_space_gradients = getattr(
+            raster_settings, "screen_space_gradients", False)
         ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels, edge_details, face_edge_ids, sigma_face)
         return color, radii, scaling, depth, max_blending, was_rendered
 
@@ -271,6 +275,7 @@ class _RasterizeTriangles(torch.autograd.Function):
                 num_rendered,
                 binningBuffer,
                 imgBuffer,
+                ctx.screen_space_gradients,
                 raster_settings.debug)
 
         # Compute gradients for relevant tensors by invoking backward method
@@ -320,6 +325,11 @@ class TriangleRasterizationSettings(NamedTuple):
     # 0 disables the per-face texel carrier (exact original code path). Defaulted and
     # placed last so existing positional construction of this NamedTuple still works.
     texel_order : int = 0
+    # False is the published backward: the vertex position gradient carries only
+    # the depth term and dL_dpoints2D is never propagated through the perspective
+    # projection. True is the exact derivative, which invalidates the published
+    # learning rates and pruning thresholds and so has to be opted into.
+    screen_space_gradients : bool = False
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):
