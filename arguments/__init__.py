@@ -183,6 +183,9 @@ class OptimizationParams(ParamGroup):
         # carrier is allocated after the restricted Delaunay rebuild, like texels.
         self.face_hardness = False
         self.face_hardness_lr = 0.01
+        # Widest ratio a face's hardening rate may reach before the rates are
+        # normalised to mean one. 1.0 pins every face to the published schedule.
+        self.face_hardness_spread = 4.0
 
         self.splitt_large_triangles = 100
         self.start_upsampling = 20000

@@ -165,7 +165,8 @@ def training(
                 # to the baseline here; everything before this point is untouched.
                 triangles.create_texels(opt.texel_order, opt.texel_lr)
                 # Same moment, same reason: the face set is only now stable.
-                triangles.create_face_hardness(opt.face_hardness, opt.face_hardness_lr)
+                triangles.create_face_hardness(opt.face_hardness, opt.face_hardness_lr,
+                                               opt.face_hardness_spread)
             need_delaunay = False
 
         # Supersampling
