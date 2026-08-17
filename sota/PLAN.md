@@ -183,16 +183,63 @@ the same projected positions — into vertex gradients, and `dL_dpoints2D` route
 through the projection adds that contribution a second time. Kept behind the flag,
 default off.
 
+### Per-face hardening order is closed too, by the same mechanism
+
+Given the *same* total softness the published schedule spends — rates bounded by
+`spread` and normalised to mean one, so a face can only buy softness by selling
+it — the question was whether spending it unevenly helps. It does not:
+
+| `spread` | final PSNR | peak | 26k | 26k→30k |
+|---:|---:|---:|---:|---:|
+| 1 (`base`) | **24.7217** | 25.299 @11k | 25.038 | −0.317 |
+| 4 (`hard`) | 24.3666 | 25.454 @22k | 25.377 | −1.011 |
+| 16 (`hard_wide`) | 23.8581 | 25.373 @22k | 25.360 | −1.502 |
+
+The reallocation is real and the model commits to it hard: the learned rates
+saturate at both bounds and are essentially binary, 88% of faces as hard as
+allowed and 12% as soft as allowed, at an exactly unit mean. It genuinely helps
+mid-training — both arms peak above `base`'s best and lead it by `0.33 dB` at
+26k. Then the soft minority has to reach the endpoint, and the tail loss scales
+with `spread`, taking more than the reallocation bought.
+
+An earlier *unbudgeted* version answered a different question and answered it
+degenerately: 93.6% of faces went softer, the median rate reached 89.5, and the
+run held 25.83 dB until the endpoint identity forced every face onto
+`sigma_final` in a single step and it collapsed to 21.47. That 25.83 is the soft
+model, i.e. the 2.4 dB gap in their Table 1 measured again, not a method result.
+
+### One mechanism closes the whole hardening axis
+
+Four independent interventions, each with a monotone dose response:
+
+| intervention | dose → final PSNR |
+|---|---|
+| coverage left for the tail | 0.209 / 0.111 / 0.008 → 24.72 / 24.57 / 22.79 |
+| vertex learning rate through hardening | 30k / 60k steps → 24.72 / 23.48 |
+| exact vertex gradient step size | 1/10, 1/100, 1/1000 → 12.45 / 9.59 / 8.97 |
+| per-face reallocation width | spread 1 / 4 / 16 → 24.72 / 24.37 / 23.86 |
+
+> **Softness has a price, it is paid at the moment it is given up, and neither
+> when nor on which faces you give it up changes the total.**
+
+Globally and per face, the same statement. The published schedule is already at
+the optimum of this family because it keeps the model soft as long as it can and
+then pays once.
+
 ## What is still open
 
-- **Per-face hardening rate** (`sota/batch2.sh`). The global clock is closed; whether
-  different faces want different clocks is a separate claim, and the reparameterised
-  carrier can now express either direction.
-- **Stretched schedule** (`sota/batch4.sh`). Batch 1 cannot separate "coverage spent
-  costs quality" from "not enough updates at each hardness". `lr60k` ruled out a
-  bigger step, which is not the same as more steps.
+- **Stretched schedule** (`sota/batch4.sh`). The one variable the four interventions
+  above never changed is the number of updates. `lr60k` ruled out a bigger step,
+  which is not the same as more steps: if the tail loss is the model failing to
+  re-fit rather than coverage costing quality outright, scaling every phase
+  boundary together should recover some of it. This is the last hardening question.
 - `noreg`'s `+0.085` is small, free, and real, but it buys metrics with geometry —
   their Figure 7a is explicit about that.
+
+If the stretched schedule is also null, the hardening axis is finished and the
+direction question has to be reopened. The honest options at that point are
+appearance capacity within the hard-opaque regime and primitive count, neither of
+which this plan has tested on a correct baseline yet.
 
 Two scenes must agree before any nine-scene run.
 
