@@ -129,8 +129,72 @@ passes a gradient check can still destroy training, and only a training run says
 
 `sota/batch1.sh garden`, then `python sota/table.py`.
 
-Batch 2 combines whatever wins and repeats on Room; the nine-scene run comes only
-after two scenes agree.
+## Results so far, all Garden at the official protocol
+
+Reference: `base` reproduces the baseline at **24.7217 / 0.7616 / 0.2165** in 44 min,
+against 24.7467 measured on the A40 and 24.71 in `record1.md`.
+
+| arm | PSNR | vs base | peak | 26k→30k |
+|---|---:|---:|---:|---:|
+| `noreg` | **24.8063** | **+0.0847** | 25.316 @11k | −0.222 |
+| `base` | 24.7217 | — | 25.299 @11k | −0.317 |
+| `cov` | 24.5719 | −0.150 | 24.837 @21k | −0.216 |
+| `lr60k` | 23.4845 | −1.237 | 24.743 @11k | −0.918 |
+| `lrm` | 22.7901 | −1.932 | 23.106 @25k | −0.300 |
+| `exact_lr10` | 12.4459 | −12.28 | 16.76 @2k | — |
+| `exact_lr100` | 9.5900 | −15.13 | 15.09 @2k | — |
+| `exact_lr1000` | 8.9700 | −15.75 | 14.72 @1k | — |
+
+### The hardening cost is real and it is not the regularizers
+
+Between 26k and 30k nothing changes but sigma — densification, pruning, the opacity
+anneal and both supersampling switches are all done. Over those 4k iterations `base`
+loses `0.317 dB`, `0.0183 SSIM` and gains `0.0149 LPIPS`, accelerating as it goes
+(`−0.019, −0.070, −0.086, −0.141`), exactly where the coverage curve is steepest.
+From the peak at 11k it is `0.58 dB`. Removing every active regularizer (`noreg`)
+leaves the decline in place at `−0.222`, so it is the hardening, not the priors.
+
+### The global schedule axis is closed
+
+Coverage left for the last 5k iterations against final PSNR: `0.209 → 24.72`,
+`0.111 → 24.57`, `0.008 → 22.79`. Monotone, and the mechanism is visible in the
+peaks: `lrm` did reduce the tail to `−0.300` as designed, but its peak fell from
+`25.30` to `23.11`. **The loss is relocated, not removed.** Softness is expressive,
+every unit of coverage costs quality whenever it is spent, and the published linear
+anneal is already near-optimal in this family because it stays soft as long as it can.
+This also explains HARD-G0's `−0.81 dB` early-hardening result.
+
+`lr60k` refutes the premise this plan started from. Keeping the vertex learning rate
+alive through hardening does not let the geometry compensate — it costs `1.24 dB` and
+triples the tail loss. **The decaying learning rate is not a limitation, it is
+stabilisation.**
+
+The closed-form coverage identity is still correct and still the right *analysis* —
+it predicts where the decline steepens, and it explains why per-triangle compensation
+is impossible on shared vertices. It is not a usable *intervention*.
+
+### The exact vertex gradient is not a training path
+
+Three step sizes, monotone the wrong way: `12.45`, `9.59`, `8.97`. Lowering the step
+makes it worse, so the added term is not merely mis-scaled, it points somewhere
+harmful. The likely reason is double counting: `BACKWARD::preprocess` already turns
+`dL_dnormals`, `dL_doffsets` and `dL_dmean2D` — screen-space quantities derived from
+the same projected positions — into vertex gradients, and `dL_dpoints2D` routed
+through the projection adds that contribution a second time. Kept behind the flag,
+default off.
+
+## What is still open
+
+- **Per-face hardening rate** (`sota/batch2.sh`). The global clock is closed; whether
+  different faces want different clocks is a separate claim, and the reparameterised
+  carrier can now express either direction.
+- **Stretched schedule** (`sota/batch4.sh`). Batch 1 cannot separate "coverage spent
+  costs quality" from "not enough updates at each hardness". `lr60k` ruled out a
+  bigger step, which is not the same as more steps.
+- `noreg`'s `+0.085` is small, free, and real, but it buys metrics with geometry —
+  their Figure 7a is explicit about that.
+
+Two scenes must agree before any nine-scene run.
 
 ## Rules
 
