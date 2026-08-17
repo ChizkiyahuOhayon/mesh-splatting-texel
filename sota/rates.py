@@ -1,6 +1,6 @@
 """What did the faces actually ask for?
 
-    python sota/rates.py <run_dir> [<run_dir> ...]
+    python -m sota.rates <run_dir> [<run_dir> ...]
 
 Reads the learned per-face hardening rates out of a finished run and reports
 their distribution. Rate 1 is the published schedule, below 1 is a face that
