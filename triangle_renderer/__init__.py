@@ -151,7 +151,8 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     # Per-face window exponents, each at most the scheduled scalar above. None
     # when the carrier is not allocated, which hands the kernels a null pointer
     # and takes the original code path (sota/hardness.py).
-    sigma_face = pc.get_face_sigma(sigma) if hasattr(pc, "get_face_sigma") else None
+    sigma_face = (pc.get_face_sigma(sigma, pc.final_sigma)
+                  if hasattr(pc, "get_face_sigma") else None)
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.

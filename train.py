@@ -112,6 +112,7 @@ def training(
     # define the scheduler for sigma and opacity
     initial_sigma = opt.set_sigma
     final_sigma = 0.0001
+    triangles.final_sigma = final_sigma
     sigma_start = opt.sigma_start
     total_iters = opt.sigma_until
 

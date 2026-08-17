@@ -1,62 +1,66 @@
-"""Per-face window hardness that may run ahead of the global schedule.
+"""Per-face hardening rate: when each triangle spends the window it has to spend.
 
-Triangle Splatting gives every triangle its own window exponent `sigma` and
-never hardens; MeshSplatting collapses that into one scalar annealed to `1e-4`,
+Triangle Splatting gives every triangle its own window exponent `sigma` and never
+hardens; MeshSplatting collapses that into one scalar annealed to `sigma_final`,
 which is what turns the soft field into an opaque connected mesh. Their Table 1
 puts the two 2.4 dB apart, so the collapse is expensive -- but it is also what
 makes the deliverable a mesh, and it cannot simply be undone.
 
-The compromise here is to keep the schedule as a floor on hardness and let each
-face add to it. Working in hardness `h = 1 / sigma` rather than in `sigma`,
+Batch 1 measured what the global schedule can and cannot do. Moving the window's
+area coverage earlier than the published linear anneal is monotonically harmful
+on Garden -- `24.72` with `0.209` of the coverage left for the last 5k
+iterations, `24.57` at `0.111`, `22.79` at `0.008` -- and the loss is not
+removed by moving it, only relocated: the arm that nearly emptied the tail also
+dropped its peak from `25.30` to `23.11`. Softness is expressive, every unit of
+coverage spent costs quality whenever it is spent, and the published schedule is
+already near-optimal in that family because it stays soft as long as it can.
 
-    h_face = a_face + h_schedule(t) ,    a_face >= 0
+That closes the *global* schedule but not the per-face question, which is a
+different claim: a scene is not uniformly hard to represent, so the faces that
+can afford opacity early and the ones that need every iteration of softness need
+not be on the same clock. This carrier interpolates the published schedule per
+face,
 
-so that
+    sigma_face(t) = sigma_final + rate_face * (sigma_schedule(t) - sigma_final)
 
-    sigma_face(t) = 1 / (a_face + 1 / sigma_schedule(t)) <= sigma_schedule(t) .
+with `rate_face > 0` learned. Its properties:
 
-Three properties follow, and they are the reason for this form:
+* **The endpoint is an identity, not a constraint.** At the last iteration
+  `sigma_schedule` equals `sigma_final`, so `sigma_face` equals it too for every
+  face and every rate. Nothing has to be clamped, projected, or regularised, and
+  the model that comes out is the same opaque connected mesh.
+* **The default is recovered exactly.** `rate_face = 1` is the published path,
+  so a run starts byte-identical to the baseline.
+* **Both directions are available.** `rate < 1` hardens a face ahead of the
+  clock, `rate > 1` keeps it softer for longer. Batch 1 says the second is the
+  direction the data wants, and an earlier one-sided version of this file
+  offered only the first -- it could not have expressed the answer.
+* **Gradients never die.** `d sigma_face / d rate = sigma_schedule(t) -
+  sigma_final >= 0`, vanishing only at the final iteration, where nothing is
+  left to decide.
 
-* **The endpoint is exact.** `a_face >= 0` is precisely the condition
-  `sigma_face(T) <= sigma_schedule(T)`, so every face ends at least as opaque as
-  the published model. The mesh that comes out is the same kind of object.
-* **The default is recovered exactly.** `a_face = 0` gives `sigma_schedule`
-  back, so a zero-initialised carrier starts the run byte-identical.
-* **Gradients never die.** `d sigma_face / d a_face = -sigma_face ** 2` is
-  non-zero everywhere, unlike the `min` of the two, which would freeze any face
-  the schedule currently binds.
-
-The direction is one-sided on purpose: a face may harden early, never late. The
-published anneal moves 31% of the window's area coverage after iteration 25k,
-where the vertex learning rate has decayed to ~2% of its initial value
-(`sota/sigma_schedule.py`). Letting a face spend that change earlier, while the
-geometry can still respond, is the whole point; letting it defer the change
-would only push more of it into the tail.
+`rate_face` is stored through an exponential, matching how `TriangleModel` stores
+sigma itself, so it stays positive by construction and its step size is relative.
 """
 
 import torch
 
 
-# `a_face` is stored through an exponential, matching how `TriangleModel` stores
-# sigma itself, so the parameter is scale-free and stays positive by
-# construction. The initial value is small enough to leave the render visually
-# unchanged at allocation and large enough for Adam to move it immediately.
-INITIAL_ADDED_HARDNESS = 1e-3
+def raw_from_rate(rate):
+    """Stored parameter for a given hardening rate; `rate = 1` is the schedule."""
+    return float(torch.log(torch.tensor(float(rate))))
 
 
-def raw_from_hardness(added_hardness):
-    return float(torch.log(torch.tensor(float(added_hardness))))
-
-
-def added_hardness(raw):
-    """The non-negative hardness each face adds to the scheduled floor."""
+def rate(raw):
+    """Per-face hardening rate, positive by construction."""
     return torch.exp(raw)
 
 
-def face_sigma(raw, scheduled_sigma):
-    """Per-face window exponent, never softer than the schedule.
+def face_sigma(raw, scheduled_sigma, final_sigma):
+    """Per-face window exponent at this iteration.
 
-    `scheduled_sigma` is the scalar the published path would have used at this
-    iteration; the result is elementwise `<=` it.
+    Every face reaches `final_sigma` exactly when the schedule does, whatever it
+    learned, because the term it scales is the schedule's own distance to that
+    endpoint.
     """
-    return torch.reciprocal(added_hardness(raw) + 1.0 / scheduled_sigma)
+    return final_sigma + rate(raw) * (scheduled_sigma - final_sigma)

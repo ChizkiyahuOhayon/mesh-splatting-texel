@@ -31,7 +31,7 @@ from simple_knn._C import distCUDA2
 import math
 import rdel
 
-from sota.hardness import INITIAL_ADDED_HARDNESS, face_sigma, raw_from_hardness
+from sota.hardness import face_sigma, raw_from_rate
 
 
 
@@ -166,6 +166,10 @@ class TriangleModel:
         self._face_hardness = torch.empty(0)
         self.face_hardness_enabled = False
         self.face_hardness_optimizer = None
+        # Endpoint the window schedule anneals to. Every per-face rate scales the
+        # schedule's remaining distance to it, so rendering a checkpoint needs the
+        # same value the run trained with.
+        self.final_sigma = 0.0001
         # ResidualGate per-face geometric-under-resolution signal (RESEARCH_PLAN_v5).
         # Derived (not learned): g_m is refreshed periodically from the photometric
         # residual, so on any topology change we simply re-allocate to the new face
@@ -214,6 +218,7 @@ class TriangleModel:
         # Per-face window hardness, for the same reason: without it the reloaded
         # model would render at the scheduled sigma and not reproduce training.
         point_cloud_state_dict["face_hardness_enabled"] = self.face_hardness_enabled
+        point_cloud_state_dict["final_sigma"] = self.final_sigma
         if self.face_hardness_enabled:
             point_cloud_state_dict["face_hardness"] = self._face_hardness
         point_cloud_state_dict["texel_order"] = self.texel_order
@@ -345,6 +350,7 @@ class TriangleModel:
         if "g_m" in state:
             self._g_m = state["g_m"].to(device).to(torch.float32)
             self._g_m_ready = True
+        self.final_sigma = float(state.get("final_sigma", 0.0001))
         self.face_hardness_enabled = bool(state.get("face_hardness_enabled", False))
         if self.face_hardness_enabled:
             self._face_hardness = state["face_hardness"].to(device).to(torch.float32).detach().clone()
@@ -835,15 +841,15 @@ class TriangleModel:
     def get_texels(self):
         return self._texels if self.texel_order > 0 else None
 
-    def get_face_sigma(self, scheduled_sigma):
+    def get_face_sigma(self, scheduled_sigma, final_sigma):
         """Per-face window exponents for this iteration, or None when disabled.
 
-        Every value is at most `scheduled_sigma`, so the model is never softer
-        than the published one and ends at the same opaque endpoint.
+        Each face scales the schedule's remaining distance to `final_sigma`, so
+        all of them still land on that endpoint together.
         """
         if not self.face_hardness_enabled:
             return None
-        return face_sigma(self._face_hardness, scheduled_sigma)
+        return face_sigma(self._face_hardness, scheduled_sigma, final_sigma)
 
     def create_face_hardness(self, enabled, lr):
         """Allocate the per-face hardness carrier, at the scheduled value.
@@ -857,13 +863,14 @@ class TriangleModel:
             return
         F = self._triangle_indices.shape[0]
         self.face_hardness_enabled = True
+        # Rate 1 is the published schedule, so allocation changes nothing.
         self._face_hardness = nn.Parameter(
-            torch.full((F,), raw_from_hardness(INITIAL_ADDED_HARDNESS),
+            torch.full((F,), raw_from_rate(1.0),
                        dtype=torch.float, device="cuda").requires_grad_(True))
         self.face_hardness_optimizer = torch.optim.Adam(
             [{'params': [self._face_hardness], 'lr': lr, "name": "face_hardness"}],
             eps=1e-15)
-        print(f"[hardness] allocated per-face window hardness for {F:,} faces, lr {lr}")
+        print(f"[hardness] allocated per-face hardening rate for {F:,} faces, lr {lr}")
 
     def _prune_face_hardness(self, mask):
         """Keep the hardness carrier aligned when triangles are pruned."""

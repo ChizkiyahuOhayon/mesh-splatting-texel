@@ -1,65 +1,67 @@
-"""Tests for the per-face hardness carrier's three defining properties."""
+"""Tests for the per-face hardening rate's defining properties."""
 
 import pytest
 import torch
 
-from sota.hardness import (
-    INITIAL_ADDED_HARDNESS,
-    added_hardness,
-    face_sigma,
-    raw_from_hardness,
-)
+from sota.hardness import face_sigma, rate, raw_from_rate
 
 
-SCHEDULED = [1.0, 0.633, 0.167, 1e-4]
+FINAL = 1e-4
+SCHEDULED = [1.0, 0.633, 0.167, 0.01, FINAL]
+RAWS = torch.linspace(-4.0, 4.0, 65)
+
+
+def test_unit_rate_is_the_published_schedule():
+    raw = torch.full((5,), raw_from_rate(1.0))
+    for scheduled in SCHEDULED:
+        assert face_sigma(raw, scheduled, FINAL) == pytest.approx(scheduled, rel=1e-6)
+
+
+def test_every_face_lands_on_the_endpoint_whatever_it_learned():
+    """At the last iteration the schedule is the endpoint, so every face is too."""
+    assert torch.allclose(face_sigma(RAWS, FINAL, FINAL),
+                          torch.full_like(RAWS, FINAL), rtol=1e-9)
 
 
 @pytest.mark.parametrize("scheduled", SCHEDULED)
-def test_zero_addition_reproduces_the_schedule(scheduled):
-    raw = torch.full((5,), raw_from_hardness(1e-30))
-    assert face_sigma(raw, scheduled) == pytest.approx(scheduled, rel=1e-6)
+def test_rate_below_one_hardens_early_and_above_one_lags(scheduled):
+    early = face_sigma(torch.tensor(raw_from_rate(0.5)), scheduled, FINAL)
+    onclock = face_sigma(torch.tensor(raw_from_rate(1.0)), scheduled, FINAL)
+    late = face_sigma(torch.tensor(raw_from_rate(2.0)), scheduled, FINAL)
+    assert early <= onclock <= late
+    if scheduled > FINAL:
+        assert early < onclock < late
 
 
 @pytest.mark.parametrize("scheduled", SCHEDULED)
-def test_no_face_is_ever_softer_than_the_schedule(scheduled):
-    raw = torch.linspace(-12.0, 6.0, 64)
-    assert torch.all(face_sigma(raw, scheduled) <= scheduled)
+def test_sigma_stays_positive(scheduled):
+    assert torch.all(face_sigma(RAWS, scheduled, FINAL) > 0)
 
 
-def test_the_endpoint_is_reached_whatever_the_face_learned():
-    """Any finite parameter still ends at or below the published final sigma."""
-    raw = torch.linspace(-20.0, 20.0, 256)
-    assert torch.all(face_sigma(raw, 1e-4) <= 1e-4)
+def test_hardening_is_monotone_in_the_iteration_for_any_rate():
+    schedule = torch.linspace(1.0, FINAL, 200)
+    for raw in (raw_from_rate(0.25), raw_from_rate(1.0), raw_from_rate(4.0)):
+        values = [face_sigma(torch.tensor(raw), float(s), FINAL) for s in schedule]
+        assert all(b <= a for a, b in zip(values, values[1:]))
 
 
-def test_the_gradient_never_vanishes():
-    raw = torch.linspace(-12.0, 6.0, 64).requires_grad_(True)
-    face_sigma(raw, 0.167).sum().backward()
-    assert torch.all(raw.grad != 0)
-    # Adding hardness lowers sigma, so the derivative is negative throughout.
-    assert torch.all(raw.grad < 0)
+def test_gradient_vanishes_only_at_the_endpoint():
+    for scheduled in SCHEDULED[:-1]:
+        raw = RAWS.clone().requires_grad_(True)
+        face_sigma(raw, scheduled, FINAL).sum().backward()
+        assert torch.all(raw.grad > 0)
+    raw = RAWS.clone().requires_grad_(True)
+    face_sigma(raw, FINAL, FINAL).sum().backward()
+    assert torch.allclose(raw.grad, torch.zeros_like(raw.grad), atol=1e-12)
 
 
 def test_analytic_derivative_matches_autograd():
-    """d sigma / d a = -sigma ** 2, routed through the exponential storage."""
-    raw = torch.tensor([-6.0, -1.0, 0.5, 3.0], requires_grad=True)
-    sigma = face_sigma(raw, 0.4)
-    sigma.sum().backward()
-    expected = -(sigma.detach() ** 2) * added_hardness(raw.detach())
-    assert torch.allclose(raw.grad, expected, rtol=1e-6)
+    """d sigma / d rate is the schedule's remaining distance to the endpoint."""
+    raw = torch.tensor([-2.0, 0.0, 1.5], requires_grad=True)
+    face_sigma(raw, 0.4, FINAL).sum().backward()
+    assert torch.allclose(raw.grad, (0.4 - FINAL) * rate(raw.detach()), rtol=1e-6)
 
 
-def test_initial_value_is_visually_neutral_but_movable():
-    raw = torch.full((1,), raw_from_hardness(INITIAL_ADDED_HARDNESS))
-    assert added_hardness(raw).item() == pytest.approx(INITIAL_ADDED_HARDNESS, rel=1e-6)
-    # At the hardest scheduled point of interest the deviation is well under a
-    # tenth of a percent, so allocation does not perturb a converged render.
-    for scheduled in SCHEDULED:
-        assert face_sigma(raw, scheduled).item() == pytest.approx(scheduled, rel=2e-3)
-
-
-def test_hardness_is_additive_in_the_reciprocal():
-    raw = torch.tensor([-2.0, 0.0, 1.5])
-    for scheduled in SCHEDULED:
-        combined = 1.0 / face_sigma(raw, scheduled)
-        assert torch.allclose(combined, added_hardness(raw) + 1.0 / scheduled, rtol=1e-6)
+def test_raw_round_trips_through_rate():
+    for value in (0.1, 0.5, 1.0, 3.0):
+        assert rate(torch.tensor(raw_from_rate(value))).item() == pytest.approx(value)
