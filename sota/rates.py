@@ -17,6 +17,8 @@ from pathlib import Path
 
 import torch
 
+from sota.hardness import DEFAULT_SPREAD, rate
+
 
 QUANTILES = (0.01, 0.05, 0.25, 0.50, 0.75, 0.95, 0.99)
 
@@ -35,10 +37,15 @@ def report(run):
     if not state.get("face_hardness_enabled", False):
         print(f"{run.name}: no per-face hardening rate in {path.parent.name}")
         return
-    rates = torch.exp(state["face_hardness"].float())
+    # Reconstruct with the same function training used, not the stored parameter:
+    # the raw value is bounded through a tanh and normalised to mean one, so
+    # exponentiating it directly reports a spread the model never rendered.
+    spread = float(state.get("face_hardness_spread", DEFAULT_SPREAD))
+    rates = rate(state["face_hardness"].float(), spread)
     quantiles = torch.quantile(rates, torch.tensor(QUANTILES))
 
-    print(f"\n=== {run.name} ({path.parent.name}, {rates.numel():,} faces) ===")
+    print(f"\n=== {run.name} ({path.parent.name}, {rates.numel():,} faces, "
+          f"spread {spread:g}) ===")
     print("  " + "  ".join(f"p{int(q * 100):02d} {v:.4f}"
                            for q, v in zip(QUANTILES, quantiles.tolist())))
     print(f"  mean {rates.mean():.4f}   sd {rates.std():.4f}"
