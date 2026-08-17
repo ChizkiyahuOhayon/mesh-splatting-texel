@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Batch 2 -- the learned hardening order, and the learning-rate arm it needs.
+# Batch 2 -- do faces want different hardening clocks?
 #
 #   sota/batch2.sh garden
 #
