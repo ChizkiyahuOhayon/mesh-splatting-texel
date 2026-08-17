@@ -226,6 +226,35 @@ Globally and per face, the same statement. The published schedule is already at
 the optimum of this family because it keeps the model soft as long as it can and
 then pays once.
 
+## Verdict, 2026-08-17: both remaining directions failed on transfer
+
+Two arms were taken to a second scene. Both collapsed, and so did the appearance
+trade that replaced them.
+
+| intervention | Garden matched | Room matched | Room raw |
+|---|---:|---:|---:|
+| `noreg` | **+0.221** | −0.005 | −0.002 |
+| `combo` (`noreg` + 5/3 schedule) | **+0.618** | +0.012 | **−0.607** |
+| `tex2` (triangles traded for per-face detail) | **+0.451** | −0.049 | **−0.245** |
+
+Room's own on-curve scatter is about `±0.05` (`cap28` +0.048, `combo` +0.012), so
+all three Room numbers are indistinguishable from the baseline's frontier, and two
+of the three lose raw PSNR outright. `tex2` also costs **+16.5% storage** on Room,
+because Room's baseline is smaller so the 204.7 MB of texels are no longer paid
+for by the mesh it saves.
+
+**Three independent interventions, all clearly positive on Garden, all null or
+negative on Room.** That is not three coincidences. Garden's baseline carries
+6,659,278 triangles over 1.09 Mpx — **6.1 triangles per pixel** — while Room
+carries 5,596,666 over 1.62 Mpx, **3.5 per pixel**. Garden has slack to give
+back and Room does not, so anything that trades primitives for something else
+looks good on Garden and does nothing elsewhere.
+
+This project has been fooled by that before: July's texel experiment measured
+Garden `+0.3 dB` and a nine-scene mean of `−0.103`. Same scene, same shape of
+result, a month apart. **Garden is an outlier and must never again be the scene a
+decision is made on.**
+
 ## What is still open
 
 - **Stretched schedule** (`sota/batch4.sh`). The one variable the four interventions
