@@ -21,6 +21,40 @@ fi
 }
 export MESH_SPLATTING_PYTHON=$SOTA_PYTHON
 
+TORCH_CUDA=$(
+  "$SOTA_PYTHON" -c 'import torch; print(torch.version.cuda or "")'
+)
+if [ -n "${MESH_SPLATTING_CUDA_HOME:-}" ]; then
+  SOTA_CUDA_HOME=$MESH_SPLATTING_CUDA_HOME
+else
+  SOTA_CUDA_HOME=$("$SOTA_PYTHON" -c 'import sys; print(sys.prefix)')
+fi
+if [ ! -x "$SOTA_CUDA_HOME/bin/nvcc" ] && \
+   [ -x "/usr/local/cuda-$TORCH_CUDA/bin/nvcc" ]; then
+  SOTA_CUDA_HOME="/usr/local/cuda-$TORCH_CUDA"
+fi
+[ -x "$SOTA_CUDA_HOME/bin/nvcc" ] || {
+  echo "CUDA $TORCH_CUDA nvcc was not found in $SOTA_CUDA_HOME/bin" >&2
+  return 1
+}
+export CUDA_HOME=$SOTA_CUDA_HOME
+export PATH="$CUDA_HOME/bin:$PATH"
+
+"$SOTA_PYTHON" -c '
+import re
+import subprocess
+import sys
+import torch
+output = subprocess.check_output([sys.argv[1], "--version"], text=True)
+match = re.search(r"release ([0-9]+\.[0-9]+)", output)
+if match is None or match.group(1) != torch.version.cuda:
+    detected = match.group(1) if match else "unknown"
+    raise SystemExit(
+        f"nvcc/PyTorch CUDA mismatch: nvcc={detected} torch={torch.version.cuda}"
+    )
+print("toolkit:", sys.argv[1], "cuda:", match.group(1))
+' "$CUDA_HOME/bin/nvcc"
+
 if ! "$SOTA_PYTHON" -c 'import rdel' >/dev/null 2>&1; then
   echo "== installing rdel into $SOTA_PYTHON"
   "$SOTA_PYTHON" -m pip install --no-build-isolation --no-deps --no-cache-dir \

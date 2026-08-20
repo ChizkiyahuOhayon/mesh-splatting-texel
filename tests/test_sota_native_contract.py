@@ -25,6 +25,12 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn('TRAIN_PYTHON=${MESH_SPLATTING_PYTHON:-python}', self.runner)
         self.assertIn('"$TRAIN_PYTHON" -u train.py', self.runner)
 
+    def test_nvcc_is_bound_to_the_pytorch_environment(self):
+        self.assertIn("SOTA_CUDA_HOME=$(\"$SOTA_PYTHON\"", self.environment)
+        self.assertIn('export CUDA_HOME=$SOTA_CUDA_HOME', self.environment)
+        self.assertIn('export PATH="$CUDA_HOME/bin:$PATH"', self.environment)
+        self.assertIn("nvcc/PyTorch CUDA mismatch", self.environment)
+
 
 if __name__ == "__main__":
     unittest.main()

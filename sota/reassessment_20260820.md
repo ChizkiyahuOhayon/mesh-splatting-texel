@@ -163,3 +163,10 @@ The launcher now selects the project interpreter itself and binds the installed
 rasterizer to a hash of the checkout's Python, C++, CUDA, and GLM sources.  A
 missing or mismatched hash triggers a local rebuild before training.  The next
 Room launch remains the first scientific endpoint-forward attempt.
+
+The next launch exposed one further pre-training environment mismatch: the
+correct cu126 Python still discovered the host CUDA 11.8 compiler because an
+absolute Python path does not activate its micromamba prefix.  Wheel construction
+stopped before compiling any source.  The launcher now derives CUDA_HOME from
+that Python's prefix, puts its `nvcc` first, and verifies the compiler release
+equals `torch.version.cuda` before checking or rebuilding either native module.
