@@ -25,6 +25,7 @@ from scene.triangle_model import TriangleModel
 from utils.sh_utils import eval_sh
 from utils.point_utils import depth_to_normal
 from svsr_footprint import filter_texel_detail, projected_texel_weights
+from sota.endpoint import opacity_at_floor
 import torch.nn.functional as F
 
 def normals_world_to_view(view, normal_world):
@@ -101,7 +102,22 @@ def compute_image_2d_pytorch_exact(vertices, projmatrix, W, H):
     return image_2D_pytorch
 
 
-def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, window_donors = None, edge_details = None, face_edge_ids = None, gorfe_face_edge_ids = None, gorfe_edge_count = None):
+def render(
+    viewpoint_camera,
+    pc: TriangleModel,
+    pipe,
+    bg_color: torch.Tensor,
+    scaling_modifier=1.0,
+    override_color=None,
+    window_donors=None,
+    edge_details=None,
+    face_edge_ids=None,
+    gorfe_face_edge_ids=None,
+    gorfe_edge_count=None,
+    sigma_override=None,
+    opacity_floor_override=None,
+    upsample_override=None,
+):
     """
     Render the scene. 
     
@@ -111,7 +127,8 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     
     triangles_indices = pc.get_triangle_indices  # the idx of the 3 vertices of each triangl
     vertices = pc.get_vertices # contains all the vertices of the triangles
-    vertex_weights = pc.get_vertex_weight  # contains the weights of the vertices for each vertex in the triangles
+    vertex_weights = (pc.get_vertex_weight if opacity_floor_override is None
+                      else opacity_at_floor(pc.vertex_weight, opacity_floor_override))
     scaling = torch.zeros_like(triangles_indices[:, 0], dtype=pc.get_triangles_points.dtype, requires_grad=True, device="cuda").detach()
 
     vertex_index = pc._triangle_indices.shape[0]
@@ -123,7 +140,9 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     H_init = int(viewpoint_camera.image_height)
     W_init = int(viewpoint_camera.image_width)
 
-    upsample = pc.scaling
+    upsample = pc.scaling if upsample_override is None else upsample_override
+    if not isinstance(upsample, int) or upsample < 1:
+        raise ValueError("upsample override must be a positive integer")
 
     H = upsample * H_init
     W = upsample * W_init
@@ -147,12 +166,12 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)
 
-    sigma = pc.get_sigma
+    sigma = pc.get_sigma if sigma_override is None else sigma_override
     # Per-face window exponents, each at most the scheduled scalar above. None
     # when the carrier is not allocated, which hands the kernels a null pointer
     # and takes the original code path (sota/hardness.py).
     sigma_face = (pc.get_face_sigma(sigma, pc.final_sigma)
-                  if hasattr(pc, "get_face_sigma") else None)
+                  if sigma_override is None and hasattr(pc, "get_face_sigma") else None)
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.

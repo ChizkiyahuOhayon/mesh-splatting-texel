@@ -36,6 +36,7 @@ from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams, update_indoor
 from sota.sigma_schedule import SCHEDULES, schedule as sigma_schedule
+from sota.endpoint import endpoint_image
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -202,8 +203,23 @@ def training(
                 triangles.importance_score = torch.zeros((triangles._triangle_indices.shape[0]), dtype=torch.float, device="cuda") # reset to 0 to ensure that everything is deleted with an importance score of 0
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
 
+        endpoint_render = None
+        if opt.endpoint_supervision:
+            with torch.no_grad():
+                endpoint_render = render(
+                    viewpoint_cam,
+                    triangles,
+                    pipe,
+                    bg,
+                    sigma_override=final_sigma,
+                    opacity_floor_override=final_opacity,
+                    upsample_override=opt.final_scaling,
+                )["render"]
+
         render_pkg = render(viewpoint_cam, triangles, pipe, bg)
         image = render_pkg["render"]
+        if endpoint_render is not None:
+            image = endpoint_image(image, endpoint_render)
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
