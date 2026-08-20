@@ -12,6 +12,6 @@ OUTPUT=${OUTPUT:-$NAS_ROOT/experiments/depth_opacity_01/room}
 [ ! -e "$OUTPUT" ] || { echo "output already exists: $OUTPUT" >&2; exit 1; }
 
 cd "$HERE/.."
-"$MESH_SPLATTING_PYTHON" -u sota/depth_opacity.py \
+"$MESH_SPLATTING_PYTHON" -u -m sota.depth_opacity \
   -s "$DATA_ROOT/room" -m "$MODEL" -i images_2 --eval \
   --scene room --iteration 30000 --output "$OUTPUT"

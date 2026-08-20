@@ -170,3 +170,11 @@ absolute Python path does not activate its micromamba prefix.  Wheel constructio
 stopped before compiling any source.  The launcher now derives CUDA_HOME from
 that Python's prefix, puts its `nvcc` first, and verifies the compiler release
 equals `torch.version.cuda` before checking or rebuilding either native module.
+
+The first frozen depth-opacity ceiling launch at revision `ff58a58` was also an
+infrastructure failure, not a scientific result.  Its launcher invoked
+`sota/depth_opacity.py` as a file, so Python used `sota/` rather than the
+repository root as its import path and stopped before loading the checkpoint,
+data, or CUDA renderer.  The launcher now uses the package entrypoint
+`python -m sota.depth_opacity`; the registered experiment and output suffix stay
+unchanged because no output directory or metric was produced.

@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from sota.depth_opacity_core import SCALES, choose_scale, evenly_spaced_indices
 
@@ -23,6 +24,14 @@ class SelectionTest(unittest.TestCase):
     def test_choose_scale_rejects_an_unregistered_sweep(self):
         with self.assertRaisesRegex(ValueError, "locked scale grid"):
             choose_scale({1.0: 1.0})
+
+    def test_launcher_uses_the_repository_module_entrypoint(self):
+        launcher = (
+            Path(__file__).resolve().parents[1] / "sota" / "batch11.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('cd "$HERE/.."', launcher)
+        self.assertIn('-u -m sota.depth_opacity', launcher)
+        self.assertNotIn('-u sota/depth_opacity.py', launcher)
 
 
 if __name__ == "__main__":
