@@ -161,3 +161,40 @@ change.  The matched stock Garden endpoint is L1 `0.0380918289689968`, PSNR
 `0.21650994258622328`, and FPS `32.24509159415195`.  Continue only if Garden
 also improves PSNR, SSIM, and LPIPS; otherwise the Room gain is not transferable
 and the direction stops without tuning the opacity endpoint.
+
+## 2026-08-21 — terminal opacity floor 0.8 / Garden / run 01
+
+- Status: **completed — registered Garden transfer gate passed**
+- Source revision: `51106246ca08937c946ca41b608ff6daf821de93`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_floor_01/opacity08__garden`
+- Device: NVIDIA A40, logical CUDA device 0 mapped from physical GPU 1
+- Environment: Python 3.11.15, PyTorch 2.7.1+cu126, CUDA toolkit 12.6
+- Training time: `7,557` seconds (2 h 5 min 57 s)
+- Final iteration: 30,000
+- Checkpoint contract: `opacity_floor = 0.8` verified after saving
+- Final test: L1 `0.03679694840684533`, PSNR `25.02400803565979`, SSIM
+  `0.7766205668449402`, LPIPS `0.20147701228658357`, FPS
+  `12.084227031060074`
+
+Against matched stock Garden, terminal opacity `0.8` changes L1 by
+`-0.0012948806` (`-3.399%`, better), PSNR by `+0.3023383617 dB`, SSIM by
+`+0.0149941146`, LPIPS by `-0.0150329303` (`-6.943%`, better), and FPS by
+`-62.524%`.  Garden passes more strongly than Room and improves all four
+quality metrics.  The same one-line training change has therefore transferred
+across an indoor and an outdoor scene without tuning.
+
+This is a genuine quality result, but not yet a complete SOTA result.  The
+quality gain is moderate and alpha compositing processes enough additional
+fragments to reduce measured FPS from `32.25` to `12.08`.  The next scientific
+question is no longer whether softer terminal opacity helps; it is whether the
+quality gain transfers to a third, geometrically harder scene and whether the
+negligible-transmittance tail can then be skipped without losing that gain.
+
+## Planned experiment — terminal opacity floor 0.8 / Bicycle screen
+
+Run the identical arm on Bicycle as a third-scene transfer screen.  No matched
+Bicycle run from this exact code and environment is currently recorded, so this
+stage makes no causal baseline claim from external numbers.  If training is
+stable and the absolute endpoint is competitive, run the unchanged stock arm
+next for the matched delta; if it is clearly unusable, stop without paying for
+that control.  No opacity or scene-specific setting may change.
