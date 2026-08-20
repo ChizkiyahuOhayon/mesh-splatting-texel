@@ -198,3 +198,31 @@ stage makes no causal baseline claim from external numbers.  If training is
 stable and the absolute endpoint is competitive, run the unchanged stock arm
 next for the matched delta; if it is clearly unusable, stop without paying for
 that control.  No opacity or scene-specific setting may change.
+
+## 2026-08-21 — terminal opacity floor 0.8 / Bicycle / run 01
+
+- Status: **completed — stable absolute result; matched control required**
+- Source revision: `39af67f392690b9643fe5828d49932960658a1d0`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_floor_01/opacity08__bicycle`
+- Device: NVIDIA A40, logical CUDA device 0 mapped from physical GPU 1
+- Environment: Python 3.11.15, PyTorch 2.7.1+cu126, CUDA toolkit 12.6
+- Training time: `6,157` seconds (1 h 42 min 37 s)
+- Final iteration: 30,000
+- Checkpoint contract: `opacity_floor = 0.8` verified after saving
+- Final test: L1 `0.04781450614333153`, PSNR `23.23634185791016`, SSIM
+  `0.6539821124076843`, LPIPS `0.3353917896747589`, FPS
+  `15.112875185900977`
+
+The third-scene arm trains normally and produces a usable endpoint.  Because no
+Bicycle baseline from the same source, environment, and metric path is recorded,
+these absolute values neither pass nor fail transfer.  Do not compare them to a
+paper table or another machine as if matched.
+
+## Planned experiment — matched stock Bicycle control
+
+Run the exact published default in the same checkout and output root: no method
+flag, hence terminal opacity `0.9999`.  This single control determines all four
+quality deltas and the FPS cost of `0.8` on Bicycle.  If `0.8` improves PSNR,
+SSIM, and LPIPS here as on Room and Garden, proceed to inference-time tail
+culling; otherwise stop the transfer claim and analyze the failure before any
+speed work.

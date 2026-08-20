@@ -17,6 +17,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.opacity_bicycle_batch = (repo / "sota" / "batch14.sh").read_text(
             encoding="utf-8"
         )
+        self.stock_bicycle_batch = (repo / "sota" / "batch15.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -87,6 +90,14 @@ class SOTANativeContractTest(unittest.TestCase):
             self.opacity_bicycle_batch,
         )
         self.assertIn('state["opacity_floor"]', self.opacity_bicycle_batch)
+
+    def test_bicycle_control_uses_the_published_default(self):
+        self.assertIn(
+            '"$HERE/run.sh" stock bicycle',
+            self.stock_bicycle_batch,
+        )
+        self.assertNotIn("--final_opacity", self.stock_bicycle_batch)
+        self.assertIn("value != 0.9999", self.stock_bicycle_batch)
 
 
 if __name__ == "__main__":
