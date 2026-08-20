@@ -85,3 +85,38 @@ evenly spaced training views, then evaluate that frozen choice on every official
 test view.  Continue the depth-layer direction only for a test PSNR gain of at
 least `+0.5 dB`; otherwise stop.  This diagnostic permits unrestricted deeper
 alpha compositing and is therefore a ceiling, not a claimed final method.
+
+## 2026-08-20 — frozen multi-depth opacity ceiling / Room / run 01
+
+- Status: **completed — registered depth-layer gate failed; consistent small
+  quality gain observed**
+- Source revision: `afaf23f76aa59343754349bf27436097555031cd`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/depth_opacity_01/room`
+- Device: NVIDIA A40, logical CUDA device 0 mapped from physical GPU 1
+- Environment: Python 3.11.15, PyTorch 2.7.1+cu126, CUDA toolkit 12.6
+- Runtime: `92.6737976768054` seconds
+- Selection: 32 fixed training views; scale `0.8` won with mean PSNR
+  `31.035257935523987`, versus `30.915599048137665` at scale `1.0`
+- Same-evaluator baseline test: L1 `0.022451156224959936`, PSNR
+  `28.47551380059658`, SSIM `0.8746312887240679`, LPIPS
+  `0.2704788966056628`, FPS `17.30245721366323`
+- Selected scale `0.8` test: L1 `0.02220378894931995`, PSNR
+  `28.622274447710087`, SSIM `0.8797348049970773`, LPIPS
+  `0.2679430842399597`, FPS `14.939835072668084`
+
+Against scale `1.0` in the same evaluator, scale `0.8` changes L1 by
+`-0.0002473673` (`-1.102%`, better), PSNR by `+0.1467606471 dB`, SSIM by
+`+0.0051035163`, LPIPS by `-0.0025358124` (`-0.938%`, better), and FPS by
+`-13.655%`.  The training-view choice transfers cleanly: every registered
+quality metric improves on the official test split without using a test target
+for selection.
+
+The `+0.1468 dB` test gain is nevertheless far below the registered `+0.5 dB`
+ceiling threshold.  Therefore do not build a two-layer carrier or unrestricted
+multi-depth representation from this result.  The narrower observation remains
+actionable: the published terminal opacity is slightly too hard.  A single
+stock Room training run whose only change is a terminal opacity floor of `0.8`
+is the next minimal test; it asks whether optimizing under the deployment
+compositor can amplify the frozen post-hoc gain.  It must be judged against a
+fresh matched stock evaluation because the historical training report and this
+checkpoint-reload evaluator have different timing and a small metric offset.
