@@ -201,7 +201,18 @@ def run(dataset, pipeline, args):
     )
     (output / "SHA256SUMS").write_text(checksums, encoding="utf-8")
     (output / "DONE").write_text("complete\n", encoding="utf-8")
-    print(json.dumps({"output": str(output), **result}, indent=2))
+    print(json.dumps({
+        "output": str(output),
+        "decision": decision,
+        "selected_scale": selected_scale,
+        "selection_mean_psnr": result["selection_mean_psnr"],
+        "baseline_test": {key: value for key, value in baseline.items()
+                          if key != "per_view"},
+        "selected_test": {key: value for key, value in selected.items()
+                          if key != "per_view"},
+        "test_psnr_gain_db": psnr_gain,
+        "elapsed_seconds": result["elapsed_seconds"],
+    }, indent=2))
 
 
 if __name__ == "__main__":
