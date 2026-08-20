@@ -120,3 +120,13 @@ is the next minimal test; it asks whether optimizing under the deployment
 compositor can amplify the frozen post-hoc gain.  It must be judged against a
 fresh matched stock evaluation because the historical training report and this
 checkpoint-reload evaluator have different timing and a small metric offset.
+
+## Planned experiment — terminal opacity floor 0.8 / Room
+
+Run one 30,000-iteration Room arm with the published configuration and seed.
+The only training change is the endpoint of the existing opacity-floor schedule:
+`0.8` instead of `0.9999`; initialization remains `0.1`, and all geometry,
+capacity, loss, densification, SH, and rendering settings remain stock.  The
+actual terminal floor is persisted in the checkpoint and restored on reload.
+Continue only if final test PSNR and SSIM are higher and LPIPS is lower than the
+matched stock Room result.  Otherwise stop without sweeping the endpoint.

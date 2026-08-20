@@ -118,7 +118,9 @@ def training(
     total_iters = opt.sigma_until
 
     init_opacity = 0.1
-    final_opacity = .9999
+    final_opacity = float(opt.final_opacity)
+    if not init_opacity <= final_opacity < 1.0:
+        raise ValueError("final_opacity must be in [0.1, 1.0)")
     total_iters_opacity = opt.final_opacity_iter
 
     lambda_weight = opt.lambda_weight

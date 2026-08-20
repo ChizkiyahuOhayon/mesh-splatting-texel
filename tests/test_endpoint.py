@@ -45,6 +45,9 @@ class EndpointArgumentTest(unittest.TestCase):
     def test_endpoint_supervision_is_opt_in(self):
         self.assertFalse(OptimizationParams(_ArgumentSink()).endpoint_supervision)
 
+    def test_published_terminal_opacity_remains_the_default(self):
+        self.assertEqual(OptimizationParams(_ArgumentSink()).final_opacity, 0.9999)
+
 
 if __name__ == "__main__":
     unittest.main()

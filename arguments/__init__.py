@@ -167,6 +167,7 @@ class OptimizationParams(ParamGroup):
         self.start_pruning = 4000
         self.sigma_until = 30000
         self.final_opacity_iter = 24000
+        self.final_opacity = 0.9999
 
         self.sigma_start = 0
 

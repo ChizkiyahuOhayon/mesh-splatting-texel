@@ -213,6 +213,7 @@ class TriangleModel:
         point_cloud_state_dict["importance_score"] = self.importance_score
         point_cloud_state_dict["image_size"] = self.image_size
         point_cloud_state_dict["pixel_count"] = self.pixel_count
+        point_cloud_state_dict["opacity_floor"] = float(self.opacity_floor)
         # Per-face texel carrier. Without these the checkpoint silently reloads as a
         # plain baseline model: the metrics measured during training would not be
         # reproducible from disk, and render/export would be wrong.
@@ -348,6 +349,9 @@ class TriangleModel:
         self._features_dc        = state["features_dc"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
         self._features_rest      = state["features_rest"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
         self.importance_score = state["importance_score"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
+        restored_opacity_floor = float(state.get("opacity_floor", 0.999))
+        if not math.isfinite(restored_opacity_floor) or not 0.0 <= restored_opacity_floor < 1.0:
+            raise ValueError("checkpoint opacity_floor must be finite and in [0, 1)")
 
         if "g_m" in state:
             self._g_m = state["g_m"].to(device).to(torch.float32)
@@ -390,7 +394,7 @@ class TriangleModel:
 
         ################################################################
 
-        self.opacity_floor = 0.999
+        self.opacity_floor = restored_opacity_floor
         self._triangle_indices = self._triangle_indices.to(torch.int32)
 
         param_groups = [

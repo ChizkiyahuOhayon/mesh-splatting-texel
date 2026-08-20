@@ -10,7 +10,11 @@ class SOTANativeContractTest(unittest.TestCase):
         )
         self.batch = (repo / "sota" / "batch9.sh").read_text(encoding="utf-8")
         self.spatial_batch = (repo / "sota" / "batch10.sh").read_text(encoding="utf-8")
+        self.opacity_batch = (repo / "sota" / "batch12.sh").read_text(encoding="utf-8")
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
+        self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
+            encoding="utf-8"
+        )
 
     def test_stale_native_install_is_rebuilt(self):
         self.assertIn(
@@ -39,6 +43,29 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn(
             "--max_points 2800000 --texel_order 2 --sh_degree 2",
             self.spatial_batch,
+        )
+
+    def test_terminal_opacity_pilot_changes_one_training_argument(self):
+        self.assertIn('source "$HERE/ensure_environment.sh"', self.opacity_batch)
+        self.assertIn(
+            '"$HERE/run.sh" opacity08 room --final_opacity 0.8',
+            self.opacity_batch,
+        )
+        self.assertIn('state["opacity_floor"]', self.opacity_batch)
+        self.assertIn("value != 0.8", self.opacity_batch)
+
+    def test_terminal_opacity_is_persisted_with_legacy_compatibility(self):
+        self.assertIn(
+            'point_cloud_state_dict["opacity_floor"] = float(self.opacity_floor)',
+            self.triangle_model,
+        )
+        self.assertIn(
+            'state.get("opacity_floor", 0.999)',
+            self.triangle_model,
+        )
+        self.assertIn(
+            "self.opacity_floor = restored_opacity_floor",
+            self.triangle_model,
         )
 
 
