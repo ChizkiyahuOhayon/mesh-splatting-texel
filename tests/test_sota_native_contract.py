@@ -11,6 +11,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.batch = (repo / "sota" / "batch9.sh").read_text(encoding="utf-8")
         self.spatial_batch = (repo / "sota" / "batch10.sh").read_text(encoding="utf-8")
         self.opacity_batch = (repo / "sota" / "batch12.sh").read_text(encoding="utf-8")
+        self.opacity_garden_batch = (repo / "sota" / "batch13.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -67,6 +70,13 @@ class SOTANativeContractTest(unittest.TestCase):
             "self.opacity_floor = restored_opacity_floor",
             self.triangle_model,
         )
+
+    def test_garden_transfer_keeps_the_room_setting(self):
+        self.assertIn(
+            '"$HERE/run.sh" opacity08 garden --final_opacity 0.8',
+            self.opacity_garden_batch,
+        )
+        self.assertIn('state["opacity_floor"]', self.opacity_garden_batch)
 
 
 if __name__ == "__main__":

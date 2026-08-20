@@ -130,3 +130,34 @@ capacity, loss, densification, SH, and rendering settings remain stock.  The
 actual terminal floor is persisted in the checkpoint and restored on reload.
 Continue only if final test PSNR and SSIM are higher and LPIPS is lower than the
 matched stock Room result.  Otherwise stop without sweeping the endpoint.
+
+## 2026-08-21 — terminal opacity floor 0.8 / Room / run 01
+
+- Status: **completed — registered Room quality gate passed**
+- Source revision: `d4bd96955f6410b91c3333acd151e3e36157e36a`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_floor_01/opacity08__room`
+- Device: NVIDIA A40, logical CUDA device 0 mapped from physical GPU 1
+- Environment: Python 3.11.15, PyTorch 2.7.1+cu126, CUDA toolkit 12.6
+- Training time: `7,363` seconds (2 h 2 min 43 s)
+- Final iteration: 30,000
+- Checkpoint contract: `opacity_floor = 0.8` verified after saving
+- Final test: L1 `0.022241393199715857`, PSNR `28.67998846983298`, SSIM
+  `0.8787254767540174`, LPIPS `0.26390550572138566`, FPS
+  `13.501303427865384`
+
+Against the matched stock Room result, terminal opacity `0.8` changes L1 by
+`+0.0000800819` (`+0.361%`, worse), PSNR by `+0.1269200154 dB`, SSIM by
+`+0.0040123203`, LPIPS by `-0.0046331527` (`-1.725%`, better), and FPS by
+`-56.893%`.  It passes the registered three-metric quality gate: the post-hoc
+Room signal survives end-to-end training and improves PSNR, SSIM, and LPIPS
+simultaneously.  It is not yet a complete SOTA result because L1 and speed
+regress substantially and transfer has not been tested.
+
+## Planned experiment — terminal opacity floor 0.8 / Garden transfer
+
+Run the identical 30,000-iteration arm on Garden with no scene-specific method
+change.  The matched stock Garden endpoint is L1 `0.0380918289689968`, PSNR
+`24.721669673919678`, SSIM `0.7616264522075653`, LPIPS
+`0.21650994258622328`, and FPS `32.24509159415195`.  Continue only if Garden
+also improves PSNR, SSIM, and LPIPS; otherwise the Room gain is not transferable
+and the direction stops without tuning the opacity endpoint.
