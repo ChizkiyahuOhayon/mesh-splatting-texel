@@ -6,4 +6,5 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCENE=${1:-room}
 
+source "$HERE/ensure_environment.sh"
 "$HERE/run.sh" endpoint "$SCENE" --endpoint_supervision

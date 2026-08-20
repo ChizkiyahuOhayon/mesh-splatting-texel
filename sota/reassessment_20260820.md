@@ -149,3 +149,17 @@ are prior-art collision at the generic STE level, biased gradients under hard
 visibility, and Garden-specific false positives.  The single most important next
 action is therefore the full Room run, not another protocol, proxy, or ablation.
 
+## Execution record
+
+The first two Room launches at revision `e411ef5` were infrastructure failures,
+not endpoint-forward results.  The first used the base interpreter and stopped
+before training because `rdel` was absent.  The second selected the intended
+Torch 2.7.1/CUDA 12.6 environment, loaded the data, and then stopped at iteration
+zero because its installed `diff_triangle_rasterization` Python wrapper predated
+the checkout's `screen_space_gradients` setting.  No metric or scientific
+decision was produced by either attempt.
+
+The launcher now selects the project interpreter itself and binds the installed
+rasterizer to a hash of the checkout's Python, C++, CUDA, and GLM sources.  A
+missing or mismatched hash triggers a local rebuild before training.  The next
+Room launch remains the first scientific endpoint-forward attempt.

@@ -16,6 +16,7 @@ shift 2
 DATA_ROOT=${DATA_ROOT:-/root/autodl-tmp/data/m360}
 RUNS=${RUNS:-/root/autodl-tmp/runs}
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TRAIN_PYTHON=${MESH_SPLATTING_PYTHON:-python}
 
 case "$SCENE" in
   bicycle|flowers|garden|stump|treehill) PROTOCOL=(-i images_4) ;;
@@ -44,7 +45,7 @@ set +e
 # keeps the allocator from fragmenting at the supersampling change, which is
 # where a 24 GB card runs out.
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-python -u train.py -s "$DATA_ROOT/$SCENE" -m "$OUT" --eval "${PROTOCOL[@]}" "$@" \
+"$TRAIN_PYTHON" -u train.py -s "$DATA_ROOT/$SCENE" -m "$OUT" --eval "${PROTOCOL[@]}" "$@" \
   > "$OUT/train.log" 2>&1
 STATUS=$?
 set -e
