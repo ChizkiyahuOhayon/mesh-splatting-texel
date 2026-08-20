@@ -117,6 +117,7 @@ def render(
     sigma_override=None,
     opacity_floor_override=None,
     upsample_override=None,
+    opacity_scale_override=None,
 ):
     """
     Render the scene. 
@@ -129,6 +130,12 @@ def render(
     vertices = pc.get_vertices # contains all the vertices of the triangles
     vertex_weights = (pc.get_vertex_weight if opacity_floor_override is None
                       else opacity_at_floor(pc.vertex_weight, opacity_floor_override))
+    if opacity_scale_override is not None:
+        opacity_scale = float(opacity_scale_override)
+        if not 0.0 < opacity_scale <= 1.0:
+            raise ValueError("opacity scale override must be in (0, 1]")
+        if opacity_scale != 1.0:
+            vertex_weights = vertex_weights * opacity_scale
     scaling = torch.zeros_like(triangles_indices[:, 0], dtype=pc.get_triangles_points.dtype, requires_grad=True, device="cuda").detach()
 
     vertex_index = pc._triangle_indices.shape[0]

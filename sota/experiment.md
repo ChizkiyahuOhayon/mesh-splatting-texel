@@ -74,3 +74,14 @@ The arm demonstrates a real compactness trade but does not improve the model:
 the small SSIM increase does not offset the material PSNR loss, slightly worse
 LPIPS, and large rendering-speed regression.  It fails the registered
 all-metrics rule.  Do not run Garden and do not sweep this SH/texel exchange.
+
+## Planned experiment — frozen multi-depth opacity ceiling / Room
+
+Before changing the representation or retraining, evaluate whether deeper
+fragments contain useful appearance at all.  On the sealed Room stock seed-0
+checkpoint, sweep the fixed global opacity scales `1.0, 0.95, 0.9, 0.8, 0.7,
+0.6, 0.5, 0.375, 0.25`.  Select one scale by mean PSNR on 32 deterministic,
+evenly spaced training views, then evaluate that frozen choice on every official
+test view.  Continue the depth-layer direction only for a test PSNR gain of at
+least `+0.5 dB`; otherwise stop.  This diagnostic permits unrestricted deeper
+alpha compositing and is therefore a ceiling, not a claimed final method.
