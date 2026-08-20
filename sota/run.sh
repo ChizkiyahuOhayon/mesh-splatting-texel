@@ -58,7 +58,7 @@ grep -E "^\[ITER .*\] Evaluating" "$OUT/train.log" > "$OUT/metrics.txt" || true
 if [ "$STATUS" -eq 0 ] && grep -q "Evaluating test" "$OUT/metrics.txt"; then
   echo "$ELAPSED" > "$OUT/DONE"
   echo "== $ARM/$SCENE OK in ${ELAPSED}s"
-  tail -1 "$OUT/metrics.txt"
+  grep "Evaluating test" "$OUT/metrics.txt" | tail -1
 else
   touch "$OUT/FAILED"
   echo "== $ARM/$SCENE FAILED (exit $STATUS) after ${ELAPSED}s" >&2

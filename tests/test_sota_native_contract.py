@@ -25,6 +25,7 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn('source "$HERE/ensure_environment.sh"', self.batch)
         self.assertIn('TRAIN_PYTHON=${MESH_SPLATTING_PYTHON:-python}', self.runner)
         self.assertIn('"$TRAIN_PYTHON" -u train.py', self.runner)
+        self.assertIn('grep "Evaluating test" "$OUT/metrics.txt" | tail -1', self.runner)
 
     def test_nvcc_is_bound_to_the_pytorch_environment(self):
         self.assertIn("SOTA_CUDA_HOME=$(\"$SOTA_PYTHON\"", self.environment)

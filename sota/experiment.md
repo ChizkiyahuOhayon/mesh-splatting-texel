@@ -35,10 +35,42 @@ margin.  This is a decisive failure under the preregistered Room-first rule:
 stop endpoint-forward, do not run Garden or Bicycle, and do not add rescue
 weights, schedules, or auxiliary components to this mechanism.
 
-## Next experiment — SH2 + texel2 / Room
+## Planned experiment — SH2 + texel2 / Room
 
 Run one unchanged Room arm with `--max_points 2800000 --texel_order 2
 --sh_degree 2`.  This exchanges per-vertex angular capacity for per-face spatial
 capacity using existing code.  Continue only if final test PSNR and SSIM exceed
 the matched Room baseline, LPIPS is lower, and checkpoint storage does not
 increase.  Otherwise stop the direction without a sweep.
+
+## 2026-08-20 — SH2 + texel2 / Room / run 01
+
+- Status: **completed — quality gate failed; compactness improved**
+- Source revision: `36fa93c4d093d2087d962cd1008215d5a4771323`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/spatial_detail_01/tex2_sh2__room`
+- Device: NVIDIA A40, logical CUDA device 0 mapped from physical GPU 1
+- Environment: Python 3.11.15, PyTorch 2.7.1+cu126, CUDA toolkit 12.6
+- Training time: 5,945 seconds (1 h 39 min 5 s)
+- Final iteration: 30,000
+- Configuration: `--max_points 2800000 --texel_order 2 --sh_degree 2`
+- Reported final **train** metrics: L1 `0.017345024645328524`, PSNR
+  `30.569569015502932`, SSIM `0.9150214076042176`, LPIPS
+  `0.20031991302967073`, FPS `15.569512112840952`
+- Final **test** metrics: L1 `0.022801179200028762`, PSNR
+  `28.273298801519932`, SSIM `0.8753637014291225`, LPIPS
+  `0.2697810060702837`, FPS `16.501396834212393`
+- Checkpoint: `550367274` bytes; SHA-256
+  `db6ac5862b08e68583423d0a09658660552e1ffe02f485773e2a4e4f43463302`
+- Artifact SHA-256: `metrics.txt`
+  `c6378876bdac547eeabbe55d63e7b6733c1590801ce94b9f25a2cfa617455b72`;
+  `DONE` `82e44531eb2b8d229e2731f02dec4b1bbf835d88f7cffca538b381ff5bfa7bc8`
+
+Changes versus the matched Room quality baseline: L1 `+0.0006398679`, PSNR
+`-0.2797696529` dB, SSIM `+0.0006505450`, LPIPS `+0.0012423476` (worse), and
+FPS `-47.314%`.  Against the sealed Room reference checkpoint
+(`668222367` bytes), storage falls by `117855093` bytes (`-17.637%`).
+
+The arm demonstrates a real compactness trade but does not improve the model:
+the small SSIM increase does not offset the material PSNR loss, slightly worse
+LPIPS, and large rendering-speed regression.  It fails the registered
+all-metrics rule.  Do not run Garden and do not sweep this SH/texel exchange.
