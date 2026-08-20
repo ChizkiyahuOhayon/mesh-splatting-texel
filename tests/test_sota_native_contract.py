@@ -9,6 +9,7 @@ class SOTANativeContractTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.batch = (repo / "sota" / "batch9.sh").read_text(encoding="utf-8")
+        self.spatial_batch = (repo / "sota" / "batch10.sh").read_text(encoding="utf-8")
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
 
     def test_stale_native_install_is_rebuilt(self):
@@ -30,6 +31,14 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn('export CUDA_HOME=$SOTA_CUDA_HOME', self.environment)
         self.assertIn('export PATH="$CUDA_HOME/bin:$PATH"', self.environment)
         self.assertIn("nvcc/PyTorch CUDA mismatch", self.environment)
+
+    def test_spatial_detail_pilot_is_one_locked_arm(self):
+        self.assertIn('source "$HERE/ensure_environment.sh"', self.spatial_batch)
+        self.assertIn('"$HERE/run.sh" tex2_sh2', self.spatial_batch)
+        self.assertIn(
+            "--max_points 2800000 --texel_order 2 --sh_degree 2",
+            self.spatial_batch,
+        )
 
 
 if __name__ == "__main__":
