@@ -320,3 +320,31 @@ baseline, then evaluate only that choice on test.  Continue if test PSNR loses
 at most `0.05 dB` and FPS improves by at least `1.5x`.  This tests whether the
 smoother opacity-0.8 representation can pay for its extra depth blending by
 using fewer spatial samples.
+
+## 2026-08-21 — reduced supersampling with absorbed tails / Room / run 01
+
+- Status: **completed — misses exploration speed gate, advances to main table**
+- Source revision: `372fe9acc9b798e076a66805930f28e5c5f31769`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/reduced_supersampling_01/room`
+- Selected factor: `3`
+- Baseline test: PSNR `28.540048110179413`, SSIM `0.8766554777438824`,
+  LPIPS `0.26737001156195617`, FPS `16.520775900816897`
+- Selected test: PSNR `28.52455814068134`, SSIM `0.8768205719116406`,
+  LPIPS `0.2685549904902776`, FPS `21.72707610785462`
+
+Factor 3 changes test PSNR by only `-0.0154899695 dB`, slightly improves SSIM
+by `+0.0001650942`, and raises FPS by `1.3151365431x` (`+31.514%`).  It stops
+under the deliberately ambitious `1.5x` exploration gate, while factors 2 and
+1 fall outside the `0.05 dB` training tolerance.  The factor-3 endpoint is
+nevertheless already above the previously measured reload-path stock Room
+checkpoint in PSNR, SSIM, LPIPS, and FPS.  Freeze factor 3 and cutoff `1e-2`;
+do not tune per scene.
+
+## Planned experiment — matched three-scene main table / run 01
+
+Evaluate stock and the frozen method with one metric implementation on Garden,
+Room, and Bicycle.  Stock uses factor 4, cutoff `1e-4`, and no tail absorption;
+the method uses the trained opacity-0.8 checkpoint, factor 3, cutoff `1e-2`,
+and tail absorption.  Report L1, PSNR, SSIM, LPIPS, FPS, checkpoint bytes,
+triangle count, and vertex count.  This is a direct comparison experiment, not
+another hyperparameter search; all method settings are identical across scenes.

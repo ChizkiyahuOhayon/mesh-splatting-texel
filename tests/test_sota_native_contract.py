@@ -29,6 +29,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.supersampling_batch = (repo / "sota" / "batch18.sh").read_text(
             encoding="utf-8"
         )
+        self.main_table_batch = (repo / "sota" / "batch19.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -145,6 +148,12 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn('source "$HERE/ensure_environment.sh"', self.supersampling_batch)
         self.assertIn("opacity_floor_01/opacity08__room", self.supersampling_batch)
         self.assertIn("-m sota.supersampling", self.supersampling_batch)
+
+    def test_main_table_uses_one_method_configuration_on_three_scenes(self):
+        self.assertIn("for SCENE in garden room bicycle", self.main_table_batch)
+        self.assertIn("--arm stock", self.main_table_batch)
+        self.assertIn("--arm ours", self.main_table_batch)
+        self.assertIn("-m sota.main_table ", self.main_table_batch)
 
 
 if __name__ == "__main__":
