@@ -12,9 +12,10 @@ ROOT=${ROOT:-$NAS_ROOT/experiments/adaptive_supersampling_01}
 
 cd "$HERE/.."
 for SCENE in garden bicycle; do
+  IMAGES=images_4
   "$MESH_SPLATTING_PYTHON" -u -m sota.supersampling \
     -s "$DATA_ROOT/$SCENE" \
     -m "$NAS_ROOT/experiments/opacity_floor_01/opacity08__${SCENE}" \
-    -i images_2 --eval --scene "$SCENE" --iteration 30000 \
+    -i "$IMAGES" --eval --scene "$SCENE" --iteration 30000 \
     --output "$ROOT/$SCENE"
 done

@@ -35,6 +35,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.adaptive_sampling_batch = (repo / "sota" / "batch20.sh").read_text(
             encoding="utf-8"
         )
+        self.corrected_main_table_batch = (repo / "sota" / "batch21.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -162,6 +165,13 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("for SCENE in garden bicycle", self.adaptive_sampling_batch)
         self.assertIn("-m sota.supersampling", self.adaptive_sampling_batch)
         self.assertNotIn("train.py", self.adaptive_sampling_batch)
+
+    def test_outdoor_evaluation_uses_the_training_image_pyramid(self):
+        for batch in (self.main_table_batch, self.adaptive_sampling_batch):
+            self.assertIn("images_4", batch)
+            self.assertIn('-i "$IMAGES"', batch)
+        self.assertIn("main_table_02", self.corrected_main_table_batch)
+        self.assertIn('exec "$HERE/batch19.sh"', self.corrected_main_table_batch)
 
 
 if __name__ == "__main__":

@@ -376,3 +376,34 @@ Bicycle training views: choose the fastest of factors `4, 3, 2, 1` within
 absorption fixed.  Evaluate the selected factor once on test.  This is one
 shared calibration rule rather than a scene-name setting; no training or new
 method parameter is introduced.
+
+## 2026-08-21 — quality-constrained supersampling transfer / run 01
+
+- Status: **completed — stop adaptive factor selection; evaluation-resolution
+  mismatch discovered**
+- Source revision: `2aa2fa2403f198ed21c4174bad3115f9d9fc4c27`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/adaptive_supersampling_01`
+
+On Garden, the shared rule selected factor 3.  Relative to factor 4 on the same
+checkpoint, test PSNR changed by `-0.0255603790 dB` and FPS increased by
+`1.3442800682x`.  On Bicycle, the training subset selected factor 2, but test
+PSNR changed by `-0.1348692322 dB` while FPS increased by `1.7004073540x`.
+The training-selected factor therefore does not transfer reliably to the test
+views; stop adaptive factor selection and retain the single global factor 3.
+
+This run also exposed a runner defect: Batch19 and Batch20 passed `images_2` to
+Garden and Bicycle, whereas the training protocol uses `images_4` for outdoor
+scenes and `images_2` for Room.  The stock and method arms were matched to each
+other, but the resulting outdoor numbers are not at the trained/published image
+pyramid and must not be used as the final main table.  In particular, the
+apparent Garden checkpoint gap cannot be attributed to post-training cleanup
+from these measurements.  Batch21 corrects only the image-pyramid argument and
+re-evaluates the already frozen checkpoints; no model is retrained or changed.
+
+## Planned experiment — corrected three-scene main table / run 02
+
+Re-run the frozen stock-versus-method evaluation with `images_4` for Garden and
+Bicycle and `images_2` for Room.  Keep opacity floor, tail absorption, cutoff,
+supersampling factor, checkpoints, and metric code unchanged.  This inexpensive
+run replaces the outdoor rows of main-table run 01 and determines whether a
+real Garden quality gap remains before any new training experiment.

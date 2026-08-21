@@ -12,6 +12,10 @@ ROOT=${ROOT:-$NAS_ROOT/experiments/main_table_01}
 
 cd "$HERE/.."
 for SCENE in garden room bicycle; do
+  case "$SCENE" in
+    garden|bicycle) IMAGES=images_4 ;;
+    room)           IMAGES=images_2 ;;
+  esac
   STOCK_MODEL="$NAS_ROOT/experiments/sac_g1_${SCENE}_stock_seed0_train"
   if [ "$SCENE" = bicycle ]; then
     STOCK_MODEL="$NAS_ROOT/experiments/opacity_floor_01/stock__bicycle"
@@ -19,12 +23,12 @@ for SCENE in garden room bicycle; do
   OUR_MODEL="$NAS_ROOT/experiments/opacity_floor_01/opacity08__${SCENE}"
 
   "$MESH_SPLATTING_PYTHON" -u -m sota.main_table_eval \
-    -s "$DATA_ROOT/$SCENE" -m "$STOCK_MODEL" -i images_2 --eval \
+    -s "$DATA_ROOT/$SCENE" -m "$STOCK_MODEL" -i "$IMAGES" --eval \
     --scene "$SCENE" --arm stock --iteration 30000 \
     --output "$ROOT/$SCENE/stock"
 
   "$MESH_SPLATTING_PYTHON" -u -m sota.main_table_eval \
-    -s "$DATA_ROOT/$SCENE" -m "$OUR_MODEL" -i images_2 --eval \
+    -s "$DATA_ROOT/$SCENE" -m "$OUR_MODEL" -i "$IMAGES" --eval \
     --scene "$SCENE" --arm ours --iteration 30000 \
     --output "$ROOT/$SCENE/ours"
 done
