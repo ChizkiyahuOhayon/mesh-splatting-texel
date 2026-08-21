@@ -26,6 +26,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.tail_absorption_batch = (repo / "sota" / "batch17.sh").read_text(
             encoding="utf-8"
         )
+        self.supersampling_batch = (repo / "sota" / "batch18.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -137,6 +140,11 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("--absorb-tail", self.tail_absorption_batch)
         self.assertIn("absorb_tail ? T : alpha * T", self.native_forward)
         self.assertIn("T = absorb_tail ? 0.0f : test_T", self.native_forward)
+
+    def test_supersampling_screen_reuses_the_frozen_checkpoint(self):
+        self.assertIn('source "$HERE/ensure_environment.sh"', self.supersampling_batch)
+        self.assertIn("opacity_floor_01/opacity08__room", self.supersampling_batch)
+        self.assertIn("-m sota.supersampling", self.supersampling_batch)
 
 
 if __name__ == "__main__":

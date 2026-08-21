@@ -289,3 +289,34 @@ replacing them with background.  The normal `1e-4` renderer remains the bitwise
 baseline and training never uses absorption.  Select on the same fixed training
 subset with the same `0.02 dB` tolerance, then test one choice.  Continue only
 if test PSNR loses at most `0.03 dB` and FPS improves by at least `25%`.
+
+## 2026-08-21 — transmittance-tail absorption / Room / run 01
+
+- Status: **completed — mechanism works, speed gate not reached**
+- Source revision: `7fa2452f02a350c515d1634ce5b6141c509b6ea1`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/tail_absorption_01/room`
+- Selected cutoff: `1e-2`
+- Baseline test: PSNR `28.540048110179413`, SSIM `0.8766554777438824`,
+  LPIPS `0.26737001156195617`, FPS `16.534098560500638`
+- Absorbed-tail test: PSNR `28.54523399548653`, SSIM
+  `0.8777034680048624`, LPIPS `0.2672507487810575`, FPS
+  `17.813040249215465`
+
+Tail absorption changes test PSNR by `+0.0051858853 dB`, improves SSIM by
+`+0.0010479903`, improves LPIPS by `-0.0001192628`, and raises FPS by
+`1.0773517639x` (`+7.735%`).  All non-default cutoffs remained inside the
+training quality tolerance, so the compensation mechanism fixes the severe
+background-exposure error seen with ordinary tail culling.  The registered
+experiment still stops because the speedup is below `1.25x`.  This indicates
+that tail traversal is real but is not the dominant rendering cost.
+
+## Planned experiment — reduced supersampling with absorbed tails / Room
+
+Keep the frozen Room opacity-0.8 checkpoint and the successful `1e-2` absorbed
+tail.  Compare internal supersampling factors `4, 3, 2, 1`; factor 4 with the
+ordinary `1e-4` cutoff remains the baseline.  Select the fastest candidate on
+the same fixed training subset whose mean PSNR is within `0.05 dB` of the
+baseline, then evaluate only that choice on test.  Continue if test PSNR loses
+at most `0.05 dB` and FPS improves by at least `1.5x`.  This tests whether the
+smoother opacity-0.8 representation can pay for its extra depth blending by
+using fewer spatial samples.

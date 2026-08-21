@@ -46,7 +46,9 @@ def _mean(values):
     return float(statistics.fmean(values))
 
 
-def _render_timed(view, triangles, pipeline, background, threshold, absorb_tail):
+def _render_timed(
+    view, triangles, pipeline, background, threshold, absorb_tail, upsample=4
+):
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     start.record()
@@ -57,6 +59,7 @@ def _render_timed(view, triangles, pipeline, background, threshold, absorb_tail)
         background,
         transmittance_threshold_override=threshold,
         absorb_transmittance_tail=absorb_tail,
+        upsample_override=upsample,
     )["render"].clamp(0.0, 1.0)
     end.record()
     torch.cuda.synchronize()
@@ -64,18 +67,19 @@ def _render_timed(view, triangles, pipeline, background, threshold, absorb_tail)
 
 
 def _measure_selection(
-    views, triangles, pipeline, background, threshold, absorb_tail
+    views, triangles, pipeline, background, threshold, absorb_tail, upsample=4
 ):
     with torch.no_grad():
         render(
             views[0], triangles, pipeline, background,
             transmittance_threshold_override=threshold,
             absorb_transmittance_tail=absorb_tail,
+            upsample_override=upsample,
         )
         rows = []
         for view in views:
             prediction, render_ms = _render_timed(
-                view, triangles, pipeline, background, threshold, absorb_tail
+                view, triangles, pipeline, background, threshold, absorb_tail, upsample
             )
             target = view.original_image[:3].to(prediction.device).clamp(0.0, 1.0)
             rows.append({
@@ -92,7 +96,8 @@ def _measure_selection(
 
 
 def _evaluate(
-    views, triangles, pipeline, background, threshold, absorb_tail, lpips_metric
+    views, triangles, pipeline, background, threshold, absorb_tail, lpips_metric,
+    upsample=4,
 ):
     rows = []
     with torch.no_grad():
@@ -100,10 +105,11 @@ def _evaluate(
             views[0], triangles, pipeline, background,
             transmittance_threshold_override=threshold,
             absorb_transmittance_tail=absorb_tail,
+            upsample_override=upsample,
         )
         for view in views:
             prediction, render_ms = _render_timed(
-                view, triangles, pipeline, background, threshold, absorb_tail
+                view, triangles, pipeline, background, threshold, absorb_tail, upsample
             )
             target = view.original_image[:3].to(prediction.device).clamp(0.0, 1.0)
             rows.append({
