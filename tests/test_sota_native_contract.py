@@ -20,10 +20,20 @@ class SOTANativeContractTest(unittest.TestCase):
         self.stock_bicycle_batch = (repo / "sota" / "batch15.sh").read_text(
             encoding="utf-8"
         )
+        self.tail_culling_batch = (repo / "sota" / "batch16.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
         )
+        self.renderer = (repo / "triangle_renderer" / "__init__.py").read_text(
+            encoding="utf-8"
+        )
+        self.native_forward = (
+            repo / "submodules" / "diff-triangle-mesh-rasterization"
+            / "cuda_rasterizer" / "forward.cu"
+        ).read_text(encoding="utf-8")
 
     def test_stale_native_install_is_rebuilt(self):
         self.assertIn(
@@ -31,6 +41,7 @@ class SOTANativeContractTest(unittest.TestCase):
             self.environment,
         )
         self.assertIn('"screen_space_gradients"', self.environment)
+        self.assertIn('"transmittance_threshold"', self.environment)
         self.assertIn('"sigma_face"', self.environment)
         self.assertIn("--force-reinstall", self.environment)
 
@@ -98,6 +109,23 @@ class SOTANativeContractTest(unittest.TestCase):
         )
         self.assertNotIn("--final_opacity", self.stock_bicycle_batch)
         self.assertIn("value != 0.9999", self.stock_bicycle_batch)
+
+    def test_tail_culling_uses_the_frozen_room_checkpoint(self):
+        self.assertIn('source "$HERE/ensure_environment.sh"', self.tail_culling_batch)
+        self.assertIn(
+            "opacity_floor_01/opacity08__room",
+            self.tail_culling_batch,
+        )
+        self.assertIn("-m sota.tail_culling", self.tail_culling_batch)
+
+    def test_tail_cutoff_is_explicit_and_the_default_is_preserved(self):
+        self.assertIn("transmittance_threshold_override=None", self.renderer)
+        self.assertIn(
+            "1e-4 if transmittance_threshold_override is None",
+            self.renderer,
+        )
+        self.assertIn("test_T < transmittance_threshold", self.native_forward)
+        self.assertNotIn("test_T < 0.0001f", self.native_forward)
 
 
 if __name__ == "__main__":

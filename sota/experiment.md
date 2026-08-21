@@ -226,3 +226,36 @@ quality deltas and the FPS cost of `0.8` on Bicycle.  If `0.8` improves PSNR,
 SSIM, and LPIPS here as on Room and Garden, proceed to inference-time tail
 culling; otherwise stop the transfer claim and analyze the failure before any
 speed work.
+
+## 2026-08-21 — matched stock Bicycle control / run 01
+
+- Status: **completed — Bicycle transfer gate passed**
+- Source revision: `0190ca0fbb4cc80e3b0d6da1f084fb98d0693390`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_floor_01/stock__bicycle`
+- Device: NVIDIA A40, logical CUDA device 0 mapped from physical GPU 1
+- Environment: Python 3.11.15, PyTorch 2.7.1+cu126, CUDA toolkit 12.6
+- Training time: `5,844` seconds (1 h 37 min 24 s)
+- Final iteration: 30,000
+- Checkpoint contract: `opacity_floor = 0.9999` verified after saving
+- Final test: L1 `0.04879365459084511`, PSNR `23.042085647583008`, SSIM
+  `0.6407600545883179`, LPIPS `0.34864730000495914`, FPS
+  `16.544935566342215`
+
+Against this matched control, opacity `0.8` changes L1 by `-0.0009791484`
+(`-2.007%`, better), PSNR by `+0.1942562103 dB`, SSIM by `+0.0132220578`,
+LPIPS by `-0.0132555103` (`-3.802%`, better), and FPS by `-8.656%`.
+Bicycle therefore passes all four quality metrics.  Across Room, Garden, and
+Bicycle, the same untuned terminal opacity improves PSNR, SSIM, and LPIPS in
+every scene; L1 improves in two of three.  The quality mechanism is now
+transferable enough to justify optimizing its inference cost.
+
+## Planned experiment — frozen transmittance-tail culling / Room
+
+Do not retrain or alter opacity.  On the trained Room `0.8` checkpoint, test
+earlier termination of front-to-back compositing after the remaining
+transmittance becomes negligible.  The renderer's published cutoff `1e-4`
+remains the default and bitwise parent.  A fixed training-view subset may choose
+among `1e-4, 3e-4, 1e-3, 3e-3, 1e-2`; choose the fastest candidate whose mean
+training PSNR is within `0.02 dB` of `1e-4`, then evaluate that one choice on the
+official test split.  Continue only if test PSNR loses no more than `0.03 dB`
+and FPS improves by at least `25%` relative to the same checkpoint at `1e-4`.

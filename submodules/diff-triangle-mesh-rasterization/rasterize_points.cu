@@ -80,8 +80,15 @@ RasterizetrianglesCUDA(
 	const int degree,
 	const torch::Tensor& campos,
 	const bool prefiltered,
-	const bool debug)
+	const bool debug,
+	const float transmittance_threshold)
 {
+
+  TORCH_CHECK(std::isfinite(transmittance_threshold)
+              && transmittance_threshold > 0.0f
+              && transmittance_threshold < 1.0f,
+              "transmittance_threshold must be finite and in (0, 1), got ",
+              transmittance_threshold);
 
   const int P = triangles_indices.size(0);
   if (donor_mode != 0) {
@@ -204,6 +211,7 @@ RasterizetrianglesCUDA(
 		tan_fovx,
 		tan_fovy,
 		prefiltered,
+		transmittance_threshold,
 		out_color.contiguous().data_ptr<float>(),
 		out_others.contiguous().data_ptr<float>(),
 		max_blending.contiguous().data_ptr<float>(),

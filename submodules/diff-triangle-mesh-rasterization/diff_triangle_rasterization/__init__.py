@@ -204,7 +204,8 @@ class _RasterizeTriangles(torch.autograd.Function):
             raster_settings.sh_degree,
             raster_settings.campos,
             raster_settings.prefiltered,
-            raster_settings.debug
+            raster_settings.debug,
+            raster_settings.transmittance_threshold,
         )
 
 
@@ -330,6 +331,9 @@ class TriangleRasterizationSettings(NamedTuple):
     # projection. True is the exact derivative, which invalidates the published
     # learning rates and pruning thresholds and so has to be opted into.
     screen_space_gradients : bool = False
+    # Stop compositing once the remaining transmittance falls below this value.
+    # The published renderer uses 1e-4.
+    transmittance_threshold : float = 1e-4
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):
@@ -420,6 +424,8 @@ class TriangleRasterizer(nn.Module):
             raise ValueError("GoRFE design export requires the frozen texel-free parent")
         if edge_details is not None or face_edge_ids is not None:
             raise ValueError("GoRFE design export requires the frozen edge-detail-free parent")
+        if raster_settings.transmittance_threshold != 1e-4:
+            raise ValueError("GoRFE design export requires transmittance_threshold=1e-4")
         if output_scaling != 4:
             raise ValueError(
                 f"GoRFE-V1 output_scaling must equal 4, got {output_scaling}"
@@ -470,6 +476,7 @@ class TriangleRasterizer(nn.Module):
             raster_settings.campos,
             raster_settings.prefiltered,
             raster_settings.debug,
+            raster_settings.transmittance_threshold,
         )
         (
             num_rendered,

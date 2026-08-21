@@ -118,6 +118,7 @@ def render(
     opacity_floor_override=None,
     upsample_override=None,
     opacity_scale_override=None,
+    transmittance_threshold_override=None,
 ):
     """
     Render the scene. 
@@ -154,6 +155,11 @@ def render(
     H = upsample * H_init
     W = upsample * W_init
 
+    transmittance_threshold = (1e-4 if transmittance_threshold_override is None
+                               else float(transmittance_threshold_override))
+    if not math.isfinite(transmittance_threshold) or not 0.0 < transmittance_threshold < 1.0:
+        raise ValueError("transmittance threshold override must be finite and in (0, 1)")
+
     raster_settings = TriangleRasterizationSettings(
         image_height=H,
         image_width=W,
@@ -169,6 +175,7 @@ def render(
         debug=pipe.debug,
         texel_order=getattr(pc, "texel_order", 0),
         screen_space_gradients=getattr(pipe, "screen_space_gradients", False),
+        transmittance_threshold=transmittance_threshold,
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)

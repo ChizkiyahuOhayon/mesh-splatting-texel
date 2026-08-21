@@ -575,6 +575,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float* __restrict__ depths,
 	 const float2* __restrict__ phi_center,
 	 const float2* __restrict__ p_image,
+	 const float transmittance_threshold,
 	 float* __restrict__ final_T,
 	 uint32_t* __restrict__ n_contrib,
 	 const float* __restrict__ bg_color,
@@ -752,7 +753,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 			 atomicAdd(was_rendered + j_id, 1);
 
 			 float test_T = T * (1 - alpha);
-			 if (test_T < 0.0001f)
+			 if (test_T < transmittance_threshold)
 			 {
 				 done = true;
 				 continue;
@@ -918,6 +919,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float* depths,
 	 const float2* phi_center,
 	 const float2* p_image,
+	 const float transmittance_threshold,
 	 float* final_T,
 	 uint32_t* n_contrib,
 	 const float* bg_color,
@@ -954,6 +956,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 depths,
 		 phi_center,
 		 p_image,
+		 transmittance_threshold,
 		 final_T,
 		 n_contrib,
 		 bg_color,

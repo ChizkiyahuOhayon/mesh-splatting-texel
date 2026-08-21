@@ -125,6 +125,7 @@
 		 const float* depths,
 		 const float2* phi_center,
 		 const float2* p_image,
+		 const float transmittance_threshold,
 		 float* final_T,
 		 uint32_t* n_contrib,
 		 const float* bg_color,

@@ -75,6 +75,7 @@ native_contract() {
 import inspect
 import diff_triangle_rasterization as rasterizer
 assert "screen_space_gradients" in rasterizer.TriangleRasterizationSettings._fields
+assert "transmittance_threshold" in rasterizer.TriangleRasterizationSettings._fields
 assert "sigma_face" in inspect.signature(rasterizer.TriangleRasterizer.forward).parameters
 assert hasattr(rasterizer._C, "rasterize_triangles")
 ' >/dev/null 2>&1

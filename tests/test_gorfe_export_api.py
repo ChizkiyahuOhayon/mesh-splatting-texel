@@ -79,7 +79,7 @@ class GoRFEExportAPITest(unittest.TestCase):
     @staticmethod
     def _forward_result(*args):
         faces = args[2]
-        height, width = args[18:20]
+        height, width = args[19:21]
         return (
             7,
             torch.zeros((3, height, width)),
@@ -89,7 +89,7 @@ class GoRFEExportAPITest(unittest.TestCase):
             torch.zeros(3, dtype=torch.uint8),
             torch.zeros(4, dtype=torch.uint8),
             torch.zeros(5, dtype=torch.uint8),
-            args[13],
+            args[14],
             torch.zeros(faces.shape[0]),
         )
 
@@ -110,6 +110,7 @@ class GoRFEExportAPITest(unittest.TestCase):
                 "edge_details",
                 "face_edge_ids",
                 "window_donors",
+                "sigma_face",
             ),
         )
 
@@ -117,7 +118,7 @@ class GoRFEExportAPITest(unittest.TestCase):
         captured = {}
 
         def fake_forward(*args):
-            captured["parent_face_edge_ids"] = args[9]
+            captured["parent_face_edge_ids"] = args[10]
             return self._forward_result(*args)
 
         def fake_export(*args):
@@ -234,6 +235,15 @@ class GoRFEExportAPITest(unittest.TestCase):
                         "face_edge_ids": self.candidate_map,
                     }
                 )
+            original_settings = self.rasterizer.raster_settings
+            self.rasterizer.raster_settings = original_settings._replace(
+                transmittance_threshold=1e-3
+            )
+            try:
+                with self.assertRaisesRegex(ValueError, "transmittance_threshold"):
+                    self.rasterizer.forward_with_gorfe_design(**self._arguments())
+            finally:
+                self.rasterizer.raster_settings = original_settings
 
             original_settings = self.rasterizer.raster_settings
             self.rasterizer.raster_settings = original_settings._replace(texel_order=1)
