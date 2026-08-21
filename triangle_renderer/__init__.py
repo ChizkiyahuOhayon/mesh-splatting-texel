@@ -119,6 +119,7 @@ def render(
     upsample_override=None,
     opacity_scale_override=None,
     transmittance_threshold_override=None,
+    absorb_transmittance_tail=False,
 ):
     """
     Render the scene. 
@@ -159,6 +160,10 @@ def render(
                                else float(transmittance_threshold_override))
     if not math.isfinite(transmittance_threshold) or not 0.0 < transmittance_threshold < 1.0:
         raise ValueError("transmittance threshold override must be finite and in (0, 1)")
+    if not isinstance(absorb_transmittance_tail, bool):
+        raise TypeError("absorb_transmittance_tail must be boolean")
+    if absorb_transmittance_tail and torch.is_grad_enabled():
+        raise ValueError("transmittance-tail absorption is evaluation-only")
 
     raster_settings = TriangleRasterizationSettings(
         image_height=H,
@@ -176,6 +181,7 @@ def render(
         texel_order=getattr(pc, "texel_order", 0),
         screen_space_gradients=getattr(pipe, "screen_space_gradients", False),
         transmittance_threshold=transmittance_threshold,
+        absorb_transmittance_tail=absorb_transmittance_tail,
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)

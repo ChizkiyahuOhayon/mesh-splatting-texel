@@ -46,7 +46,7 @@ def _mean(values):
     return float(statistics.fmean(values))
 
 
-def _render_timed(view, triangles, pipeline, background, threshold):
+def _render_timed(view, triangles, pipeline, background, threshold, absorb_tail):
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     start.record()
@@ -56,22 +56,26 @@ def _render_timed(view, triangles, pipeline, background, threshold):
         pipeline,
         background,
         transmittance_threshold_override=threshold,
+        absorb_transmittance_tail=absorb_tail,
     )["render"].clamp(0.0, 1.0)
     end.record()
     torch.cuda.synchronize()
     return prediction, float(start.elapsed_time(end))
 
 
-def _measure_selection(views, triangles, pipeline, background, threshold):
+def _measure_selection(
+    views, triangles, pipeline, background, threshold, absorb_tail
+):
     with torch.no_grad():
         render(
             views[0], triangles, pipeline, background,
             transmittance_threshold_override=threshold,
+            absorb_transmittance_tail=absorb_tail,
         )
         rows = []
         for view in views:
             prediction, render_ms = _render_timed(
-                view, triangles, pipeline, background, threshold
+                view, triangles, pipeline, background, threshold, absorb_tail
             )
             target = view.original_image[:3].to(prediction.device).clamp(0.0, 1.0)
             rows.append({
@@ -87,16 +91,19 @@ def _measure_selection(views, triangles, pipeline, background, threshold):
     }
 
 
-def _evaluate(views, triangles, pipeline, background, threshold, lpips_metric):
+def _evaluate(
+    views, triangles, pipeline, background, threshold, absorb_tail, lpips_metric
+):
     rows = []
     with torch.no_grad():
         render(
             views[0], triangles, pipeline, background,
             transmittance_threshold_override=threshold,
+            absorb_transmittance_tail=absorb_tail,
         )
         for view in views:
             prediction, render_ms = _render_timed(
-                view, triangles, pipeline, background, threshold
+                view, triangles, pipeline, background, threshold, absorb_tail
             )
             target = view.original_image[:3].to(prediction.device).clamp(0.0, 1.0)
             rows.append({
@@ -175,7 +182,12 @@ def run(dataset, pipeline, args):
 
     selection_measurements = {
         threshold: _measure_selection(
-            selection, triangles, pipeline, background, threshold
+            selection,
+            triangles,
+            pipeline,
+            background,
+            threshold,
+            args.absorb_tail and threshold != DEFAULT_THRESHOLD,
         )
         for threshold in THRESHOLDS
     }
@@ -189,12 +201,24 @@ def run(dataset, pipeline, args):
 
     lpips_metric = lpips.LPIPS(net="vgg").cuda().eval()
     baseline = _evaluate(
-        test, triangles, pipeline, background, DEFAULT_THRESHOLD, lpips_metric
+        test,
+        triangles,
+        pipeline,
+        background,
+        DEFAULT_THRESHOLD,
+        False,
+        lpips_metric,
     )
     selected = (
         baseline if selected_threshold == DEFAULT_THRESHOLD else
         _evaluate(
-            test, triangles, pipeline, background, selected_threshold, lpips_metric
+            test,
+            triangles,
+            pipeline,
+            background,
+            selected_threshold,
+            args.absorb_tail,
+            lpips_metric,
         )
     )
     decision = "continue" if passes_test_gate(baseline, selected) else "stop"
@@ -202,7 +226,10 @@ def run(dataset, pipeline, args):
         ["git", "rev-parse", "HEAD"], text=True
     ).strip()
     manifest = {
-        "experiment": "transmittance-tail-culling-v0",
+        "experiment": (
+            "transmittance-tail-absorption-v0" if args.absorb_tail
+            else "transmittance-tail-culling-v0"
+        ),
         "scene": args.scene,
         "source_revision": source_revision,
         "dataset": str(Path(dataset.source_path).resolve()),
@@ -220,6 +247,7 @@ def run(dataset, pipeline, args):
         "selection_psnr_tolerance_db": SELECTION_PSNR_TOLERANCE_DB,
         "test_psnr_tolerance_db": TEST_PSNR_TOLERANCE_DB,
         "minimum_fps_multiplier": MINIMUM_FPS_MULTIPLIER,
+        "absorb_tail_for_nondefault_candidates": args.absorb_tail,
         "default_threshold_bitwise_parent": default_is_bitwise,
         "torch": torch.__version__,
         "gpu": torch.cuda.get_device_name(torch.cuda.current_device()),
@@ -276,6 +304,7 @@ if __name__ == "__main__":
     parser.add_argument("--iteration", type=int, default=30000)
     parser.add_argument("--output", required=True)
     parser.add_argument("--scene", default="room")
+    parser.add_argument("--absorb-tail", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     parsed = get_combined_args(parser)
     if not parsed.eval:

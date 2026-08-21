@@ -259,3 +259,33 @@ among `1e-4, 3e-4, 1e-3, 3e-3, 1e-2`; choose the fastest candidate whose mean
 training PSNR is within `0.02 dB` of `1e-4`, then evaluate that one choice on the
 official test split.  Continue only if test PSNR loses no more than `0.03 dB`
 and FPS improves by at least `25%` relative to the same checkpoint at `1e-4`.
+
+## 2026-08-21 — frozen transmittance-tail culling / Room / run 01
+
+- Status: **completed — stopped**
+- Source revision: `d50e3af6e8a1c4980882c08ce3b67c622b063d88`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/tail_culling_01/room`
+- Checkpoint: trained Room opacity-0.8 endpoint, iteration 30,000
+- Default test: PSNR `28.54004820799216`, FPS `16.57662177959423`
+- Selected threshold: `1e-4` (the unchanged default)
+
+The first alternative, `3e-4`, changed the training-subset PSNR from
+`30.961707592010498` to `30.49935621023178` (`-0.4623513818 dB`) while FPS
+rose only from `16.40016454030132` to `16.502459001950307` (`+0.624%`).
+Thresholds `1e-3`, `3e-3`, and `1e-2` reduced mean selection PSNR to
+`24.1839`, `23.5632`, and `22.9343` dB respectively.  None met the locked
+`0.02 dB` selection tolerance, so the default was correctly retained and the
+speed gate failed.  Do not tune this cutoff further: the removed layers carry
+material color, and ordinary early termination exposes the background rather
+than eliminating a harmless compute-only tail.
+
+## Planned experiment — transmittance-tail absorption / Room
+
+Keep the same frozen Room opacity-0.8 checkpoint and cutoff grid.  For each
+non-default cutoff, when the next alpha update would cross the cutoff, assign
+the entire remaining transmittance to that terminal fragment and stop.  This
+approximates the skipped nearby layers with the last visible surface instead of
+replacing them with background.  The normal `1e-4` renderer remains the bitwise
+baseline and training never uses absorption.  Select on the same fixed training
+subset with the same `0.02 dB` tolerance, then test one choice.  Continue only
+if test PSNR loses at most `0.03 dB` and FPS improves by at least `25%`.

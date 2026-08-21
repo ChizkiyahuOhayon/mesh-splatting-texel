@@ -54,7 +54,8 @@ RasterizetrianglesCUDA(
 	const torch::Tensor& campos,
 	const bool prefiltered,
 	const bool debug,
-	const float transmittance_threshold);
+	const float transmittance_threshold,
+	const bool absorb_transmittance_tail);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 ExportGoRFERowsCUDA(

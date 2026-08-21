@@ -23,6 +23,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.tail_culling_batch = (repo / "sota" / "batch16.sh").read_text(
             encoding="utf-8"
         )
+        self.tail_absorption_batch = (repo / "sota" / "batch17.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -42,6 +45,7 @@ class SOTANativeContractTest(unittest.TestCase):
         )
         self.assertIn('"screen_space_gradients"', self.environment)
         self.assertIn('"transmittance_threshold"', self.environment)
+        self.assertIn('"absorb_transmittance_tail"', self.environment)
         self.assertIn('"sigma_face"', self.environment)
         self.assertIn("--force-reinstall", self.environment)
 
@@ -126,6 +130,13 @@ class SOTANativeContractTest(unittest.TestCase):
         )
         self.assertIn("test_T < transmittance_threshold", self.native_forward)
         self.assertNotIn("test_T < 0.0001f", self.native_forward)
+
+    def test_tail_absorption_is_a_frozen_evaluation_arm(self):
+        self.assertIn('source "$HERE/ensure_environment.sh"', self.tail_absorption_batch)
+        self.assertIn("opacity_floor_01/opacity08__room", self.tail_absorption_batch)
+        self.assertIn("--absorb-tail", self.tail_absorption_batch)
+        self.assertIn("absorb_tail ? T : alpha * T", self.native_forward)
+        self.assertIn("T = absorb_tail ? 0.0f : test_T", self.native_forward)
 
 
 if __name__ == "__main__":

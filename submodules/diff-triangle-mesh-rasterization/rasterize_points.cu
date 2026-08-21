@@ -81,7 +81,8 @@ RasterizetrianglesCUDA(
 	const torch::Tensor& campos,
 	const bool prefiltered,
 	const bool debug,
-	const float transmittance_threshold)
+	const float transmittance_threshold,
+	const bool absorb_transmittance_tail)
 {
 
   TORCH_CHECK(std::isfinite(transmittance_threshold)
@@ -212,6 +213,7 @@ RasterizetrianglesCUDA(
 		tan_fovy,
 		prefiltered,
 		transmittance_threshold,
+		absorb_transmittance_tail,
 		out_color.contiguous().data_ptr<float>(),
 		out_others.contiguous().data_ptr<float>(),
 		max_blending.contiguous().data_ptr<float>(),

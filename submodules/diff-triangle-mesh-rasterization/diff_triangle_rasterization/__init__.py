@@ -206,6 +206,7 @@ class _RasterizeTriangles(torch.autograd.Function):
             raster_settings.prefiltered,
             raster_settings.debug,
             raster_settings.transmittance_threshold,
+            raster_settings.absorb_transmittance_tail,
         )
 
 
@@ -229,6 +230,7 @@ class _RasterizeTriangles(torch.autograd.Function):
         ctx.edge_details_enabled = edge_details.numel() > 0
         ctx.donor_mode = donor_mode
         ctx.per_face_sigma = sigma_face.numel() > 0
+        ctx.absorb_transmittance_tail = raster_settings.absorb_transmittance_tail
         # False reproduces the published backward, whose vertex position gradient
         # carries only the depth term. See cuda_rasterizer/backward.cu.
         ctx.screen_space_gradients = getattr(
@@ -244,6 +246,10 @@ class _RasterizeTriangles(torch.autograd.Function):
         raster_settings = ctx.raster_settings
         sigma = ctx.sigma
         texel_order = ctx.texel_order
+        if ctx.absorb_transmittance_tail:
+            raise NotImplementedError(
+                "transmittance-tail absorption is evaluation-only"
+            )
         if ctx.donor_mode != 0:
             raise NotImplementedError(
                 "backward through active window donors is not implemented; "
@@ -334,6 +340,9 @@ class TriangleRasterizationSettings(NamedTuple):
     # Stop compositing once the remaining transmittance falls below this value.
     # The published renderer uses 1e-4.
     transmittance_threshold : float = 1e-4
+    # Evaluation-only approximation: assign the remaining transmittance to the
+    # terminal fragment instead of exposing the background.
+    absorb_transmittance_tail : bool = False
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):
@@ -426,6 +435,8 @@ class TriangleRasterizer(nn.Module):
             raise ValueError("GoRFE design export requires the frozen edge-detail-free parent")
         if raster_settings.transmittance_threshold != 1e-4:
             raise ValueError("GoRFE design export requires transmittance_threshold=1e-4")
+        if raster_settings.absorb_transmittance_tail:
+            raise ValueError("GoRFE design export does not support tail absorption")
         if output_scaling != 4:
             raise ValueError(
                 f"GoRFE-V1 output_scaling must equal 4, got {output_scaling}"
@@ -477,6 +488,7 @@ class TriangleRasterizer(nn.Module):
             raster_settings.prefiltered,
             raster_settings.debug,
             raster_settings.transmittance_threshold,
+            raster_settings.absorb_transmittance_tail,
         )
         (
             num_rendered,

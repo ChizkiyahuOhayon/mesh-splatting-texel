@@ -246,6 +246,16 @@ class GoRFEExportAPITest(unittest.TestCase):
                 self.rasterizer.raster_settings = original_settings
 
             original_settings = self.rasterizer.raster_settings
+            self.rasterizer.raster_settings = original_settings._replace(
+                absorb_transmittance_tail=True
+            )
+            try:
+                with self.assertRaisesRegex(ValueError, "tail absorption"):
+                    self.rasterizer.forward_with_gorfe_design(**self._arguments())
+            finally:
+                self.rasterizer.raster_settings = original_settings
+
+            original_settings = self.rasterizer.raster_settings
             self.rasterizer.raster_settings = original_settings._replace(texel_order=1)
             try:
                 with self.assertRaisesRegex(ValueError, "texel-free"):

@@ -576,6 +576,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float2* __restrict__ phi_center,
 	 const float2* __restrict__ p_image,
 	 const float transmittance_threshold,
+	 const bool absorb_transmittance_tail,
 	 float* __restrict__ final_T,
 	 uint32_t* __restrict__ n_contrib,
 	 const float* __restrict__ bg_color,
@@ -753,13 +754,15 @@ __global__ void computeVertexSH1FactorsCUDA(
 			 atomicAdd(was_rendered + j_id, 1);
 
 			 float test_T = T * (1 - alpha);
-			 if (test_T < transmittance_threshold)
+			 const bool absorb_tail =
+				 absorb_transmittance_tail && test_T < transmittance_threshold;
+			 if (test_T < transmittance_threshold && !absorb_tail)
 			 {
 				 done = true;
 				 continue;
 			 }
 			 
-			 float blending_weight = alpha * T;
+			 float blending_weight = absorb_tail ? T : alpha * T;
 			 // Update the maximum blending weight in a thread-safe way
 			 atomicMax(((int*)max_blending) + j_id, *((int*)(&blending_weight)));
 
@@ -850,7 +853,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 							* edge_details[detail_base + k * CHANNELS + ch];
 					interp += edge_bases[local_edge] * edge_color;
 				}
-				C[ch] += interp * alpha * T;
+				C[ch] += interp * blending_weight;
 			 } 
 
 			 float depth_interp = wA * depth_vertex_0 + wB * depth_vertex_1 + wC * depth_vertex_2;
@@ -865,9 +868,11 @@ __global__ void computeVertexSH1FactorsCUDA(
 			 // Render normal map
 			 for (int ch=0; ch<3; ch++) N[ch] += normal[ch] * blending_weight;
  
-			 T = test_T;
- 
+			 T = absorb_tail ? 0.0f : test_T;
+
 			 last_contributor = contributor;
+			 if (absorb_tail)
+				 done = true;
 		 }
 	 }
  
@@ -920,6 +925,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float2* phi_center,
 	 const float2* p_image,
 	 const float transmittance_threshold,
+	 const bool absorb_transmittance_tail,
 	 float* final_T,
 	 uint32_t* n_contrib,
 	 const float* bg_color,
@@ -957,6 +963,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 phi_center,
 		 p_image,
 		 transmittance_threshold,
+		 absorb_transmittance_tail,
 		 final_T,
 		 n_contrib,
 		 bg_color,
