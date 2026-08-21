@@ -8,6 +8,7 @@ source "$HERE/ensure_environment.sh"
 NAS_ROOT=${NAS_ROOT:-/home/smbu/dy/nas/meshsplatting_smbu}
 DATA_ROOT=${DATA_ROOT:-/home/smbu/dy/mesh-splatting/data/mipnerf360}
 ROOT=${ROOT:-$NAS_ROOT/experiments/main_table_01}
+METHOD_UPSAMPLE=${METHOD_UPSAMPLE:-3}
 [ ! -e "$ROOT" ] || { echo "output already exists: $ROOT" >&2; exit 1; }
 
 cd "$HERE/.."
@@ -30,6 +31,7 @@ for SCENE in garden room bicycle; do
   "$MESH_SPLATTING_PYTHON" -u -m sota.main_table_eval \
     -s "$DATA_ROOT/$SCENE" -m "$OUR_MODEL" -i "$IMAGES" --eval \
     --scene "$SCENE" --arm ours --iteration 30000 \
+    --method-upsample "$METHOD_UPSAMPLE" \
     --output "$ROOT/$SCENE/ours"
 done
 

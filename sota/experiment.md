@@ -407,3 +407,33 @@ Bicycle and `images_2` for Room.  Keep opacity floor, tail absorption, cutoff,
 supersampling factor, checkpoints, and metric code unchanged.  This inexpensive
 run replaces the outdoor rows of main-table run 01 and determines whether a
 real Garden quality gap remains before any new training experiment.
+
+## 2026-08-21 — corrected three-scene main table / run 02
+
+- Status: **completed — near-complete main-table win; Garden PSNR short by
+  0.0055 dB**
+- Source revision: `0a7663b27ce8c525385214559508c3385ea085ec`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/main_table_02`
+
+At each scene's training image pyramid, the global factor-3 method wins SSIM,
+LPIPS, FPS, and checkpoint size on all three scenes.  It wins PSNR on Room by
+`+0.0490443401 dB` and Bicycle by `+0.1541744995 dB`; Garden is effectively
+tied at `-0.0055450598 dB` while improving L1 by `0.0000954707`, SSIM by
+`0.0056110571`, and LPIPS by `0.0045082066`.  FPS improves from `16.7192` to
+`19.2585` on Garden (`+15.188%`), `17.2784` to `21.6905` on Room (`+25.536%`),
+and `20.3674` to `22.9642` on Bicycle (`+12.750%`).  Checkpoint size falls by
+`53,225,920`, `104,347,328`, and `25,222,848` bytes respectively.
+
+The corrected result replaces the outdoor rows of run 01.  It establishes a
+strong speed/compactness/quality Pareto improvement, but the strict claim that
+PSNR also improves in every scene is not yet supported because of the tiny
+Garden deficit.  No retraining is needed for the next test.
+
+## Planned experiment — global factor-4 quality main table
+
+Evaluate the same frozen opacity-0.8 checkpoints and absorbed `1e-2` tail with
+factor 4 on every scene.  This changes only the global sampling factor from the
+run-02 method.  It tests whether restoring spatial sampling closes Garden's
+`0.0055 dB` PSNR gap while the smaller checkpoints and absorbed tail retain an
+FPS advantage.  Continue with this quality-first operating point only if PSNR,
+SSIM, LPIPS, FPS, and checkpoint size all beat stock on all three scenes.

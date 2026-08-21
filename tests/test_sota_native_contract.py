@@ -38,6 +38,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.corrected_main_table_batch = (repo / "sota" / "batch21.sh").read_text(
             encoding="utf-8"
         )
+        self.quality_main_table_batch = (repo / "sota" / "batch22.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -172,6 +175,12 @@ class SOTANativeContractTest(unittest.TestCase):
             self.assertIn('-i "$IMAGES"', batch)
         self.assertIn("main_table_02", self.corrected_main_table_batch)
         self.assertIn('exec "$HERE/batch19.sh"', self.corrected_main_table_batch)
+
+    def test_quality_main_table_changes_only_the_global_sampling_factor(self):
+        self.assertIn("METHOD_UPSAMPLE=${METHOD_UPSAMPLE:-3}", self.main_table_batch)
+        self.assertIn('--method-upsample "$METHOD_UPSAMPLE"', self.main_table_batch)
+        self.assertIn("export METHOD_UPSAMPLE=4", self.quality_main_table_batch)
+        self.assertIn('exec "$HERE/batch19.sh"', self.quality_main_table_batch)
 
 
 if __name__ == "__main__":

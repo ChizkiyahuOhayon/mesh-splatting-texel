@@ -42,7 +42,9 @@ def run(dataset, pipeline, args):
     if not checkpoint.is_file():
         raise FileNotFoundError(checkpoint)
 
-    setting = SETTINGS[args.arm]
+    setting = dict(SETTINGS[args.arm])
+    if args.arm == "ours":
+        setting["upsample"] = args.method_upsample
     triangles = TriangleModel(dataset.sh_degree)
     scene = Scene(
         args=dataset,
@@ -126,6 +128,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True)
     parser.add_argument("--scene", required=True)
     parser.add_argument("--arm", choices=tuple(SETTINGS), required=True)
+    parser.add_argument("--method-upsample", type=int, choices=(1, 2, 3, 4), default=3)
     parser.add_argument("--quiet", action="store_true")
     parsed = get_combined_args(parser)
     if not parsed.eval:
