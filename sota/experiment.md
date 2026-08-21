@@ -348,3 +348,31 @@ the method uses the trained opacity-0.8 checkpoint, factor 3, cutoff `1e-2`,
 and tail absorption.  Report L1, PSNR, SSIM, LPIPS, FPS, checkpoint bytes,
 triangle count, and vertex count.  This is a direct comparison experiment, not
 another hyperparameter search; all method settings are identical across scenes.
+
+## 2026-08-21 — matched three-scene main table / run 01
+
+- Status: **completed — speed/storage win; Garden quality is the remaining gap**
+- Source revision: `e1a610a2c9e982aa5f608200da161fd4cf773887`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/main_table_01`
+
+With one global factor-3 configuration, the method improves FPS and checkpoint
+size on all three scenes.  FPS changes by `+19.746%` on Garden, `+25.535%` on
+Room, and `+22.295%` on Bicycle.  Checkpoint bytes fall by `6.308%`, `15.616%`,
+and `3.323%` respectively.  Room improves PSNR by `+0.049044 dB`, SSIM by
+`+0.002189`, and LPIPS by `-0.001924`; Bicycle improves PSNR by `+0.172630 dB`,
+SSIM by `+0.010804`, LPIPS by `-0.010438`, and L1 by `-0.000892`.
+
+Garden is the only quality miss: L1 `+0.000344`, PSNR `-0.070341 dB`, SSIM
+`-0.000164`, and LPIPS `+0.002436`, while still being faster and smaller.  The
+loss is small and consistent with insufficient spatial supersampling on the
+high-frequency foliage scene, not a failure of opacity training or tail
+absorption.
+
+## Planned experiment — quality-constrained supersampling transfer
+
+Apply the already fixed Room selection rule independently to Garden and
+Bicycle training views: choose the fastest of factors `4, 3, 2, 1` within
+`0.05 dB` of each scene's factor-4 baseline, with cutoff `1e-2` and tail
+absorption fixed.  Evaluate the selected factor once on test.  This is one
+shared calibration rule rather than a scene-name setting; no training or new
+method parameter is introduced.

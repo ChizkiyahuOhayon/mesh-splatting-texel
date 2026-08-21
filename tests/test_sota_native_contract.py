@@ -32,6 +32,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.main_table_batch = (repo / "sota" / "batch19.sh").read_text(
             encoding="utf-8"
         )
+        self.adaptive_sampling_batch = (repo / "sota" / "batch20.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -154,6 +157,11 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("--arm stock", self.main_table_batch)
         self.assertIn("--arm ours", self.main_table_batch)
         self.assertIn("-m sota.main_table ", self.main_table_batch)
+
+    def test_sampling_rule_transfers_without_retraining(self):
+        self.assertIn("for SCENE in garden bicycle", self.adaptive_sampling_batch)
+        self.assertIn("-m sota.supersampling", self.adaptive_sampling_batch)
+        self.assertNotIn("train.py", self.adaptive_sampling_batch)
 
 
 if __name__ == "__main__":
