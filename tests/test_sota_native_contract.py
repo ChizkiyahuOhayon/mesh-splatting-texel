@@ -44,6 +44,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.balanced_main_table_batch = (repo / "sota" / "batch23.sh").read_text(
             encoding="utf-8"
         )
+        self.formal_training_batch = (repo / "sota" / "batch24.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -193,6 +196,22 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("export METHOD_UPSAMPLE=4", self.balanced_main_table_batch)
         self.assertIn("export METHOD_THRESHOLD=0.03", self.balanced_main_table_batch)
         self.assertIn('exec "$HERE/batch19.sh"', self.balanced_main_table_batch)
+
+    def test_formal_training_adds_only_the_six_missing_scene_arms(self):
+        self.assertIn(
+            "MISSING_METHOD_SCENES=(flowers stump treehill counter kitchen bonsai)",
+            self.formal_training_batch,
+        )
+        self.assertIn(
+            '"$HERE/run.sh" opacity08 "$SCENE" --final_opacity 0.8',
+            self.formal_training_batch,
+        )
+        self.assertIn("for SCENE in bicycle garden room", self.formal_training_batch)
+        self.assertIn("missing stock checkpoint", self.formal_training_batch)
+        self.assertIn("--untracked-files=no", self.formal_training_batch)
+
+    def test_new_runs_record_the_source_revision(self):
+        self.assertIn('git rev-parse HEAD > "$OUT/source_revision.txt"', self.runner)
 
 
 if __name__ == "__main__":

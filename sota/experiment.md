@@ -465,3 +465,37 @@ the same three-scene runner.  Continue with this balanced operating point only
 if PSNR, SSIM, LPIPS, FPS, and checkpoint size all beat stock on every scene.
 If either outdoor FPS still loses or any quality metric regresses past stock,
 stop cutoff tuning and move to a renderer optimization or the nine-scene table.
+
+## 2026-08-24 — factor-4 absorbed tail at 0.03
+
+- Status: **completed — quality preserved; no useful speed gain; stop cutoff tuning**
+- Source revision: `a450b11f5bcd6d23354690aa47cc11385c8a8c40`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/main_table_balanced_01`
+- Device: NVIDIA A40, physical GPU 0
+- Configuration: opacity floor `0.8`, supersampling factor `4`, absorbed-tail
+  cutoff `0.03`; stock remains factor `4`, cutoff `1e-4`, no absorption
+
+The method again beats stock PSNR, SSIM, LPIPS, and checkpoint size on all
+three scenes.  Garden changes are L1 `-0.0003818021`, PSNR `+0.0570177237`
+dB, SSIM `+0.0081774468`, LPIPS `-0.0059883365`, and FPS `-3.829%`.
+Room changes are L1 `+0.0001531359`, PSNR `+0.0694484222` dB, SSIM
+`+0.0030641220`, LPIPS `-0.0032163503`, and FPS `+3.192%`.  Bicycle changes
+are L1 `-0.0009642583`, PSNR `+0.1929238892` dB, SSIM `+0.0122713792`,
+LPIPS `-0.0115150428`, and FPS `-2.260%`.
+
+Relative to the factor-4 cutoff-0.01 run, raising the cutoff to `0.03` changes
+quality only in the fourth decimal place and does not materially change FPS.
+The all-metric gate therefore remains at three PSNR wins, three SSIM wins,
+three LPIPS wins, three checkpoint-size wins, but only one FPS win.  Stop the
+cutoff axis: factor 3 remains the speed operating point and factor 4 with
+cutoff `0.01` remains the quality operating point.
+
+## Planned experiment — formal nine-scene opacity-0.8 training
+
+Use the official Mip-NeRF360 scene protocols and the same terminal opacity
+floor `0.8` on all nine scenes.  Reuse the completed Garden, Room, and Bicycle
+method checkpoints and train only Flowers, Stump, Treehill, Counter, Kitchen,
+and Bonsai.  Before training, require a complete matching stock checkpoint set
+for all nine scenes.  No scene-specific method setting, seed sweep, proxy gate,
+or additional loss is introduced.  After all six runs complete, evaluate the
+nine-scene quality and speed operating points with one metric implementation.

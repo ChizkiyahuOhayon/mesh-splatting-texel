@@ -36,6 +36,7 @@ flock -n 9 || { echo "== another sota/run.sh holds $RUNS/.lock; refusing" >&2; e
 rm -rf "$OUT"; mkdir -p "$OUT"
 
 cd "$REPO"
+git rev-parse HEAD > "$OUT/source_revision.txt"
 printf '%s\n' "$*" > "$OUT/args.txt"
 
 START=$SECONDS
