@@ -199,16 +199,22 @@ class SOTANativeContractTest(unittest.TestCase):
 
     def test_formal_training_adds_only_the_six_missing_scene_arms(self):
         self.assertIn(
-            "MISSING_METHOD_SCENES=(flowers stump treehill counter kitchen bonsai)",
+            "MISSING_SCENES=(flowers stump treehill counter kitchen bonsai)",
             self.formal_training_batch,
         )
+        self.assertIn('"$HERE/run.sh" stock "$SCENE"', self.formal_training_batch)
         self.assertIn(
             '"$HERE/run.sh" opacity08 "$SCENE" --final_opacity 0.8',
             self.formal_training_batch,
         )
         self.assertIn("for SCENE in bicycle garden room", self.formal_training_batch)
-        self.assertIn("missing stock checkpoint", self.formal_training_batch)
+        self.assertIn("STOCK_GPU=${STOCK_GPU:-0}", self.formal_training_batch)
+        self.assertIn("METHOD_GPU=${METHOD_GPU:-1}", self.formal_training_batch)
         self.assertIn("--untracked-files=no", self.formal_training_batch)
+
+    def test_training_lock_is_scoped_to_one_arm_and_scene(self):
+        self.assertIn('LOCK="$RUNS/.${ARM}__${SCENE}.lock"', self.runner)
+        self.assertNotIn('exec 9> "$RUNS/.lock"', self.runner)
 
     def test_new_runs_record_the_source_revision(self):
         self.assertIn('git rev-parse HEAD > "$OUT/source_revision.txt"', self.runner)

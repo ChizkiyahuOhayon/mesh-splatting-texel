@@ -499,3 +499,10 @@ and Bonsai.  Before training, require a complete matching stock checkpoint set
 for all nine scenes.  No scene-specific method setting, seed sweep, proxy gate,
 or additional loss is introduced.  After all six runs complete, evaluate the
 nine-scene quality and speed operating points with one metric implementation.
+
+The first formal-launch preflight on 2026-08-24 exited before training because
+the moved original-output tree had no Flowers stock checkpoint at the expected
+path.  No GPU work, output directory, or scientific result was produced.  The
+formal run therefore trains matched stock and opacity-0.8 arms for all six
+missing scenes in parallel on two GPUs; this removes dependence on incomplete
+legacy output while preserving the three already completed matched pairs.
