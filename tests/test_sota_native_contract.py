@@ -41,6 +41,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.quality_main_table_batch = (repo / "sota" / "batch22.sh").read_text(
             encoding="utf-8"
         )
+        self.balanced_main_table_batch = (repo / "sota" / "batch23.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -181,6 +184,15 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn('--method-upsample "$METHOD_UPSAMPLE"', self.main_table_batch)
         self.assertIn("export METHOD_UPSAMPLE=4", self.quality_main_table_batch)
         self.assertIn('exec "$HERE/batch19.sh"', self.quality_main_table_batch)
+
+    def test_balanced_main_table_changes_only_the_global_tail_threshold(self):
+        self.assertIn(
+            "METHOD_THRESHOLD=${METHOD_THRESHOLD:-0.01}", self.main_table_batch
+        )
+        self.assertIn('--method-threshold "$METHOD_THRESHOLD"', self.main_table_batch)
+        self.assertIn("export METHOD_UPSAMPLE=4", self.balanced_main_table_batch)
+        self.assertIn("export METHOD_THRESHOLD=0.03", self.balanced_main_table_batch)
+        self.assertIn('exec "$HERE/batch19.sh"', self.balanced_main_table_batch)
 
 
 if __name__ == "__main__":

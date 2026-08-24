@@ -437,3 +437,31 @@ run-02 method.  It tests whether restoring spatial sampling closes Garden's
 `0.0055 dB` PSNR gap while the smaller checkpoints and absorbed tail retain an
 FPS advantage.  Continue with this quality-first operating point only if PSNR,
 SSIM, LPIPS, FPS, and checkpoint size all beat stock on all three scenes.
+
+## 2026-08-21 — global factor-4 quality main table
+
+- Status: **completed — quality and storage win; speed misses on two scenes**
+- Source revision: `907819b1471a8471f14c1b2a7fadf44ba9eb9097`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/main_table_quality_01`
+
+Restoring factor 4 makes the opacity-0.8 method beat stock PSNR, SSIM, LPIPS,
+and checkpoint size on Garden, Room, and Bicycle.  PSNR changes by
+`+0.0578899384`, `+0.0697201949`, and `+0.1935616302` dB; SSIM changes by
+`+0.0081830447`, `+0.0030721793`, and `+0.0122808409`; LPIPS changes by
+`-0.0059800278`, `-0.0032281478`, and `-0.0115056884`, respectively.  L1
+also improves on Garden and Bicycle but is `+0.0001528137` worse on Room.
+
+Checkpoint bytes fall by `6.308%`, `15.616%`, and `3.323%`.  The strict
+all-metric gate does not pass because FPS changes by `-3.839%` on Garden,
+`+3.028%` on Room, and `-2.336%` on Bicycle.  This is the quality-first
+operating point: the remaining gap is a small inference-time deficit on the two
+outdoor scenes, not a representation-quality failure.
+
+## Planned experiment — factor-4 absorbed tail at 0.03
+
+Keep the same frozen checkpoints and global factor 4, changing only the shared
+absorbed-tail cutoff from `0.01` to `0.03`.  Evaluate stock and method through
+the same three-scene runner.  Continue with this balanced operating point only
+if PSNR, SSIM, LPIPS, FPS, and checkpoint size all beat stock on every scene.
+If either outdoor FPS still loses or any quality metric regresses past stock,
+stop cutoff tuning and move to a renderer optimization or the nine-scene table.
