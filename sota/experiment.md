@@ -562,3 +562,82 @@ The speed point uses factor 3, cutoff `0.01`, and absorbed tails; the quality
 point uses factor 4 with the same cutoff and absorption.  Report per-scene and
 nine-scene mean L1, PSNR, SSIM, LPIPS, FPS, checkpoint bytes, triangles, and
 vertices, plus deltas against the matched stock and MeshSplatting Table 1.
+
+## 2026-08-25 — formal nine-scene matched main table
+
+- Status: **completed — both operating points beat matched stock on mean quality**
+- Source revision: `cfdd5d7fe200c942a61811d2200b8c5217ffca28`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/formal_main_table_01`
+- Device: NVIDIA A40, physical GPU 0
+- Protocol: official nine-scene test splits; one metric implementation for all
+  arms; stock is factor 4/cutoff `1e-4`/no absorption; speed is factor
+  3/cutoff `0.01`/absorbed tail; quality is factor 4/cutoff `0.01`/absorbed tail
+
+| Scene | Arm | L1 | PSNR | SSIM | LPIPS | FPS | Checkpoint bytes | Triangles | Vertices |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Bicycle | Stock | 0.048794 | 23.041271 | 0.640807 | 0.348756 | 20.328844 | 759106271 | 5320396 | 3035639 |
+| Bicycle | Speed | 0.048016 | 23.195446 | 0.651117 | 0.338084 | 22.920987 | 733883423 | 5036406 | 2947143 |
+| Bicycle | Quality | 0.047826 | 23.234833 | 0.653088 | 0.337250 | 19.867901 | 733883423 | 5036406 | 2947143 |
+| Flowers | Stock | 0.072981 | 19.187858 | 0.491566 | 0.410658 | 21.615463 | 721468511 | 4681084 | 2928455 |
+| Flowers | Speed | 0.071461 | 19.353559 | 0.500561 | 0.399100 | 25.957212 | 692610847 | 4340802 | 2828979 |
+| Flowers | Quality | 0.071282 | 19.374407 | 0.501950 | 0.399845 | 21.492244 | 692610847 | 4340802 | 2828979 |
+| Garden | Stock | 0.037263 | 24.951998 | 0.767987 | 0.208522 | 16.716299 | 843823391 | 6952816 | 3254576 |
+| Garden | Speed | 0.037167 | 24.946452 | 0.773598 | 0.204013 | 19.266939 | 790597471 | 6380742 | 3064691 |
+| Garden | Quality | 0.036878 | 25.009887 | 0.776170 | 0.202541 | 16.062619 | 790597471 | 6380742 | 3064691 |
+| Stump | Stock | 0.039539 | 24.905838 | 0.682467 | 0.310663 | 20.095976 | 756575327 | 5315633 | 3024020 |
+| Stump | Speed | 0.038600 | 25.109888 | 0.695883 | 0.299210 | 22.740280 | 729699743 | 4967374 | 2934994 |
+| Stump | Quality | 0.038421 | 25.152299 | 0.697998 | 0.298199 | 19.620795 | 729699743 | 4967374 | 2934994 |
+| Treehill | Stock | 0.059255 | 20.553801 | 0.544168 | 0.420839 | 20.651201 | 765712223 | 5205871 | 3080612 |
+| Treehill | Speed | 0.057968 | 20.764348 | 0.552123 | 0.412656 | 23.791149 | 737897247 | 4888988 | 2983450 |
+| Treehill | Quality | 0.057828 | 20.782629 | 0.553769 | 0.413276 | 20.259275 | 737897247 | 4888988 | 2983450 |
+| Room | Stock | 0.022451 | 28.475514 | 0.874631 | 0.270479 | 17.251937 | 668222367 | 5628158 | 2563186 |
+| Room | Speed | 0.022651 | 28.524558 | 0.876821 | 0.268555 | 21.663890 | 563875039 | 4646148 | 2174825 |
+| Room | Quality | 0.022604 | 28.545234 | 0.877703 | 0.267251 | 17.784252 | 563875039 | 4646148 | 2174825 |
+| Counter | Stock | 0.025011 | 26.370213 | 0.846130 | 0.278404 | 14.849613 | 575617951 | 4818582 | 2211385 |
+| Counter | Speed | 0.024838 | 26.495812 | 0.846780 | 0.277614 | 20.264451 | 498635423 | 4015827 | 1933902 |
+| Counter | Quality | 0.024770 | 26.512634 | 0.847886 | 0.276044 | 15.517074 | 498635423 | 4015827 | 1933902 |
+| Kitchen | Stock | 0.025864 | 27.462079 | 0.859761 | 0.225250 | 14.333200 | 572536479 | 5280239 | 2143301 |
+| Kitchen | Speed | 0.025937 | 27.525986 | 0.858401 | 0.229251 | 19.154564 | 492744543 | 4371689 | 1864520 |
+| Kitchen | Quality | 0.025797 | 27.570042 | 0.860137 | 0.226496 | 14.964859 | 492744543 | 4371689 | 1864520 |
+| Bonsai | Stock | 0.022599 | 28.225407 | 0.877637 | 0.294033 | 16.673034 | 746859679 | 5534484 | 2952058 |
+| Bonsai | Speed | 0.022259 | 28.422882 | 0.883337 | 0.286459 | 20.526534 | 701300383 | 5082645 | 2785158 |
+| Bonsai | Quality | 0.022187 | 28.454425 | 0.884398 | 0.284298 | 16.625824 | 701300383 | 5082645 | 2785158 |
+
+| Arm | Mean L1 | Mean PSNR | Mean SSIM | Mean LPIPS | Mean FPS | Mean bytes | Mean triangles | Mean vertices |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Stock | 0.039306 | 24.797109 | 0.731684 | 0.307511 | 18.057285 | 712213578 | 5415251 | 2799248 |
+| Speed | 0.038766 | 24.926548 | 0.737625 | 0.301660 | 21.809556 | 660138235 | 4858958 | 2613074 |
+| Quality | 0.038621 | 24.959599 | 0.739233 | 0.300578 | 18.021649 | 660138235 | 4858958 | 2613074 |
+
+Relative to matched stock, the speed point changes mean L1 by `-0.0005401`,
+PSNR by `+0.1294393` dB, SSIM by `+0.0059408`, LPIPS by `-0.0058513`, and
+FPS by `+20.780%`.  It also reduces checkpoint bytes by `7.312%`, triangles by
+`10.273%`, and vertices by `6.651%`.  It wins FPS, checkpoint size, triangle
+count, and vertex count on all nine scenes; PSNR/SSIM/LPIPS on eight; and L1 on
+seven.
+
+The quality point changes mean L1 by `-0.0006849`, PSNR by `+0.1624902` dB,
+SSIM by `+0.0075495`, LPIPS by `-0.0069336`, and FPS by `-0.197%`, with the
+same representation-size reductions.  It wins PSNR and SSIM on all nine,
+LPIPS and L1 on eight, and FPS on three.  Its only L1 loss is Room and its only
+LPIPS loss is Kitchen.
+
+Against MeshSplatting Table 1 (`24.78` PSNR, `0.728` SSIM, `0.310` LPIPS),
+the speed point is `+0.146548` dB / `+0.009625` / `-0.008340`, and the quality
+point is `+0.179599` dB / `+0.011233` / `-0.009422`.  The matched stock itself
+is only `+0.017109` dB above the paper, so the improvement is primarily the
+method rather than a stronger local reproduction.
+
+**Decision:** the nine-scene transfer criterion passes.  Freeze opacity `0.8`,
+cutoff `0.01`, and both operating points.  Stop method search and cutoff tuning;
+move to the smallest causal ablation and then paper-facing comparisons.
+
+## Planned experiment — nine-scene opacity-only ablation
+
+Evaluate the same opacity-0.8 checkpoints at the untouched stock renderer
+settings: factor 4, cutoff `1e-4`, and no tail absorption.  This adds no training
+and changes exactly one cause relative to stock: terminal opacity.  If mean
+PSNR, SSIM, and LPIPS still beat matched stock, opacity relaxation is the main
+representation contribution; the absorbed tail and factor 3 can then be
+presented as independent inference operating points.  Otherwise the method is
+a coupled training/rendering design and must be described that way.

@@ -40,6 +40,12 @@ SETTINGS = {
         "absorb_tail": True,
         "upsample": 4,
     },
+    "ours_opacity": {
+        "opacity_floor": 0.8,
+        "threshold": 1e-4,
+        "absorb_tail": False,
+        "upsample": 4,
+    },
 }
 
 

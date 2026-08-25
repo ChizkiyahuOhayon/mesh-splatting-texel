@@ -50,6 +50,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.formal_evaluation_batch = (repo / "sota" / "batch25.sh").read_text(
             encoding="utf-8"
         )
+        self.opacity_ablation_batch = (repo / "sota" / "batch26.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -234,6 +237,10 @@ class SOTANativeContractTest(unittest.TestCase):
             self.formal_evaluation_batch,
         )
         self.assertIn("  evaluate_stock\n  evaluate_method", self.formal_evaluation_batch)
+
+    def test_opacity_ablation_changes_no_inference_setting(self):
+        self.assertIn("--arm ours_opacity", self.opacity_ablation_batch)
+        self.assertIn("-m sota.opacity_ablation", self.opacity_ablation_batch)
 
 
 if __name__ == "__main__":
