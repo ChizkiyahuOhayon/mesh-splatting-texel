@@ -28,6 +28,18 @@ SETTINGS = {
         "absorb_tail": True,
         "upsample": 3,
     },
+    "ours_speed": {
+        "opacity_floor": 0.8,
+        "threshold": 1e-2,
+        "absorb_tail": True,
+        "upsample": 3,
+    },
+    "ours_quality": {
+        "opacity_floor": 0.8,
+        "threshold": 1e-2,
+        "absorb_tail": True,
+        "upsample": 4,
+    },
 }
 
 
@@ -56,7 +68,7 @@ def run(dataset, pipeline, args):
         shuffle=False,
     )
     triangles.scaling = 4
-    if args.arm == "ours" and float(triangles.opacity_floor) != 0.8:
+    if args.arm != "stock" and float(triangles.opacity_floor) != 0.8:
         raise RuntimeError(
             f"method checkpoint opacity_floor is {triangles.opacity_floor}, expected 0.8"
         )

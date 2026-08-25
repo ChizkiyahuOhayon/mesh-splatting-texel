@@ -47,6 +47,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.formal_training_batch = (repo / "sota" / "batch24.sh").read_text(
             encoding="utf-8"
         )
+        self.formal_evaluation_batch = (repo / "sota" / "batch25.sh").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -218,6 +221,12 @@ class SOTANativeContractTest(unittest.TestCase):
 
     def test_new_runs_record_the_source_revision(self):
         self.assertIn('git rev-parse HEAD > "$OUT/source_revision.txt"', self.runner)
+
+    def test_formal_evaluation_uses_two_fixed_operating_points(self):
+        self.assertIn("for SCENE in", self.formal_evaluation_batch)
+        self.assertIn("ours_speed", self.formal_evaluation_batch)
+        self.assertIn("ours_quality", self.formal_evaluation_batch)
+        self.assertIn("-m sota.formal_table", self.formal_evaluation_batch)
 
 
 if __name__ == "__main__":

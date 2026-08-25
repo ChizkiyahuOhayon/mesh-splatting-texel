@@ -506,3 +506,59 @@ path.  No GPU work, output directory, or scientific result was produced.  The
 formal run therefore trains matched stock and opacity-0.8 arms for all six
 missing scenes in parallel on two GPUs; this removes dependence on incomplete
 legacy output while preserving the three already completed matched pairs.
+
+## 2026-08-25 — formal nine-scene training / missing six matched pairs
+
+- Status: **completed — opacity-0.8 wins all four quality metrics on all six**
+- Source revision: `c8341fdff1e582444d3cd860045529a4b02edd13`
+- Output root: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_floor_01`
+- Devices: NVIDIA A40 GPU 0 for stock and GPU 2 for opacity-0.8
+- Configuration: official scene protocol, iteration 30,000, matched stock versus
+  the single global change `--final_opacity 0.8`
+
+| Scene | Arm | Seconds | L1 | PSNR | SSIM | LPIPS | FPS |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Flowers | Stock | 5857 | 0.071036 | 19.464428 | 0.492637 | 0.408309 | 16.529078 |
+| Flowers | Opacity 0.8 | 6175 | 0.069302 | 19.665277 | 0.504587 | 0.396228 | 15.555863 |
+| Stump | Stock | 5546 | 0.039550 | 24.901448 | 0.682257 | 0.310649 | 16.291457 |
+| Stump | Opacity 0.8 | 5929 | 0.038353 | 25.155465 | 0.698617 | 0.297398 | 14.703627 |
+| Treehill | Stock | 5946 | 0.058947 | 20.586056 | 0.545253 | 0.420342 | 16.530302 |
+| Treehill | Opacity 0.8 | 6264 | 0.057240 | 20.846214 | 0.555447 | 0.413790 | 15.280997 |
+| Counter | Stock | 7305 | 0.024912 | 26.440423 | 0.846378 | 0.278266 | 11.347065 |
+| Counter | Opacity 0.8 | 7666 | 0.024495 | 26.622126 | 0.849782 | 0.272211 | 11.307885 |
+| Kitchen | Stock | 7661 | 0.025833 | 27.498172 | 0.859861 | 0.225138 | 11.674087 |
+| Kitchen | Opacity 0.8 | 8103 | 0.025734 | 27.597946 | 0.860814 | 0.224453 | 11.522598 |
+| Bonsai | Stock | 8687 | 0.022536 | 28.284916 | 0.877814 | 0.293871 | 10.267386 |
+| Bonsai | Opacity 0.8 | 8048 | 0.021954 | 28.565135 | 0.885600 | 0.277842 | 12.781260 |
+
+| Scene | PSNR delta | SSIM delta | LPIPS delta | L1 delta |
+|---|---:|---:|---:|---:|
+| Flowers | +0.2008 | +0.011950 | -0.012081 | -0.001733 |
+| Stump | +0.2540 | +0.016360 | -0.013251 | -0.001197 |
+| Treehill | +0.2602 | +0.010194 | -0.006553 | -0.001707 |
+| Counter | +0.1817 | +0.003404 | -0.006056 | -0.000417 |
+| Kitchen | +0.0998 | +0.000953 | -0.000685 | -0.000099 |
+| Bonsai | +0.2802 | +0.007786 | -0.016029 | -0.000583 |
+
+Across these six new matched pairs, mean PSNR improves from `24.5292404` to
+`24.7420272` (`+0.2127867` dB), mean SSIM from `0.7173666` to `0.7258079`
+(`+0.0084412`), mean LPIPS from `0.3227628` to `0.3136537`
+(`-0.0091091`), and mean L1 from `0.0404691` to `0.0395131`
+(`-0.0009560`).  Every new scene improves every quality metric.  The unoptimized
+training-report FPS is lower on five scenes and higher on Bonsai; this is not
+the final inference result because it omits the fixed absorbed-tail and
+factor-3 speed operating point.
+
+All twelve new checkpoints passed their persisted endpoint check: every stock
+checkpoint records opacity floor `0.9999` and every method checkpoint records
+`0.8`.  Together with the three previously completed matched pairs, the formal
+nine-scene checkpoint set is complete.
+
+## Planned experiment — formal nine-scene matched main table
+
+Evaluate every frozen checkpoint with one implementation and two method
+operating points.  Stock uses factor 4, cutoff `1e-4`, and no tail absorption.
+The speed point uses factor 3, cutoff `0.01`, and absorbed tails; the quality
+point uses factor 4 with the same cutoff and absorption.  Report per-scene and
+nine-scene mean L1, PSNR, SSIM, LPIPS, FPS, checkpoint bytes, triangles, and
+vertices, plus deltas against the matched stock and MeshSplatting Table 1.
