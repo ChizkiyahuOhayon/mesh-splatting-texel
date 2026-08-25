@@ -49,27 +49,35 @@ evaluate() {
     --scene "$scene" --arm "$arm" --iteration 30000 --output "$output"
 }
 
-(
+evaluate_stock() {
   export CUDA_VISIBLE_DEVICES=$STOCK_GPU
   for SCENE in "${SCENES[@]}"; do
     evaluate "$SCENE" stock "$(stock_model "$SCENE")"
   done
-) &
-STOCK_PID=$!
+}
 
-(
+evaluate_method() {
   export CUDA_VISIBLE_DEVICES=$METHOD_GPU
   for SCENE in "${SCENES[@]}"; do
     MODEL="$RUNS/opacity08__${SCENE}"
     evaluate "$SCENE" ours_speed "$MODEL"
     evaluate "$SCENE" ours_quality "$MODEL"
   done
-) &
-METHOD_PID=$!
+}
 
-STATUS=0
-wait "$STOCK_PID" || STATUS=1
-wait "$METHOD_PID" || STATUS=1
-test "$STATUS" -eq 0 || exit "$STATUS"
+if [ "$STOCK_GPU" = "$METHOD_GPU" ]; then
+  evaluate_stock
+  evaluate_method
+else
+  evaluate_stock &
+  STOCK_PID=$!
+  evaluate_method &
+  METHOD_PID=$!
+
+  STATUS=0
+  wait "$STOCK_PID" || STATUS=1
+  wait "$METHOD_PID" || STATUS=1
+  test "$STATUS" -eq 0 || exit "$STATUS"
+fi
 
 "$MESH_SPLATTING_PYTHON" -m sota.formal_table "$ROOT"

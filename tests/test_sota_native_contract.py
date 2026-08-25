@@ -228,6 +228,13 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("ours_quality", self.formal_evaluation_batch)
         self.assertIn("-m sota.formal_table", self.formal_evaluation_batch)
 
+    def test_formal_evaluation_serializes_arms_on_one_gpu(self):
+        self.assertIn(
+            'if [ "$STOCK_GPU" = "$METHOD_GPU" ]',
+            self.formal_evaluation_batch,
+        )
+        self.assertIn("  evaluate_stock\n  evaluate_method", self.formal_evaluation_batch)
+
 
 if __name__ == "__main__":
     unittest.main()
