@@ -711,3 +711,80 @@ Store predictions, targets, and fixed-scale absolute-error maps.  Exporting all
 test views makes the artifact reusable and leaves paper-view selection separate
 from the renderer.  The batch is single-GPU, resumable per training and export,
 and introduces no new scientific setting beyond the two opacity endpoints.
+
+## 2026-08-25 — trained terminal-opacity sensitivity
+
+- Status: **completed — 0.8 remains the frozen global endpoint**
+- Source revision: `5a14a926a105ce7128411b08d28a9bc2650b24a8`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_sensitivity_01`
+- Device: NVIDIA A40, physical GPU 0
+- Protocol: Bicycle and Room, iteration 30,000, terminal opacity floors
+  `0.7`, `0.8`, `0.9`, plus matched stock `0.9999`; factor 4, cutoff `1e-4`,
+  no tail absorption for every arm
+- Result checksum: `aeff61b628aff94465fc6b231594985d535508797ae14373b5833b250c53b87b`
+- Completion checksum: `37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1`
+
+| Scene | Opacity | L1 | PSNR | SSIM | LPIPS | FPS | Checkpoint bytes | Triangles | Vertices |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Bicycle | 0.9999 (stock) | 0.048794 | 23.041271 | 0.640807 | 0.348756 | 20.328844 | 759106271 | 5320396 | 3035639 |
+| Bicycle | 0.7 | 0.047797 | 23.250986 | 0.653877 | 0.332161 | 18.183549 | 721526623 | 4878573 | 2905946 |
+| Bicycle | 0.8 | 0.047914 | 23.225800 | 0.652080 | 0.337504 | 18.614687 | 733883423 | 5036406 | 2947143 |
+| Bicycle | 0.9 | 0.048469 | 23.105868 | 0.646507 | 0.344014 | 18.840787 | 741829791 | 5111766 | 2976651 |
+| Room | 0.9999 (stock) | 0.022451 | 28.475514 | 0.874631 | 0.270479 | 17.251937 | 668222367 | 5628158 | 2563186 |
+| Room | 0.7 | 0.022584 | 28.597967 | 0.873894 | 0.275401 | 16.040776 | 543500575 | 4454631 | 2098969 |
+| Room | 0.8 | 0.022635 | 28.540048 | 0.876655 | 0.267370 | 16.486950 | 563875039 | 4646148 | 2174825 |
+| Room | 0.9 | 0.022603 | 28.533605 | 0.874944 | 0.272247 | 16.512580 | 595791839 | 4941615 | 2294178 |
+
+| Opacity | Mean L1 | Mean PSNR | Mean SSIM | Mean LPIPS | Mean FPS | Mean bytes | Mean triangles | Mean vertices |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.9999 (stock) | 0.035622 | 25.758393 | 0.757719 | 0.309617 | 18.790390 | 713664319 | 5474277 | 2799413 |
+| 0.7 | **0.035191** | **25.924477** | 0.763885 | 0.303781 | 17.112163 | **632513599** | **4666602** | **2502458** |
+| 0.8 | 0.035275 | 25.882924 | **0.764368** | **0.302437** | 17.550818 | 648879231 | 4841277 | 2560984 |
+| 0.9 | 0.035536 | 25.819737 | 0.760725 | 0.308130 | 17.676683 | 668810815 | 5026691 | 2635415 |
+
+Relative to stock, opacity `0.7` changes mean L1 by `-0.0004318`, PSNR by
+`+0.1660841` dB, SSIM by `+0.0061662`, LPIPS by `-0.0058363`, and FPS by
+`-8.931%`; it reduces checkpoint bytes by `11.371%`, triangles by `14.754%`,
+and vertices by `10.608%`.  Opacity `0.8` changes mean L1 by `-0.0003478`,
+PSNR by `+0.1245313` dB, SSIM by `+0.0066486`, LPIPS by `-0.0071802`, and FPS
+by `-6.597%`; it reduces checkpoint bytes by `9.078%`, triangles by `11.563%`,
+and vertices by `8.517%`.  Opacity `0.9` improves stock less on every mean
+quality metric and is not competitive with the lower endpoints.
+
+The sensitivity exposes a genuine quality tradeoff rather than a single tuned
+optimum.  Opacity `0.7` has the best two-scene L1 and PSNR and the smallest
+representation.  Opacity `0.8` has the best mean SSIM and LPIPS.  On Room,
+`0.7` improves PSNR but falls below stock on SSIM and LPIPS, whereas `0.8`
+improves PSNR, SSIM, and LPIPS together.  The frozen `0.8` endpoint is therefore
+the more stable global perceptual-quality choice, and it already has the
+stronger nine-scene evidence.  The two-scene sensitivity does not justify
+replacing the completed nine-scene main configuration with `0.7`.
+
+**Decision:** keep opacity `0.8` as the single global method setting.  Report
+`0.7/0.8/0.9` as a compact sensitivity study and stop opacity tuning.
+
+## 2026-08-25 — formal qualitative export
+
+- Status: **completed — all requested test views exported**
+- Source revision: `5a14a926a105ce7128411b08d28a9bc2650b24a8`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/qualitative_01`
+- Scenes: Bicycle, Flowers, Room
+- Arms: matched stock and frozen quality operating point
+- Artifacts per view: shared target, stock render, stock absolute-error map,
+  method render, and method absolute-error map
+- Error visualization: channel-mean absolute error with fixed scale `4.0`
+- Completion: `430` PNG files and `7` `DONE` markers
+
+The export is complete: Bicycle has 25 test views, Flowers 22, and Room 39,
+for 86 views total.  Targets are shared between arms, so the exact expected
+count is `86 * (1 target + 2 renders + 2 errors) = 430` PNG files.  The seven
+completion markers comprise two arms for each of three scenes plus the root
+marker.  Paper-view selection can now be performed without rerendering or
+changing the evaluation protocol.
+
+**Decision:** GPU experimentation for the frozen method is complete.  Preserve
+all checkpoints and JSON artifacts.  Next build the paper-facing comparison
+table from official external-method numbers, select representative qualitative
+views from this export, and draft the method, main-result, and ablation sections.
+Additional training should be opened only for a concrete reviewer-facing gap,
+not for further endpoint or seed search.
