@@ -641,3 +641,58 @@ PSNR, SSIM, and LPIPS still beat matched stock, opacity relaxation is the main
 representation contribution; the absorbed tail and factor 3 can then be
 presented as independent inference operating points.  Otherwise the method is
 a coupled training/rendering design and must be described that way.
+
+## 2026-08-25 — formal nine-scene opacity-only ablation
+
+- Status: **completed — the representation change independently passes**
+- Source revision: `a709043188d672d9664ab701fbee8855833b7360`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/formal_opacity_ablation_01`
+- Device: NVIDIA A40, physical GPU 0
+- Configuration: opacity-0.8 checkpoints with the untouched stock renderer:
+  factor 4, cutoff `1e-4`, and no tail absorption
+
+| Scene | L1 | PSNR | SSIM | LPIPS | FPS | Checkpoint bytes | Triangles | Vertices |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Bicycle | 0.047914 | 23.225800 | 0.652080 | 0.337504 | 18.614687 | 733883423 | 5036406 | 2947143 |
+| Flowers | 0.071315 | 19.367630 | 0.500578 | 0.400843 | 20.282600 | 692610847 | 4340802 | 2828979 |
+| Garden | 0.036939 | 24.996980 | 0.775096 | 0.202638 | 14.989976 | 790597471 | 6380742 | 3064691 |
+| Stump | 0.038457 | 25.145183 | 0.697413 | 0.298570 | 18.228631 | 729699743 | 4967374 | 2934994 |
+| Treehill | 0.057762 | 20.784753 | 0.552278 | 0.416521 | 19.190890 | 737897247 | 4888988 | 2983450 |
+| Room | 0.022635 | 28.540048 | 0.876655 | 0.267370 | 16.486950 | 563875039 | 4646148 | 2174825 |
+| Counter | 0.024781 | 26.508037 | 0.847078 | 0.276689 | 14.381928 | 498635423 | 4015827 | 1933902 |
+| Kitchen | 0.025842 | 27.559919 | 0.859279 | 0.227533 | 13.826435 | 492744543 | 4371689 | 1864520 |
+| Bonsai | 0.022212 | 28.449654 | 0.882395 | 0.283951 | 15.554981 | 701300383 | 5082645 | 2785158 |
+| **Mean** | **0.038651** | **24.953111** | **0.738095** | **0.301291** | **16.839675** | **660138235** | **4858958** | **2613074** |
+
+Relative to matched stock, opacity relaxation alone changes mean L1 by
+`-0.0006555`, PSNR by `+0.1560027` dB, SSIM by `+0.0064111`, and LPIPS by
+`-0.0062205`.  It wins PSNR on all nine scenes and L1/SSIM/LPIPS on eight.
+The only L1 loss is Room; the only SSIM and LPIPS losses are Kitchen.  It also
+reduces checkpoint bytes by `7.312%`, triangles by `10.273%`, and vertices by
+`6.651%`, all on nine of nine scenes.
+
+The isolated cost is rendering time: mean FPS falls from `18.057285` to
+`16.839675` (`-6.743%`) and loses on all nine scenes.  This agrees with the
+mechanism: retaining opacity below one makes useful fragments survive deeper
+into the compositing list even though the learned mesh itself is smaller.
+
+The completed four-stage ablation is:
+
+| Stage | Mean PSNR | Mean SSIM | Mean LPIPS | Mean FPS |
+|---|---:|---:|---:|---:|
+| Stock | 24.797109 | 0.731684 | 0.307511 | 18.057285 |
+| + opacity relaxation | 24.953111 | 0.738095 | 0.301291 | 16.839675 |
+| + absorbed tail (quality) | 24.959599 | 0.739233 | 0.300578 | 18.021649 |
+| + factor-3 sampling (speed) | 24.926548 | 0.737625 | 0.301660 | 21.809556 |
+
+At fixed factor 4, absorbed-tail rendering recovers `+7.019%` FPS over the
+opacity-only arm while slightly improving every mean quality metric.  Moving
+from factor 4 to factor 3 then adds `+21.019%` FPS, with only `-0.033051` dB
+PSNR, `-0.001609` SSIM, and `+0.001082` LPIPS relative to the quality point;
+the speed point remains better than stock on every mean quality metric.
+
+**Decision:** the causal ablation passes.  Terminal opacity relaxation is the
+independent quality-and-compactness contribution; absorbed-tail rendering pays
+back its compositing cost; factor 3 is an optional speed operating point.  No
+further method search or opacity/cutoff sweep is justified before paper-facing
+tables, qualitative renders, and the remaining standard comparisons are built.
