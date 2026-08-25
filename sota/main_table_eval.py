@@ -46,6 +46,18 @@ SETTINGS = {
         "absorb_tail": False,
         "upsample": 4,
     },
+    "ours_opacity07": {
+        "opacity_floor": 0.7,
+        "threshold": 1e-4,
+        "absorb_tail": False,
+        "upsample": 4,
+    },
+    "ours_opacity09": {
+        "opacity_floor": 0.9,
+        "threshold": 1e-4,
+        "absorb_tail": False,
+        "upsample": 4,
+    },
 }
 
 
@@ -74,9 +86,11 @@ def run(dataset, pipeline, args):
         shuffle=False,
     )
     triangles.scaling = 4
-    if args.arm != "stock" and float(triangles.opacity_floor) != 0.8:
+    expected_floor = setting["opacity_floor"]
+    if args.arm != "stock" and float(triangles.opacity_floor) != expected_floor:
         raise RuntimeError(
-            f"method checkpoint opacity_floor is {triangles.opacity_floor}, expected 0.8"
+            f"method checkpoint opacity_floor is {triangles.opacity_floor}, "
+            f"expected {expected_floor}"
         )
     # Garden/Room stock checkpoints predate persistence of this scalar.  Their
     # endpoint is the published opaque baseline used in the matched runs.

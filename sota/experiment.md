@@ -696,3 +696,18 @@ independent quality-and-compactness contribution; absorbed-tail rendering pays
 back its compositing cost; factor 3 is an optional speed operating point.  No
 further method search or opacity/cutoff sweep is justified before paper-facing
 tables, qualitative renders, and the remaining standard comparisons are built.
+
+## Planned experiment — overnight trained sensitivity and qualitative export
+
+Use the idle A40 for the minimum trained sensitivity study around the frozen
+global opacity `0.8`: train `0.7` and `0.9` on Bicycle and Room, giving one
+outdoor and one indoor scene while reusing the completed `0.8` and stock
+checkpoints.  Evaluate all four endpoints with factor 4, cutoff `1e-4`, and no
+tail absorption.  This is four new trainings, no seeds and no additional grid.
+
+After the sensitivity results are complete, export every official test view for
+Bicycle, Flowers, and Room under matched stock and the quality operating point.
+Store predictions, targets, and fixed-scale absolute-error maps.  Exporting all
+test views makes the artifact reusable and leaves paper-view selection separate
+from the renderer.  The batch is single-GPU, resumable per training and export,
+and introduces no new scientific setting beyond the two opacity endpoints.

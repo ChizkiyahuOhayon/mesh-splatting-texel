@@ -53,6 +53,12 @@ class SOTANativeContractTest(unittest.TestCase):
         self.opacity_ablation_batch = (repo / "sota" / "batch26.sh").read_text(
             encoding="utf-8"
         )
+        self.overnight_batch = (repo / "sota" / "batch27.sh").read_text(
+            encoding="utf-8"
+        )
+        self.qualitative = (repo / "sota" / "qualitative.py").read_text(
+            encoding="utf-8"
+        )
         self.runner = (repo / "sota" / "run.sh").read_text(encoding="utf-8")
         self.triangle_model = (repo / "scene" / "triangle_model.py").read_text(
             encoding="utf-8"
@@ -241,6 +247,16 @@ class SOTANativeContractTest(unittest.TestCase):
     def test_opacity_ablation_changes_no_inference_setting(self):
         self.assertIn("--arm ours_opacity", self.opacity_ablation_batch)
         self.assertIn("-m sota.opacity_ablation", self.opacity_ablation_batch)
+
+    def test_overnight_batch_is_a_two_scene_sensitivity_study(self):
+        self.assertIn("for SCENE in bicycle room", self.overnight_batch)
+        self.assertIn("for FLOOR in 07 09", self.overnight_batch)
+        self.assertIn("-m sota.opacity_sensitivity", self.overnight_batch)
+
+    def test_qualitative_export_uses_all_sorted_test_views(self):
+        self.assertIn("sorted(scene.getTestCameras()", self.qualitative)
+        self.assertIn('ARMS = ("stock", "ours_quality")', self.qualitative)
+        self.assertIn("ERROR_SCALE = 4.0", self.qualitative)
 
 
 if __name__ == "__main__":
