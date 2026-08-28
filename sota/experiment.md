@@ -788,3 +788,18 @@ table from official external-method numbers, select representative qualitative
 views from this export, and draft the method, main-result, and ablation sections.
 Additional training should be opened only for a concrete reviewer-facing gap,
 not for further endpoint or seed search.
+
+## Planned experiment — Tanks & Temples transfer
+
+The remaining reviewer-facing gap is cross-dataset evidence.  Train matched
+stock and frozen SoftTail checkpoints on the official Tanks & Temples Train and
+Truck scenes.  Follow MeshSplatting's protocol with primitive caps of 2.5M and
+2.0M, respectively.  Transfer the nine-scene method unchanged: terminal opacity
+`0.8`, transmittance cutoff `0.01`, absorbed tail, and factor 3/4 speed/quality
+operating points.  Use the official test split and report L1, PSNR, SSIM,
+LPIPS-VGG, FPS, checkpoint size, triangles, and vertices.
+
+The run is single-GPU and evaluates both operating points from the same method
+checkpoint.  Success means completed stock and method checkpoints for both
+scenes plus a machine-readable aggregate table and `DONE` marker.  There is no
+dataset-specific tuning and no additional search.

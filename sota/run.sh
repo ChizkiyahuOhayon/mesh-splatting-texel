@@ -3,10 +3,10 @@
 #
 #   sota/run.sh <arm> <scene> [extra train.py args...]
 #
-# The scene decides the two settings the official protocol ties to it: the image
-# pyramid level and the indoor hyperparameter override (full_eval.py). Everything
-# else an experiment wants to change is passed through verbatim, so an arm is
-# fully described by its name plus the arguments after it.
+# The scene decides the settings fixed by the published protocol: image pyramid,
+# indoor override, and the T&T scene-specific primitive cap. Everything else an
+# experiment wants to change is passed through verbatim, so an arm is fully
+# described by its name plus the arguments after it.
 set -euo pipefail
 
 ARM=${1:?usage: sota/run.sh <arm> <scene> [train args...]}
@@ -21,7 +21,9 @@ TRAIN_PYTHON=${MESH_SPLATTING_PYTHON:-python}
 case "$SCENE" in
   bicycle|flowers|garden|stump|treehill) PROTOCOL=(-i images_4) ;;
   room|counter|kitchen|bonsai)           PROTOCOL=(-i images_2 --indoor) ;;
-  *) echo "unknown scene '$SCENE' (not a Mip-NeRF360 scene)" >&2; exit 1 ;;
+  train)                                 PROTOCOL=(--max_points 2500000) ;;
+  truck)                                 PROTOCOL=(--max_points 2000000) ;;
+  *) echo "unknown supported scene '$SCENE'" >&2; exit 1 ;;
 esac
 
 OUT="$RUNS/${ARM}__${SCENE}"

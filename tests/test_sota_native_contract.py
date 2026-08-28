@@ -56,6 +56,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.overnight_batch = (repo / "sota" / "batch27.sh").read_text(
             encoding="utf-8"
         )
+        self.tandt_batch = (repo / "sota" / "batch28.sh").read_text(
+            encoding="utf-8"
+        )
         self.qualitative = (repo / "sota" / "qualitative.py").read_text(
             encoding="utf-8"
         )
@@ -252,6 +255,28 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("for SCENE in bicycle room", self.overnight_batch)
         self.assertIn("for FLOOR in 07 09", self.overnight_batch)
         self.assertIn("-m sota.opacity_sensitivity", self.overnight_batch)
+
+    def test_tandt_batch_transfers_the_frozen_method_on_one_gpu(self):
+        self.assertIn("SCENES=(train truck)", self.tandt_batch)
+        self.assertIn('GPU=${GPU:-0}', self.tandt_batch)
+        self.assertIn('"$HERE/run.sh" stock "$SCENE"', self.tandt_batch)
+        self.assertIn(
+            '"$HERE/run.sh" opacity08 "$SCENE" --final_opacity 0.8',
+            self.tandt_batch,
+        )
+        self.assertIn("ours_speed", self.tandt_batch)
+        self.assertIn("ours_quality", self.tandt_batch)
+        self.assertIn("-m sota.tandt_table", self.tandt_batch)
+
+    def test_tandt_runner_uses_the_published_scene_caps(self):
+        self.assertIn(
+            "train)                                 PROTOCOL=(--max_points 2500000)",
+            self.runner,
+        )
+        self.assertIn(
+            "truck)                                 PROTOCOL=(--max_points 2000000)",
+            self.runner,
+        )
 
     def test_qualitative_export_uses_all_sorted_test_views(self):
         self.assertIn("sorted(scene.getTestCameras()", self.qualitative)
