@@ -839,3 +839,29 @@ three metrics by `+0.398141` dB / `+0.023936` / `-0.025298`.
 Use SoftTail-Quality as the main accuracy row and SoftTail-Speed as the
 efficiency row.  The result directly supports generalization beyond
 Mip-NeRF360 and completes the planned T&T comparison.
+
+## Planned experiment — formal DTU geometry transfer
+
+The third benchmark evaluates whether terminal opacity relaxation improves the
+learned surface rather than only novel-view appearance.  Train matched stock
+MeshSplatting and the frozen SoftTail checkpoint (`final_opacity=0.8`) on the
+official DTU scans 24, 37, 40, 55, 63, 65, 69, 83, 97, 105, 106, 110, 114,
+118, and 122.  Following the published MeshSplatting protocol, use every input
+view at resolution factor 2 and disable the monocular depth-alignment term;
+retain the remaining self-supervised geometric regularizers unchanged.
+
+Export the learned triangle mesh at iteration 30,000, cull it with the public
+2DGS foreground-mask procedure, and evaluate accuracy, completeness, and their
+Chamfer mean with DTUeval-python against the official observability masks and
+STL point clouds.  Fix only the evaluator's point-order RNG to seed 0 so both
+arms receive the same deterministic downsampling; this is not a training-seed
+sweep.  Also report checkpoint bytes and the uncropped learned mesh's triangle
+and vertex counts.
+
+The batch is serial on physical GPU 0 and resumable at both the training and
+evaluation levels.  Success requires paired results for all 15 scans, a
+machine-readable `dtu_table.json`, and a root `DONE` marker.  The paper-reported
+MeshSplatting Chamfer row (`0.79` mean) is stored beside the matched rerun, while
+all method comparisons use the matched stock checkpoints as the primary
+control.  No DTU-specific method setting, endpoint search, or seed analysis is
+introduced.

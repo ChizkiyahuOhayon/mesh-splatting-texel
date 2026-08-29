@@ -6,6 +6,7 @@ from tqdm import tqdm
 from scipy.io import loadmat
 import multiprocessing as mp
 import argparse
+from pathlib import Path
 
 def sample_single_tri(input_):
     n1, n2, v1, v2, tri_vert = input_
@@ -37,7 +38,9 @@ if __name__ == '__main__':
     parser.add_argument('--patch_size', type=float, default=60)
     parser.add_argument('--max_dist', type=float, default=20)
     parser.add_argument('--visualize_threshold', type=float, default=10)
+    parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
+    Path(args.vis_out_dir).mkdir(parents=True, exist_ok=True)
 
     thresh = args.downsample_density
     if args.mode == 'mesh':
@@ -78,7 +81,7 @@ if __name__ == '__main__':
 
     pbar.update(1)
     pbar.set_description('random shuffle pcd index')
-    shuffle_rng = np.random.default_rng()
+    shuffle_rng = np.random.default_rng(args.seed)
     shuffle_rng.shuffle(data_pcd, axis=0)
 
     pbar.update(1)
@@ -161,7 +164,8 @@ if __name__ == '__main__':
     import json
     with open(f'{args.vis_out_dir}/results.json', 'w') as fp:
         json.dump({
-            'mean_d2s': mean_d2s,
-            'mean_s2d': mean_s2d,
-            'overall': over_all,
-        }, fp, indent=True)
+            'mean_d2s': float(mean_d2s),
+            'mean_s2d': float(mean_s2d),
+            'overall': float(over_all),
+            'seed': args.seed,
+        }, fp, indent=True, allow_nan=False)

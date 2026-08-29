@@ -59,6 +59,13 @@ class SOTANativeContractTest(unittest.TestCase):
         self.tandt_batch = (repo / "sota" / "batch28.sh").read_text(
             encoding="utf-8"
         )
+        self.dtu_batch = (repo / "sota" / "batch29.sh").read_text(
+            encoding="utf-8"
+        )
+        self.dtu_cull = (repo / "sota" / "dtu_cull.py").read_text(
+            encoding="utf-8"
+        )
+        self.dtu_eval = (repo / "eval.py").read_text(encoding="utf-8")
         self.qualitative = (repo / "sota" / "qualitative.py").read_text(
             encoding="utf-8"
         )
@@ -277,6 +284,46 @@ class SOTANativeContractTest(unittest.TestCase):
             "truck)                                 PROTOCOL=(--max_points 2000000)",
             self.runner,
         )
+
+    def test_dtu_batch_uses_the_official_fifteen_scan_protocol(self):
+        self.assertIn(
+            "SCANS=(24 37 40 55 63 65 69 83 97 105 106 110 114 118 122)",
+            self.dtu_batch,
+        )
+        self.assertIn('GPU=${GPU:-0}', self.dtu_batch)
+        self.assertIn('"$HERE/run.sh" stock "scan$SCAN"', self.dtu_batch)
+        self.assertIn(
+            '"$HERE/run.sh" opacity08 "scan$SCAN" --final_opacity 0.8',
+            self.dtu_batch,
+        )
+        self.assertIn("-m sota.dtu_cull", self.dtu_batch)
+        self.assertIn("--mode mesh", self.dtu_batch)
+        self.assertIn("-m sota.dtu_table", self.dtu_batch)
+
+    def test_dtu_runner_uses_all_views_and_disables_only_depth_prior(self):
+        self.assertIn("EVAL_ARGS=(--eval)", self.runner)
+        self.assertIn(
+            "scan24|scan37|scan40|scan55|scan63|scan65|scan69|scan83|scan97|scan105|scan106|scan110|scan114|scan118|scan122)",
+            self.runner,
+        )
+        self.assertIn(
+            "PROTOCOL=(-r 2 --depth_lambda_init 0 --depth_lambda_final 0)",
+            self.runner,
+        )
+        self.assertIn("EVAL_ARGS=()", self.runner)
+
+    def test_dtu_evaluation_is_deterministic_and_json_safe(self):
+        self.assertIn("parser.add_argument('--seed', type=int, default=0)", self.dtu_eval)
+        self.assertIn("np.random.default_rng(args.seed)", self.dtu_eval)
+        self.assertIn("float(mean_d2s)", self.dtu_eval)
+        self.assertIn("float(mean_s2d)", self.dtu_eval)
+        self.assertIn("float(over_all)", self.dtu_eval)
+
+    def test_dtu_mesh_culling_matches_the_public_mask_protocol(self):
+        self.assertIn("cameras.npz", self.dtu_cull)
+        self.assertIn("binary_dilation", self.dtu_cull)
+        self.assertIn("disk(24)", self.dtu_cull)
+        self.assertIn("scale_mats[0]", self.dtu_cull)
 
     def test_qualitative_export_uses_all_sorted_test_views(self):
         self.assertIn("sorted(scene.getTestCameras()", self.qualitative)

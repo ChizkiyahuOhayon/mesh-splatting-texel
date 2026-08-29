@@ -17,12 +17,19 @@ DATA_ROOT=${DATA_ROOT:-/root/autodl-tmp/data/m360}
 RUNS=${RUNS:-/root/autodl-tmp/runs}
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TRAIN_PYTHON=${MESH_SPLATTING_PYTHON:-python}
+EVAL_ARGS=(--eval)
+REQUIRE_TEST=1
 
 case "$SCENE" in
   bicycle|flowers|garden|stump|treehill) PROTOCOL=(-i images_4) ;;
   room|counter|kitchen|bonsai)           PROTOCOL=(-i images_2 --indoor) ;;
   train)                                 PROTOCOL=(--max_points 2500000) ;;
   truck)                                 PROTOCOL=(--max_points 2000000) ;;
+  scan24|scan37|scan40|scan55|scan63|scan65|scan69|scan83|scan97|scan105|scan106|scan110|scan114|scan118|scan122)
+    PROTOCOL=(-r 2 --depth_lambda_init 0 --depth_lambda_final 0)
+    EVAL_ARGS=()
+    REQUIRE_TEST=0
+    ;;
   *) echo "unknown supported scene '$SCENE'" >&2; exit 1 ;;
 esac
 
@@ -49,7 +56,7 @@ set +e
 # keeps the allocator from fragmenting at the supersampling change, which is
 # where a 24 GB card runs out.
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-"$TRAIN_PYTHON" -u train.py -s "$DATA_ROOT/$SCENE" -m "$OUT" --eval "${PROTOCOL[@]}" "$@" \
+"$TRAIN_PYTHON" -u train.py -s "$DATA_ROOT/$SCENE" -m "$OUT" "${EVAL_ARGS[@]}" "${PROTOCOL[@]}" "$@" \
   > "$OUT/train.log" 2>&1
 STATUS=$?
 set -e
@@ -59,10 +66,25 @@ ELAPSED=$((SECONDS - START))
 #   [ITER 30000] Evaluating test: L1 ... PSNR ... SSIM ... LPIPS ... FPS ...
 grep -E "^\[ITER .*\] Evaluating" "$OUT/train.log" > "$OUT/metrics.txt" || true
 
-if [ "$STATUS" -eq 0 ] && grep -q "Evaluating test" "$OUT/metrics.txt"; then
+SUCCESS=0
+if [ "$STATUS" -eq 0 ]; then
+  if [ "$REQUIRE_TEST" -eq 1 ] && grep -q "Evaluating test" "$OUT/metrics.txt"; then
+    SUCCESS=1
+  elif [ "$REQUIRE_TEST" -eq 0 ] && \
+       [ -s "$OUT/point_cloud/iteration_30000/point_cloud_state_dict.pt" ] && \
+       grep -q "Training complete." "$OUT/train.log"; then
+    SUCCESS=1
+  fi
+fi
+
+if [ "$SUCCESS" -eq 1 ]; then
   echo "$ELAPSED" > "$OUT/DONE"
   echo "== $ARM/$SCENE OK in ${ELAPSED}s"
-  grep "Evaluating test" "$OUT/metrics.txt" | tail -1
+  if [ "$REQUIRE_TEST" -eq 1 ]; then
+    grep "Evaluating test" "$OUT/metrics.txt" | tail -1
+  else
+    grep "Evaluating train" "$OUT/metrics.txt" | tail -1
+  fi
 else
   touch "$OUT/FAILED"
   echo "== $ARM/$SCENE FAILED (exit $STATUS) after ${ELAPSED}s" >&2
