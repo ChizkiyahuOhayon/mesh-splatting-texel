@@ -803,3 +803,39 @@ The run is single-GPU and evaluates both operating points from the same method
 checkpoint.  Success means completed stock and method checkpoints for both
 scenes plus a machine-readable aggregate table and `DONE` marker.  There is no
 dataset-specific tuning and no additional search.
+
+## 2026-08-28 — formal Tanks & Temples transfer
+
+- Status: **completed — SoftTail improves the matched baseline on Train and
+  Truck**
+- Source revision: `dfb051195bce0265b7f219f18c303b1c8d384ddb`
+- Output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/formal_tandt_01`
+- Device: NVIDIA A40, physical GPU 0
+- Protocol: official Train/Truck test splits; primitive caps 2.5M/2.0M;
+  iteration 30,000; frozen terminal opacity `0.8`; speed point uses factor 3,
+  quality point uses factor 4; both use cutoff `0.01` and tail absorption
+
+| Arm | Mean L1 ↓ | Mean PSNR ↑ | Mean SSIM ↑ | Mean LPIPS ↓ | Mean FPS ↑ | Mean bytes ↓ | Mean triangles ↓ | Mean vertices ↓ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Matched MeshSplatting | 0.062997 | 20.663730 | 0.758868 | 0.276019 | 16.016429 | 437874335 | 3316917 | 1722424.5 |
+| SoftTail-Speed | 0.061959 | 20.903456 | 0.767679 | 0.263554 | **22.037902** | 422477759 | 3145410 | 1668192 |
+| SoftTail-Quality | **0.061861** | **20.918141** | **0.768936** | **0.261702** | 18.935398 | **422477759** | **3145410** | **1668192** |
+
+SoftTail-Speed improves the matched mean by `+0.239726` dB PSNR,
+`+0.008811` SSIM, and `-0.012465` LPIPS while increasing FPS by `37.60%`.
+SoftTail-Quality improves it by `+0.254412` dB PSNR, `+0.010067` SSIM, and
+`-0.014317` LPIPS while increasing FPS by `18.22%`.  Both operating points
+reduce checkpoint size by `3.52%`, triangles by `5.17%`, and vertices by
+`3.15%`.
+
+Both variants win both scenes over matched stock on L1, PSNR, SSIM, LPIPS,
+checkpoint size, triangle count, and vertex count.  SoftTail-Speed also wins
+FPS on both scenes; SoftTail-Quality wins FPS on one scene and has higher mean
+FPS overall.  Against the paper-reported MeshSplatting mean
+(`20.52` PSNR / `0.745` SSIM / `0.287` LPIPS), SoftTail-Quality changes the
+three metrics by `+0.398141` dB / `+0.023936` / `-0.025298`.
+
+**Decision:** the cross-dataset transfer succeeds without T&T-specific tuning.
+Use SoftTail-Quality as the main accuracy row and SoftTail-Speed as the
+efficiency row.  The result directly supports generalization beyond
+Mip-NeRF360 and completes the planned T&T comparison.
