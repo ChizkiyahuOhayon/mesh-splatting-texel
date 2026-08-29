@@ -865,3 +865,31 @@ MeshSplatting Chamfer row (`0.79` mean) is stored beside the matched rerun, whil
 all method comparisons use the matched stock checkpoints as the primary
 control.  No DTU-specific method setting, endpoint search, or seed analysis is
 introduced.
+
+## 2026-08-30 — formal DTU scan24 training checkpoint and culling fix
+
+- Status: **training completed for both scan24 arms; geometry evaluation pending**
+- Interrupted evaluation: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/formal_dtu_01`
+- Continuation evaluation: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/formal_dtu_02`
+- Reused checkpoints: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/softtail_dtu_01`
+- Device: NVIDIA A40, physical GPU 0
+- Stock runtime: `2042` s
+- Opacity-0.8 runtime: `2139` s
+
+| Arm | Train L1 ↓ | Train PSNR ↑ | Train SSIM ↑ | Train LPIPS ↓ | Train FPS ↑ |
+|---|---:|---:|---:|---:|---:|
+| Matched MeshSplatting | 0.024706 | 25.547470 | 0.831176 | 0.285010 | 39.853432 |
+| SoftTail opacity 0.8 | 0.024970 | 25.441677 | 0.827424 | 0.287073 | 39.087721 |
+
+Both iteration-30,000 checkpoints and the stock mesh export completed.  The
+batch then stopped before Chamfer evaluation because scan24 contained `49`
+training images and `98` PNG files in `mask/`, while the culling loader assumed
+that every PNG in the directory was a protocol mask.  These train-view metrics
+are checkpoint diagnostics, not DTU test metrics and not the paper's geometry
+result; no quality conclusion is drawn from them.
+
+The culling loader now selects the official zero-padded masks (`000.png` through
+`048.png`) in camera order, ignores unrelated PNG files, and still fails loudly
+if a required protocol mask is absent.  The batch remains resumable: after the
+fix, the two completed scan24 trainings are reused and only culling/evaluation
+is retried before proceeding to scan37.

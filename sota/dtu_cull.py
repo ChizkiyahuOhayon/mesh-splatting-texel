@@ -16,17 +16,15 @@ from skimage.morphology import binary_dilation, disk
 from tqdm import tqdm
 
 from render_utils import load_K_Rt_from_P
+from sota.dtu_cull_core import select_dtu_masks
 
 
 def cull_mesh(input_mesh, scan_dir, output_mesh):
     scan_dir = Path(scan_dir)
     image_paths = sorted((scan_dir / "images").glob("*.png"))
-    mask_paths = sorted((scan_dir / "mask").glob("*.png"))
-    if not image_paths or len(mask_paths) != len(image_paths):
-        raise ValueError(
-            f"expected one PNG mask per image in {scan_dir}; "
-            f"found {len(image_paths)} images and {len(mask_paths)} masks"
-        )
+    if not image_paths:
+        raise ValueError(f"no PNG images found in {scan_dir / 'images'}")
+    mask_paths = select_dtu_masks(scan_dir / "mask", len(image_paths))
 
     camera_dict = np.load(scan_dir / "cameras.npz")
     scale_mats = [
