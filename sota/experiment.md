@@ -959,3 +959,39 @@ single configuration correction materially closes the reproduction gap; use
 an absolute error of at most `0.10` from the paper scan24 value as the parity
 gate.  Otherwise stop DTU experimentation and keep DTU out of the paper's
 quantitative claims.
+
+## 2026-08-31 — DTU scan24 indoor-configuration parity
+
+- Status: **completed — baseline parity gate failed**
+- Source revision: `ab3a0b69c0d5aa141705efb8df64543820f92955`
+- Output:
+  `/home/smbu/dy/nas/meshsplatting_smbu/experiments/dtu_indoor_probe_01/scan24/stock_indoor`
+- Device: NVIDIA A40, physical GPU 0
+- Training runtime: `1528` s
+- Configuration: matched MeshSplatting baseline, `--indoor`, resolution factor
+  2, no monocular depth-alignment term, iteration 30,000, the same public mask
+  culling and deterministic seed-0 evaluator as DTU run 02
+
+The training diagnostic was L1 `0.022478`, PSNR `26.702364`, SSIM `0.843397`,
+LPIPS `0.286498`, and FPS `47.951056`.  Mesh export produced `132592` vertices
+and `306491` faces; mask culling retained `89785` vertices and `253185` faces.
+The official DTU evaluator returned accuracy `1.918588`, completeness
+`0.451299`, and Chamfer `1.184944`.
+
+| scan24 baseline | Accuracy ↓ | Completeness ↓ | Chamfer ↓ |
+|---|---:|---:|---:|
+| Completed outdoor-default control | 2.045485 | 0.452664 | 1.249075 |
+| Indoor-configuration probe | **1.918588** | **0.451299** | **1.184944** |
+| MeshSplatting paper reference | — | — | 0.770000 |
+
+The indoor configuration improves the reproduced scan24 Chamfer by `0.064131`
+or `5.13%`, confirming that the omitted switch was consequential.  It remains
+`0.414944` above the paper value, however, and therefore fails the frozen
+parity gate of Chamfer at most `0.87`.
+
+**Decision:** stop DTU experimentation.  Do not train a corresponding SoftTail
+arm and do not repeat the 15-scan sweep with this configuration.  Archive the
+earlier paired result as an internal negative geometry-transfer finding, not a
+paper-level comparison.  The paper's quantitative scope remains the completed
+matched evaluations on Mip-NeRF360 and Tanks & Temples; paper-reported numbers
+may appear only as separately labelled references.
