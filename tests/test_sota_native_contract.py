@@ -65,6 +65,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.dtu_indoor_probe = (repo / "sota" / "batch30.sh").read_text(
             encoding="utf-8"
         )
+        self.deep_blending_batch = (repo / "sota" / "batch31.sh").read_text(
+            encoding="utf-8"
+        )
         self.dtu_cull = (repo / "sota" / "dtu_cull.py").read_text(
             encoding="utf-8"
         )
@@ -340,6 +343,25 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("-m sota.dtu_cull", self.dtu_indoor_probe)
         self.assertIn("--scan 24 --mode mesh", self.dtu_indoor_probe)
         self.assertIn("--seed 0", self.dtu_indoor_probe)
+
+    def test_deep_blending_batch_transfers_the_frozen_method_on_one_gpu(self):
+        self.assertIn("SCENES=(drjohnson playroom)", self.deep_blending_batch)
+        self.assertIn("GPU=${GPU:-0}", self.deep_blending_batch)
+        self.assertIn('"$HERE/run.sh" stock "$SCENE"', self.deep_blending_batch)
+        self.assertIn(
+            '"$HERE/run.sh" opacity08 "$SCENE" --final_opacity 0.8',
+            self.deep_blending_batch,
+        )
+        self.assertIn("ours_speed", self.deep_blending_batch)
+        self.assertIn("ours_quality", self.deep_blending_batch)
+        self.assertIn("check_floor", self.deep_blending_batch)
+        self.assertIn("-m sota.deep_blending_table", self.deep_blending_batch)
+
+    def test_deep_blending_runner_uses_the_indoor_protocol(self):
+        self.assertIn(
+            "drjohnson|playroom)                    PROTOCOL=(--indoor)",
+            self.runner,
+        )
 
     def test_qualitative_export_uses_all_sorted_test_views(self):
         self.assertIn("sorted(scene.getTestCameras()", self.qualitative)

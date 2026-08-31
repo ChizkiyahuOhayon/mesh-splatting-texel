@@ -995,3 +995,22 @@ earlier paired result as an internal negative geometry-transfer finding, not a
 paper-level comparison.  The paper's quantitative scope remains the completed
 matched evaluations on Mip-NeRF360 and Tanks & Temples; paper-reported numbers
 may appear only as separately labelled references.
+
+## Planned experiment — formal Deep Blending transfer
+
+Add a third novel-view-synthesis benchmark without reopening method search.
+Train matched MeshSplatting and the frozen SoftTail representation on the
+official Deep Blending DrJohnson and Playroom scenes.  Follow the reference
+Deep Blending split and default image resolution behavior; because both scenes
+are indoor, apply MeshSplatting's published `--indoor` configuration equally to
+both arms.  The only training difference is terminal opacity `0.9999` versus
+`0.8`.
+
+Evaluate stock, the frozen factor-4 quality point, and the frozen factor-3 speed
+point with the same program used for the completed Mip-NeRF360 and Tanks &
+Temples tables.  Success requires both scenes and all three arms, a
+machine-readable aggregate, and mean PSNR, SSIM, and LPIPS improvements over
+the matched stock arm.  Retain the same cutoff `0.01` and tail absorption for
+both method operating points.  Do not introduce Deep Blending-specific opacity,
+cutoff, sampling, loss, or per-scene settings.  Record the outcome and stop
+after this single frozen transfer, whether it passes or fails.

@@ -23,6 +23,7 @@ REQUIRE_TEST=1
 case "$SCENE" in
   bicycle|flowers|garden|stump|treehill) PROTOCOL=(-i images_4) ;;
   room|counter|kitchen|bonsai)           PROTOCOL=(-i images_2 --indoor) ;;
+  drjohnson|playroom)                    PROTOCOL=(--indoor) ;;
   train)                                 PROTOCOL=(--max_points 2500000) ;;
   truck)                                 PROTOCOL=(--max_points 2000000) ;;
   scan24|scan37|scan40|scan55|scan63|scan65|scan69|scan83|scan97|scan105|scan106|scan110|scan114|scan118|scan122)
