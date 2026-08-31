@@ -893,3 +893,51 @@ The culling loader now selects the official zero-padded masks (`000.png` through
 if a required protocol mask is absent.  The batch remains resumable: after the
 fix, the two completed scan24 trainings are reused and only culling/evaluation
 is retried before proceeding to scan37.
+
+## 2026-08-31 — formal DTU geometry transfer / run 02
+
+- Status: **completed — negative matched result; paper-protocol reproduction
+  unresolved**
+- Source revision: `a633578fc2b05307d7f3038864858eb25d55a960`
+- Evaluation output:
+  `/home/smbu/dy/nas/meshsplatting_smbu/experiments/formal_dtu_02`
+- Reused training output:
+  `/home/smbu/dy/nas/meshsplatting_smbu/experiments/softtail_dtu_01`
+- Protocol: all 15 official DTU evaluation scans, iteration 30,000, resolution
+  factor 2, no monocular depth-alignment term, public foreground-mask culling,
+  and deterministic evaluator point ordering with seed 0
+- Completion artifacts: 30 paired arm-level `results.json`/`DONE` artifacts,
+  aggregate `dtu_table.json`, and root `DONE`
+
+All distances and Chamfer values below are in the DTU evaluator's native units;
+lower is better for every column.
+
+| Arm | Mean accuracy ↓ | Mean completeness ↓ | Mean Chamfer ↓ | Mean checkpoint bytes ↓ | Mean triangles ↓ | Mean vertices ↓ |
+|---|---:|---:|---:|---:|---:|---:|
+| Matched MeshSplatting | **2.425196** | **0.768461** | **1.596828** | 40855425 | 317026 | 159821 |
+| SoftTail-Quality | 2.465590 | 0.816191 | 1.640891 | **34840744** | **258846** | **137618** |
+| SoftTail − stock | +0.040394 | +0.047730 | +0.044062 | -6014682 | -58181 | -22204 |
+
+SoftTail-Quality worsens mean accuracy by `1.67%`, completeness by `6.21%`, and
+Chamfer by `2.76%`.  It wins `3/15` scans on accuracy, `3/15` on completeness,
+and `2/15` on Chamfer.  The representation reduction is consistent across all
+15 scans: mean checkpoint size falls by `14.72%`, triangle count by `18.35%`,
+and vertex count by `13.89%`.
+
+The supplied aggregate also exposes a baseline-protocol mismatch.  The matched
+stock mean Chamfer is `1.596828`, which is `+0.806828` above and approximately
+`2.02×` the paper-reported MeshSplatting mean of `0.79`.  SoftTail's mean is
+`+0.850891` above that paper reference.  Therefore this run is a valid paired
+comparison under the implemented pipeline, but it is not a successful
+reproduction of the paper's DTU table and must not be presented as a direct
+paper-level SOTA comparison.
+
+**Decision:** archive the completed run as a negative geometry-transfer result
+and exclude it from the paper's main quantitative table.  Do not launch another
+15-scan training sweep or tune opacity on DTU.  First use the existing stock
+scan24 checkpoint for a minimal protocol-parity diagnosis: reproduce the
+authors' mesh export/post-processing and evaluation path, and require the stock
+scan24 Chamfer to approach the reported `0.77` before evaluating the remaining
+stored checkpoints.  If the matched baseline cannot be recovered without a
+new, documented protocol, stop the DTU claim and retain the completed
+Mip-NeRF360 and Tanks & Temples evidence as the paper's quantitative scope.
