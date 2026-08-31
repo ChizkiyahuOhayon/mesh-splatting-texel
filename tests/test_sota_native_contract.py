@@ -62,6 +62,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.dtu_batch = (repo / "sota" / "batch29.sh").read_text(
             encoding="utf-8"
         )
+        self.dtu_indoor_probe = (repo / "sota" / "batch30.sh").read_text(
+            encoding="utf-8"
+        )
         self.dtu_cull = (repo / "sota" / "dtu_cull.py").read_text(
             encoding="utf-8"
         )
@@ -324,6 +327,19 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("binary_dilation", self.dtu_cull)
         self.assertIn("disk(24)", self.dtu_cull)
         self.assertIn("scale_mats[0]", self.dtu_cull)
+
+    def test_dtu_indoor_probe_changes_only_the_baseline_configuration(self):
+        self.assertIn(
+            'source "$HERE/ensure_environment.sh"', self.dtu_indoor_probe
+        )
+        self.assertIn(
+            '"$HERE/run.sh" stock_indoor scan24 --indoor',
+            self.dtu_indoor_probe,
+        )
+        self.assertNotIn("opacity08", self.dtu_indoor_probe)
+        self.assertIn("-m sota.dtu_cull", self.dtu_indoor_probe)
+        self.assertIn("--scan 24 --mode mesh", self.dtu_indoor_probe)
+        self.assertIn("--seed 0", self.dtu_indoor_probe)
 
     def test_qualitative_export_uses_all_sorted_test_views(self):
         self.assertIn("sorted(scene.getTestCameras()", self.qualitative)

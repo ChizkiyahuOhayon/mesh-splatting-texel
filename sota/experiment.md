@@ -934,10 +934,28 @@ paper-level SOTA comparison.
 
 **Decision:** archive the completed run as a negative geometry-transfer result
 and exclude it from the paper's main quantitative table.  Do not launch another
-15-scan training sweep or tune opacity on DTU.  First use the existing stock
-scan24 checkpoint for a minimal protocol-parity diagnosis: reproduce the
-authors' mesh export/post-processing and evaluation path, and require the stock
-scan24 Chamfer to approach the reported `0.77` before evaluating the remaining
-stored checkpoints.  If the matched baseline cannot be recovered without a
-new, documented protocol, stop the DTU claim and retain the completed
-Mip-NeRF360 and Tanks & Temples evidence as the paper's quantitative scope.
+15-scan training sweep or tune opacity on DTU.  First run the baseline-only
+scan24 protocol-parity probe below and require its Chamfer to approach the
+reported `0.77`.  If the matched baseline cannot be recovered without a new,
+documented protocol, stop the DTU claim and retain the completed Mip-NeRF360
+and Tanks & Temples evidence as the paper's quantitative scope.
+
+## Planned experiment — DTU scan24 indoor-configuration parity
+
+Inspection after run 02 found one concrete training-protocol difference.  The
+official README directs indoor scenes to the `--indoor` configuration, whereas
+the completed DTU sweep used the outdoor defaults and changed only resolution
+and the monocular depth prior.  The indoor switch also changes feature and
+opacity learning rates, pruning, regularization weights, and mesh-creation
+timing.  The paper states only that DTU disables the supervised depth loss, and
+the official repository does not publish an end-to-end DTU command or the final
+mesh post-processing path.
+
+Run one baseline-only scan24 probe with `--indoor`, resolution factor 2, and the
+same public mask culling and deterministic evaluator used by run 02.  Compare it
+against the completed outdoor-control Chamfer `1.249075` and the paper value
+`0.77`.  Do not train a SoftTail arm in this probe.  Continue DTU only if this
+single configuration correction materially closes the reproduction gap; use
+an absolute error of at most `0.10` from the paper scan24 value as the parity
+gate.  Otherwise stop DTU experimentation and keep DTU out of the paper's
+quantitative claims.
