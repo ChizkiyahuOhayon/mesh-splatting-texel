@@ -1014,3 +1014,64 @@ the matched stock arm.  Retain the same cutoff `0.01` and tail absorption for
 both method operating points.  Do not introduce Deep Blending-specific opacity,
 cutoff, sampling, loss, or per-scene settings.  Record the outcome and stop
 after this single frozen transfer, whether it passes or fails.
+
+## 2026-08-31 — formal Deep Blending transfer
+
+- Status: **completed — frozen transfer passed**
+- Source revision: `d96e3711eaebc8b94a45c8e5c1a864b5387e6053`
+- Output:
+  `/home/smbu/dy/nas/meshsplatting_smbu/experiments/formal_deep_blending_01`
+- Protocol: official DrJohnson and Playroom splits, iteration 30,000, default
+  Deep Blending image resolution, and the same `--indoor` training protocol for
+  both arms
+- Method configuration: terminal opacity `0.8`; quality uses factor-4
+  supersampling; speed uses factor-3 supersampling; both use transmittance
+  cutoff `0.01` with tail absorption
+- Completion artifacts: six arm-level `result.json`/`DONE` pairs, aggregate
+  `formal_table.json`, and root `DONE`
+
+| Scene | Arm | L1 ↓ | PSNR ↑ | SSIM ↑ | LPIPS-VGG ↓ | FPS ↑ | Checkpoint bytes ↓ | Triangles ↓ | Vertices ↓ |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| DrJohnson | Matched MeshSplatting | 0.029292 | 26.471692 | 0.829608 | 0.368402 | 21.023692 | 879472479 | 8512506 | 3246002 |
+| DrJohnson | SoftTail-Speed | 0.028381 | 26.723354 | 0.837919 | 0.360194 | **27.126104** | **719156319** | **6879658** | **2663657** |
+| DrJohnson | SoftTail-Quality | **0.028336** | **26.738605** | **0.838782** | **0.358601** | 22.364760 | **719156319** | **6879658** | **2663657** |
+| Playroom | Matched MeshSplatting | 0.026163 | 27.705571 | 0.854245 | 0.301912 | 22.205740 | 865992799 | 8078660 | 3231255 |
+| Playroom | SoftTail-Speed | 0.025505 | 27.972873 | 0.857628 | 0.296181 | **26.147011** | **809477471** | **7479871** | **3028637** |
+| Playroom | SoftTail-Quality | **0.025462** | **27.994035** | **0.858536** | **0.294692** | 21.949796 | **809477471** | **7479871** | **3028637** |
+
+| Mean arm | L1 ↓ | PSNR ↑ | SSIM ↑ | LPIPS-VGG ↓ | FPS ↑ | Checkpoint bytes ↓ | Triangles ↓ | Vertices ↓ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Matched MeshSplatting | 0.027727 | 27.088631 | 0.841926 | 0.335157 | 21.614716 | 872732639 | 8295583 | 3238629 |
+| SoftTail-Speed | 0.026943 | 27.348113 | 0.847773 | 0.328188 | **26.636557** | **764316895** | **7179765** | **2846147** |
+| SoftTail-Quality | **0.026899** | **27.366320** | **0.848659** | **0.326646** | 22.157278 | **764316895** | **7179765** | **2846147** |
+
+SoftTail-Quality improves the two-scene mean by `+0.277689` dB PSNR,
+`+0.006733` SSIM, and `-0.008511` LPIPS-VGG.  It also improves L1 by
+`0.000828`, FPS by `2.51%`, checkpoint size by `12.42%`, triangle count by
+`13.45%`, and vertex count by `12.12%`.  It wins both scenes on L1, PSNR,
+SSIM, LPIPS-VGG, checkpoint size, triangle count, and vertex count.
+
+SoftTail-Speed improves the mean by `+0.259482` dB PSNR, `+0.005847` SSIM,
+and `-0.006969` LPIPS-VGG while increasing FPS by `23.23%`.  It wins both
+scenes on every recorded metric, including FPS and all representation-size
+measures.
+
+The completed NVS evidence now covers 13 scenes in three datasets.  The frozen
+quality point improves mean PSNR, SSIM, and LPIPS-VGG on Mip-NeRF360, Tanks &
+Temples, and Deep Blending; the frozen speed point does the same while raising
+mean FPS by `20.78%`, `37.60%`, and `23.23%`, respectively.  The representation
+is smaller on every evaluated NVS scene.
+
+| Dataset | Scenes | Quality ΔPSNR ↑ | Quality ΔSSIM ↑ | Quality ΔLPIPS ↓ | Quality ΔFPS | Checkpoint reduction | Triangle reduction | Speed FPS gain |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Mip-NeRF360 | 9 | +0.162490 | +0.007550 | -0.006934 | -0.20% | 7.31% | 10.27% | 20.78% |
+| Tanks & Temples | 2 | +0.254412 | +0.010067 | -0.014317 | +18.22% | 3.52% | 5.17% | 37.60% |
+| Deep Blending | 2 | +0.277689 | +0.006733 | -0.008511 | +2.51% | 12.42% | 13.45% | 23.23% |
+
+**Decision:** the Deep Blending transfer passes the frozen gate and becomes the
+third paper-level NVS benchmark.  Stop dataset expansion and method tuning.
+Use SoftTail-Quality as the primary reconstruction row and SoftTail-Speed as
+the efficiency row.  The remaining work is evidence presentation: construct
+the three-dataset main comparison, consolidate the completed opacity/tail/
+supersampling ablations, select qualitative crops from the existing export,
+and verify every external comparison and citation before manuscript claims.
