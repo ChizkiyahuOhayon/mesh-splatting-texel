@@ -6,8 +6,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/ensure_environment.sh"
 
 NAS_ROOT=${NAS_ROOT:-/home/smbu/dy/nas/meshsplatting_smbu}
-TANDT_DATA=${TANDT_DATA:-/home/smbu/dy/nas/dy/mesh-splatting/data/tandt}
-DEEP_DATA=${DEEP_DATA:-$TANDT_DATA/db}
+TANDT_DATA=${TANDT_DATA:-/home/smbu/dy/nas/dy/mesh-splatting/data/tandt/tandt}
+DEEP_DATA=${DEEP_DATA:-/home/smbu/dy/nas/dy/mesh-splatting/data/tandt/db}
 TANDT_RUNS=${TANDT_RUNS:-$NAS_ROOT/experiments/softtail_tandt_01}
 DEEP_RUNS=${DEEP_RUNS:-$NAS_ROOT/experiments/softtail_deep_blending_01}
 ROOT=${ROOT:-$NAS_ROOT/experiments/qualitative_transfer_01}

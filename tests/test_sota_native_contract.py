@@ -367,6 +367,8 @@ class SOTANativeContractTest(unittest.TestCase):
         )
 
     def test_transfer_qualitative_batch_reuses_all_frozen_checkpoints(self):
+        self.assertIn("data/tandt/tandt", self.transfer_qualitative_batch)
+        self.assertIn("data/tandt/db", self.transfer_qualitative_batch)
         self.assertIn(
             "SCENES=(train truck drjohnson playroom)",
             self.transfer_qualitative_batch,
