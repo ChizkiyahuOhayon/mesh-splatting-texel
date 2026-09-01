@@ -15,6 +15,20 @@ GPU=${GPU:-0}
 SCENES=(train truck drjohnson playroom)
 export CUDA_VISIBLE_DEVICES=$GPU
 
+require_dir() {
+  [ -d "$1" ] || {
+    echo "missing directory: $1" >&2
+    exit 1
+  }
+}
+
+require_file() {
+  [ -f "$1" ] || {
+    echo "missing file: $1" >&2
+    exit 1
+  }
+}
+
 [ -f "$ROOT/DONE" ] && {
   echo "Transfer qualitative export already complete: $ROOT"
   exit 0
@@ -43,8 +57,8 @@ runs_for() {
 for SCENE in "${SCENES[@]}"; do
   DATA=$(data_for "$SCENE")
   RUNS=$(runs_for "$SCENE")
-  test -d "$DATA/$SCENE/images"
-  test -d "$DATA/$SCENE/sparse/0"
+  require_dir "$DATA/$SCENE/images"
+  require_dir "$DATA/$SCENE/sparse/0"
 
   for ARM in stock ours_quality; do
     if [ "$ARM" = stock ]; then
@@ -52,7 +66,7 @@ for SCENE in "${SCENES[@]}"; do
     else
       MODEL="$RUNS/opacity08__${SCENE}"
     fi
-    test -f "$MODEL/point_cloud/iteration_30000/point_cloud_state_dict.pt"
+    require_file "$MODEL/point_cloud/iteration_30000/point_cloud_state_dict.pt"
     "$MESH_SPLATTING_PYTHON" -u -m sota.qualitative \
       -s "$DATA/$SCENE" -m "$MODEL" -i images --eval \
       --scene "$SCENE" --arm "$ARM" --iteration 30000 \

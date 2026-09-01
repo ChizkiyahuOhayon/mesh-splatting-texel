@@ -378,6 +378,8 @@ class SOTANativeContractTest(unittest.TestCase):
         self.assertIn("stock__${SCENE}", self.transfer_qualitative_batch)
         self.assertIn("opacity08__${SCENE}", self.transfer_qualitative_batch)
         self.assertIn("-m sota.qualitative", self.transfer_qualitative_batch)
+        self.assertIn("missing directory: $1", self.transfer_qualitative_batch)
+        self.assertIn("missing file: $1", self.transfer_qualitative_batch)
         self.assertNotIn("train.py", self.transfer_qualitative_batch)
 
     def test_qualitative_export_uses_all_sorted_test_views(self):
