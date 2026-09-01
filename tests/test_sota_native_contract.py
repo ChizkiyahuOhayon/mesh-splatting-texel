@@ -68,6 +68,9 @@ class SOTANativeContractTest(unittest.TestCase):
         self.deep_blending_batch = (repo / "sota" / "batch31.sh").read_text(
             encoding="utf-8"
         )
+        self.transfer_qualitative_batch = (
+            repo / "sota" / "batch32.sh"
+        ).read_text(encoding="utf-8")
         self.dtu_cull = (repo / "sota" / "dtu_cull.py").read_text(
             encoding="utf-8"
         )
@@ -362,6 +365,20 @@ class SOTANativeContractTest(unittest.TestCase):
             "drjohnson|playroom)                    PROTOCOL=(--indoor)",
             self.runner,
         )
+
+    def test_transfer_qualitative_batch_reuses_all_frozen_checkpoints(self):
+        self.assertIn(
+            "SCENES=(train truck drjohnson playroom)",
+            self.transfer_qualitative_batch,
+        )
+        self.assertIn("GPU=${GPU:-0}", self.transfer_qualitative_batch)
+        self.assertIn(
+            "for ARM in stock ours_quality", self.transfer_qualitative_batch
+        )
+        self.assertIn("stock__${SCENE}", self.transfer_qualitative_batch)
+        self.assertIn("opacity08__${SCENE}", self.transfer_qualitative_batch)
+        self.assertIn("-m sota.qualitative", self.transfer_qualitative_batch)
+        self.assertNotIn("train.py", self.transfer_qualitative_batch)
 
     def test_qualitative_export_uses_all_sorted_test_views(self):
         self.assertIn("sorted(scene.getTestCameras()", self.qualitative)

@@ -1075,3 +1075,21 @@ the efficiency row.  The remaining work is evidence presentation: construct
 the three-dataset main comparison, consolidate the completed opacity/tail/
 supersampling ablations, select qualitative crops from the existing export,
 and verify every external comparison and citation before manuscript claims.
+
+## Planned experiment — transfer-benchmark qualitative export
+
+Complete the visual evidence without additional training.  Reuse the frozen
+matched checkpoints for Tanks & Temples Train/Truck and Deep Blending
+DrJohnson/Playroom.  Export every official test view for matched MeshSplatting
+and SoftTail-Quality, using the same renderer settings as the corresponding
+quantitative tables.  Save a shared target, prediction, and fixed-scale
+absolute-error map for each view.
+
+Run inference on the A40 because all datasets and checkpoints already reside
+there.  Transfer only the exported images and manifests to the SSH-accessible
+AutoDL machine for deterministic view selection, cropping, and figure layout.
+Do not transfer checkpoints, retrain models, add a speed-arm visualization, or
+select scenes before the complete export exists.  Success requires eight
+arm-level `DONE` markers plus one root `DONE` marker.  After completion, stop
+GPU experimentation: the remaining comparison work uses verified published
+numbers, while figure composition uses only completed artifacts.
