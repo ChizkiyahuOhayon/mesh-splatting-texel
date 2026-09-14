@@ -12,6 +12,7 @@ from arguments import ModelParams, PipelineParams, get_combined_args
 from scene import Scene
 from scene.triangle_model import TriangleModel
 from sota.tail_culling import _evaluate
+from sota.visibility import check_adaptive_contract
 from utils.general_utils import safe_state
 
 
@@ -58,6 +59,30 @@ SETTINGS = {
         "absorb_tail": False,
         "upsample": 4,
     },
+    # SoftTail v2: visibility-aware per-vertex terminal opacity. The checkpoint
+    # carries its own per-vertex floor (global reference 0.8); the renderer
+    # settings mirror the v1 quality, speed, and opacity-only arms exactly.
+    "adaptive_quality": {
+        "opacity_floor": 0.8,
+        "threshold": 1e-2,
+        "absorb_tail": True,
+        "upsample": 4,
+        "adaptive": True,
+    },
+    "adaptive_speed": {
+        "opacity_floor": 0.8,
+        "threshold": 1e-2,
+        "absorb_tail": True,
+        "upsample": 3,
+        "adaptive": True,
+    },
+    "adaptive_opacity": {
+        "opacity_floor": 0.8,
+        "threshold": 1e-4,
+        "absorb_tail": False,
+        "upsample": 4,
+        "adaptive": True,
+    },
 }
 
 
@@ -92,6 +117,13 @@ def run(dataset, pipeline, args):
             f"method checkpoint opacity_floor is {triangles.opacity_floor}, "
             f"expected {expected_floor}"
         )
+    # An adaptive arm needs the per-vertex floor and a v1 arm must not silently
+    # render one; both directions are refused loudly.
+    check_adaptive_contract(
+        torch.load(checkpoint, map_location="cpu", weights_only=False),
+        expect_adaptive=bool(setting.get("adaptive", False)),
+        expected_high=expected_floor,
+    )
     # Garden/Room stock checkpoints predate persistence of this scalar.  Their
     # endpoint is the published opaque baseline used in the matched runs.
     triangles.opacity_floor = setting["opacity_floor"]
@@ -131,6 +163,13 @@ def run(dataset, pipeline, args):
         "triangles": int(triangles.get_triangle_indices.shape[0]),
         "vertices": int(triangles.get_vertices.shape[0]),
         "opacity_floor": setting["opacity_floor"],
+        "adaptive_opacity": (
+            dict(triangles.adaptive_opacity) | {
+                "vertex_floor_min": float(triangles.opacity_floor_vertex.min()),
+                "vertex_floor_max": float(triangles.opacity_floor_vertex.max()),
+                "vertex_floor_mean": float(triangles.opacity_floor_vertex.mean()),
+            } if triangles.opacity_floor_vertex is not None else None
+        ),
         "upsample": setting["upsample"],
         "transmittance_threshold": setting["threshold"],
         "absorb_transmittance_tail": setting["absorb_tail"],

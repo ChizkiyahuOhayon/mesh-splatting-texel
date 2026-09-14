@@ -32,6 +32,11 @@ import math
 import rdel
 
 from sota.hardness import DEFAULT_SPREAD, face_sigma
+from sota.visibility import (
+    activation_with_floor,
+    inverse_activation_with_floor,
+    reparameterize_logits,
+)
 
 
 
@@ -129,15 +134,32 @@ class TriangleModel:
     def setup_functions(self):
         self.eps = 1e-6
         self.opacity_floor = 0.0
-        self.opacity_activation = lambda x: self.opacity_floor + (1.0 - self.opacity_floor) * torch.sigmoid(x)
-        # Matching inverse for any y in [m, 1): logit( (y - m)/(1 - m) )
-        self.inverse_opacity_activation = lambda y: inverse_sigmoid(
-            ((y.clamp(self.opacity_floor + self.eps, 1.0 - self.eps) - self.opacity_floor) /
-            (1.0 - self.opacity_floor + self.eps))
-        )
+        # SoftTail v2 (VATO): an optional [V, 1] per-vertex terminal floor. None
+        # keeps the scalar path, whose expression is unchanged from v1; the
+        # scalar `opacity_floor` then remains the schedule's global reference.
+        self.opacity_floor_vertex = None
+        self.adaptive_opacity = None        # {"low", "high", "ema", "control"} when trained adaptively
+        self.visibility_dominance = None    # [V] final surface-dominance ratio d_v, for diagnostics
 
         self.exponential_activation = lambda x:math.exp(x)
         self.inverse_exponential_activation = lambda y: math.log(y)
+
+    def _floor_for(self, x, index=None, floor=None):
+        """Scalar floor (v1) or the per-vertex floor rows matching ``x``."""
+        if floor is not None:
+            return floor
+        if self.opacity_floor_vertex is None:
+            return self.opacity_floor
+        if index is not None:
+            return self.opacity_floor_vertex[index]
+        return self.opacity_floor_vertex  # shape checked against x downstream
+
+    def opacity_activation(self, x, index=None, floor=None):
+        return activation_with_floor(x, self._floor_for(x, index, floor))
+
+    def inverse_opacity_activation(self, y, index=None, floor=None):
+        # Matching inverse for any y in [m, 1): logit( (y - m)/(1 - m) )
+        return inverse_activation_with_floor(y, self._floor_for(y, index, floor), self.eps)
 
     def __init__(self, sh_degree : int, use_sparse_adam : bool = False):
 
@@ -214,6 +236,13 @@ class TriangleModel:
         point_cloud_state_dict["image_size"] = self.image_size
         point_cloud_state_dict["pixel_count"] = self.pixel_count
         point_cloud_state_dict["opacity_floor"] = float(self.opacity_floor)
+        # SoftTail v2: the per-vertex terminal floor is part of the representation;
+        # without it the checkpoint would reload as a v1 global-floor model.
+        if self.opacity_floor_vertex is not None:
+            point_cloud_state_dict["opacity_floor_vertex"] = self.opacity_floor_vertex.detach()
+            point_cloud_state_dict["adaptive_opacity"] = dict(self.adaptive_opacity or {})
+        if self.visibility_dominance is not None:
+            point_cloud_state_dict["visibility_dominance"] = self.visibility_dominance.detach()
         # Per-face texel carrier. Without these the checkpoint silently reloads as a
         # plain baseline model: the metrics measured during training would not be
         # reproducible from disk, and render/export would be wrong.
@@ -395,6 +424,23 @@ class TriangleModel:
         ################################################################
 
         self.opacity_floor = restored_opacity_floor
+        self.opacity_floor_vertex = None
+        self.adaptive_opacity = None
+        self.visibility_dominance = None
+        if "opacity_floor_vertex" in state:
+            floors = state["opacity_floor_vertex"].to(device).to(torch.float32).detach().clone()
+            if floors.shape != (self.vertices.shape[0], 1):
+                raise ValueError(
+                    f"opacity_floor_vertex has shape {tuple(floors.shape)} for "
+                    f"{self.vertices.shape[0]} vertices")
+            if not torch.isfinite(floors).all() or float(floors.min()) < 0.0 or float(floors.max()) >= 1.0:
+                raise ValueError("opacity_floor_vertex must be finite and in [0, 1)")
+            self.opacity_floor_vertex = floors
+            self.adaptive_opacity = dict(state.get("adaptive_opacity", {}))
+            print(f"[vato] restored per-vertex terminal floor for {floors.shape[0]:,} vertices "
+                  f"in [{float(floors.min()):.4f}, {float(floors.max()):.4f}]")
+        if "visibility_dominance" in state:
+            self.visibility_dominance = state["visibility_dominance"].to(device).to(torch.float32).detach().clone()
         self._triangle_indices = self._triangle_indices.to(torch.int32)
 
         param_groups = [
@@ -668,6 +714,19 @@ class TriangleModel:
         self.vertex_weight = optimizable_tensors["vertex_weight"]
         self._features_dc = optimizable_tensors["f_dc"]
         self._features_rest = optimizable_tensors["f_rest"]
+        # New vertices start at the global reference floor (the v1 value) until
+        # the visibility statistic assigns them their own endpoint.
+        if self.opacity_floor_vertex is not None:
+            new_rows = new_vertices.shape[0]
+            self.opacity_floor_vertex = torch.cat([
+                self.opacity_floor_vertex,
+                torch.full((new_rows, 1), float(self.opacity_floor),
+                           dtype=torch.float32, device=self.opacity_floor_vertex.device)])
+        if self.visibility_dominance is not None:
+            self.visibility_dominance = torch.cat([
+                self.visibility_dominance,
+                torch.ones(new_vertices.shape[0], dtype=torch.float32,
+                           device=self.visibility_dominance.device)])
         
         # Update triangle indices
         self._triangle_indices = torch.cat([
@@ -740,11 +799,11 @@ class TriangleModel:
         new_features_dc = (self._features_dc[u] + self._features_dc[v]) / 2.0
         new_features_rest = (self._features_rest[u] + self._features_rest[v]) / 2.0
         
-        opacity_u = self.opacity_activation(self.vertex_weight[u])
-        opacity_v = self.opacity_activation(self.vertex_weight[v])
+        opacity_u = self.opacity_activation(self.vertex_weight[u], index=u)
+        opacity_v = self.opacity_activation(self.vertex_weight[v], index=v)
         avg_opacity = (opacity_u + opacity_v) / 2.0
         avg_opacity = torch.clamp(avg_opacity, self.opacity_floor + self.eps, 1 - self.eps)
-        new_vertex_weight = self.inverse_opacity_activation(avg_opacity)
+        new_vertex_weight = self.inverse_opacity_activation(avg_opacity, floor=self.opacity_floor)
 
         new_triangles = subdivided_triangles
         
@@ -786,6 +845,24 @@ class TriangleModel:
                 self._features_dc = tensor
             elif name == "f_rest":
                 self._features_rest = tensor
+        # Vertex-indexed VATO buffers follow the same mask so row i stays vertex i.
+        if self.opacity_floor_vertex is not None:
+            self.opacity_floor_vertex = self.opacity_floor_vertex[mask]
+        if self.visibility_dominance is not None:
+            self.visibility_dominance = self.visibility_dominance[mask]
+        self.validate_vertex_state()
+
+    def validate_vertex_state(self):
+        """Assert every vertex-indexed VATO tensor is aligned to the vertex count."""
+        V = self.vertices.shape[0]
+        if self.opacity_floor_vertex is not None:
+            assert tuple(self.opacity_floor_vertex.shape) == (V, 1), (
+                f"opacity_floor_vertex has shape {tuple(self.opacity_floor_vertex.shape)}, "
+                f"expected ({V}, 1)")
+        if self.visibility_dominance is not None:
+            assert self.visibility_dominance.shape[0] == V, (
+                f"visibility_dominance has {self.visibility_dominance.shape[0]} rows, "
+                f"expected {V} vertices")
 
 
     def _prune_vertices(self, vertex_mask: torch.Tensor):
@@ -1114,7 +1191,22 @@ class TriangleModel:
 
 
 
-    def update_min_weight(self, new_min_weight: float, preserve_outputs: bool = True):
+    def update_min_weight(self, new_min_weight, preserve_outputs: bool = True,
+                          reference_floor=None):
+        if torch.is_tensor(new_min_weight):
+            # SoftTail v2: per-vertex floor. Realized opacities are preserved
+            # elementwise; only vertices below their own new floor are clamped.
+            V = self.vertices.shape[0]
+            new_m = (new_min_weight.detach().to(self.vertex_weight.device, torch.float32)
+                     .reshape(V, 1).clamp(0.0, 1.0 - 1e-4))
+            with torch.no_grad():
+                y = self.get_vertex_weight[:V].detach()
+                self.opacity_floor_vertex = new_m
+                if reference_floor is not None:
+                    self.opacity_floor = float(max(0.0, min(float(reference_floor), 1.0 - 1e-4)))
+                self.vertex_weight.data.copy_(reparameterize_logits(y, new_m, self.eps))
+            return
+
         new_m = float(max(0.0, min(new_min_weight, 1.0 - 1e-4)))
 
         # 1) grab the current realized opacities y (under the old floor)
@@ -1123,6 +1215,7 @@ class TriangleModel:
             y = self.get_vertex_weight[:mask].detach()
             y = y.clamp(new_m + self.eps, 1.0 - self.eps)   # clamp to the *new* floor
         self.opacity_floor = new_m
+        self.opacity_floor_vertex = None    # a scalar update returns to the global path
         new_logits = self.inverse_opacity_activation(y)
         with torch.no_grad():
             self.vertex_weight.data.copy_(new_logits)

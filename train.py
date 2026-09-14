@@ -37,6 +37,12 @@ from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams, update_indoor
 from sota.sigma_schedule import SCHEDULES, schedule as sigma_schedule
 from sota.endpoint import endpoint_image
+from sota.visibility import (
+    VisibilityTracker,
+    adaptive_floor_schedule,
+    endpoint_from_ambiguity,
+    shuffle_control,
+)
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -123,6 +129,25 @@ def training(
         raise ValueError("final_opacity must be in [0.1, 1.0)")
     total_iters_opacity = opt.final_opacity_iter
 
+    # SoftTail v2 (VATO). Off => nothing below runs and the floor stays the v1
+    # scalar. On => after the restricted-Delaunay rebuild a per-vertex
+    # surface-dominance ratio is tracked and every floor update maps it to a
+    # per-vertex endpoint in [adaptive_opacity_low, final_opacity].
+    vato_active = bool(getattr(opt, "adaptive_opacity", False))
+    vato_tracker = None
+    if vato_active:
+        vato_low = float(opt.adaptive_opacity_low)
+        if not init_opacity <= vato_low <= final_opacity:
+            raise ValueError("adaptive_opacity_low must be in [0.1, final_opacity]")
+        if opt.adaptive_opacity_control not in ("none", "shuffle"):
+            raise ValueError("adaptive_opacity_control must be 'none' or 'shuffle'")
+        triangles.adaptive_opacity = {
+            "low": vato_low,
+            "high": final_opacity,
+            "ema": float(opt.adaptive_opacity_ema),
+            "control": str(opt.adaptive_opacity_control),
+        }
+
     lambda_weight = opt.lambda_weight
     prune_triangles = opt.prune_triangles_threshold
     prune_size = opt.prune_size
@@ -170,6 +195,13 @@ def training(
                 # Same moment, same reason: the face set is only now stable.
                 triangles.create_face_hardness(opt.face_hardness, opt.face_hardness_lr,
                                                opt.face_hardness_spread)
+                if vato_active:
+                    # The vertex set is stable from here to the final cleanup.
+                    vato_tracker = VisibilityTracker(
+                        triangles.vertices.shape[0], rho=opt.adaptive_opacity_ema,
+                        device=triangles.vertices.device)
+                    print(f"[vato] tracking surface dominance for "
+                          f"{vato_tracker.n_vertices:,} vertices from iteration {iteration}")
             need_delaunay = False
 
         # Supersampling
@@ -222,6 +254,12 @@ def training(
         image = render_pkg["render"]
         if endpoint_render is not None:
             image = endpoint_image(image, endpoint_render)
+
+        if vato_tracker is not None:
+            with torch.no_grad():
+                vato_tracker.update(render_pkg["rend_ids"].detach(),
+                                    render_pkg["triangle_was_rendered"].detach(),
+                                    triangles._triangle_indices)
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
@@ -489,7 +527,16 @@ def training(
                     a = min(1.0, max(0.0, (iteration - start_iter) / max(1, end_iter - start_iter)))
                     current_opacity = init_opacity + (final_opacity - init_opacity) * a
                     current_opacity = min(current_opacity, final_opacity)
-                    triangles.update_min_weight(current_opacity)
+                    if vato_tracker is not None:
+                        # Per-vertex endpoint from the tracked dominance ratio; the
+                        # scalar reference keeps the v1 schedule for provenance.
+                        tau_v = endpoint_from_ambiguity(vato_tracker.ratio(), vato_low, final_opacity)
+                        if opt.adaptive_opacity_control == "shuffle":
+                            tau_v = shuffle_control(tau_v)
+                        floor_v = adaptive_floor_schedule(tau_v, init_opacity, a).unsqueeze(1)
+                        triangles.update_min_weight(floor_v, reference_floor=current_opacity)
+                    else:
+                        triangles.update_min_weight(current_opacity)
 
                     prune_triangles += 0.01 
                     mask_out = triangles.vertices.shape[0]
@@ -534,6 +581,14 @@ def training(
         used_vertex_mask[flat_indices] = True
     
     vertex_mask = used_vertex_mask
+    if vato_active:
+        if vato_tracker is None or triangles.opacity_floor_vertex is None:
+            raise RuntimeError(
+                "--adaptive_opacity was requested but no per-vertex floor was ever assigned "
+                "(the run did not pass the restricted-Delaunay rebuild and a floor update).")
+        # Final surface-dominance ratio, stored for the mechanism diagnostics; it is
+        # vertex-indexed and follows the cleanup prune below.
+        triangles.visibility_dominance = vato_tracker.ratio()
     triangles._prune_vertices(vertex_mask)
 
     # Fail loudly if a texel carrier was requested but never actually created (e.g. the

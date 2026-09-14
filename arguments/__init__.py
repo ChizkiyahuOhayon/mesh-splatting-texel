@@ -168,6 +168,16 @@ class OptimizationParams(ParamGroup):
         self.sigma_until = 30000
         self.final_opacity_iter = 24000
         self.final_opacity = 0.9999
+        # SoftTail v2: visibility-aware terminal opacity (sota/visibility.py).
+        # Off by default => the v1 global-floor path, byte for byte. When on,
+        # each vertex ends at tau_v = low + (final_opacity - low) * d_v, where
+        # d_v is its surface-dominance ratio; low == final_opacity is v1 again.
+        self.adaptive_opacity = False
+        self.adaptive_opacity_low = 0.6
+        self.adaptive_opacity_ema = 0.995
+        # "shuffle" is the negative control: same endpoint multiset, random
+        # assignment across vertices.
+        self.adaptive_opacity_control = "none"
 
         self.sigma_start = 0
 
