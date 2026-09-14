@@ -369,7 +369,8 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	 float* dL_dopacity,
 	 float* dL_dnormal3D,
 	 float* dL_dcolor,
-	 float* dL_dsh)
+	 float* dL_dsh,
+	 const float opacity_pool_beta)
  {
 	 auto idx = cg::this_grid().thread_rank();
 
@@ -618,7 +619,30 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	vertex_index = triangles_indices[cumsum_for_triangle + 1];
 	vertex_index = triangles_indices[cumsum_for_triangle + 2];
 
-	atomicAdd(&dL_dvertice_weights[id_lowest_weight], dL_dopacity[idx]);
+	// Opacity is shared across the connected mesh: a face's opacity is the min
+	// over its three vertices, so the exact gradient reaches the argmin alone and
+	// the other two learn nothing from this face. With `opacity_pool_beta > 0` the
+	// same total gradient is split over the three vertices by a softmin weight,
+	// recovering the exact argmin routing as beta grows. beta <= 0 reproduces the
+	// published behaviour bitwise. The forward min is never touched.
+	const float dL_do = dL_dopacity[idx];
+	if (opacity_pool_beta > 0.0f)
+	{
+		const int i0 = triangles_indices[cumsum_for_triangle];
+		const int i1 = triangles_indices[cumsum_for_triangle + 1];
+		const int i2 = triangles_indices[cumsum_for_triangle + 2];
+		// Shifting by min_weight is the standard stable-softmax trick: the largest
+		// exponent is exactly 1, so no term can overflow for any beta.
+		const float e0 = __expf(-opacity_pool_beta * (vertex_weights[i0] - min_weight));
+		const float e1 = __expf(-opacity_pool_beta * (vertex_weights[i1] - min_weight));
+		const float e2 = __expf(-opacity_pool_beta * (vertex_weights[i2] - min_weight));
+		const float inv_sum = 1.0f / (e0 + e1 + e2);
+		atomicAdd(&dL_dvertice_weights[i0], dL_do * e0 * inv_sum);
+		atomicAdd(&dL_dvertice_weights[i1], dL_do * e1 * inv_sum);
+		atomicAdd(&dL_dvertice_weights[i2], dL_do * e2 * inv_sum);
+	}
+	else
+		atomicAdd(&dL_dvertice_weights[id_lowest_weight], dL_do);
 
 
  }
@@ -1154,7 +1178,8 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	 float* dL_dopacity,
 	 float* dL_dnormal3D,
 	 float* dL_dcolor,
-	 float* dL_dsh
+	 float* dL_dsh,
+	 const float opacity_pool_beta
 	 )
  {
 	 
@@ -1185,7 +1210,8 @@ __global__ void computeVertexGeometryGradientsCUDA(
 		 dL_dopacity,
 		 dL_dnormal3D,
 		 dL_dcolor,
-		 dL_dsh
+		 dL_dsh,
+		 opacity_pool_beta
 		 );
  }
 

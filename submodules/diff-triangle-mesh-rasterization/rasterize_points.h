@@ -104,6 +104,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	const torch::Tensor& binningBuffer,
 	const torch::Tensor& imageBuffer,
 	const bool screen_space_gradients,
+	const float opacity_pool_beta,
 	const bool debug);
 		
 torch::Tensor markVisible(

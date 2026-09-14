@@ -122,6 +122,7 @@ namespace CudaRasterizer
 			float* dL_dvertice_depth,
 			float* dL_dsigma_face,
 			bool screen_space_gradients,
+			const float opacity_pool_beta,
 			bool debug);
 	};
 };

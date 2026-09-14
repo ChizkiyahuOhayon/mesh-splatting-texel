@@ -489,6 +489,7 @@
 	 float* dL_dvertice_depth,
 	 float* dL_dsigma_face,
 	 bool screen_space_gradients,
+	 const float opacity_pool_beta,
 	 bool debug)
  {
 	 // Backward never runs with donors (the Python wrapper raises first), so the
@@ -625,6 +626,7 @@
 		 dL_dopacity,
 		 dL_dnormal3D,
 		 dL_dcolor,
-		 dL_dsh
+		 dL_dsh,
+		 opacity_pool_beta
 		), debug)
  }

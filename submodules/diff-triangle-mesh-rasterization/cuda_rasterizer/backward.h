@@ -133,7 +133,8 @@
 		 float* dL_dopacity,
 		 float* dL_dnormal3D,
 		 float* dL_dcolor,
-		 float* dL_dsh
+		 float* dL_dsh,
+		 const float opacity_pool_beta
 		 );
  }
  

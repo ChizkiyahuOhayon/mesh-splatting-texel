@@ -37,6 +37,7 @@ from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams, update_indoor
 from sota.sigma_schedule import SCHEDULES, schedule as sigma_schedule
 from sota.endpoint import endpoint_image
+from sota.opacity_pooling import pool_beta
 from sota.visibility import (
     VisibilityTracker,
     adaptive_floor_schedule,
@@ -250,7 +251,21 @@ def training(
                     upsample_override=opt.final_scaling,
                 )["render"]
 
-        render_pkg = render(viewpoint_cam, triangles, pipe, bg)
+        # The softmin temperature is expressed in units of the opacity range the
+        # floor currently leaves open, so it tracks the floor ramp instead of
+        # introducing a second schedule. Outside the ramp it is 0: hard routing.
+        opacity_pool_beta = 0.0
+        if opt.opacity_pool:
+            a_floor = min(1.0, max(0.0, (iteration - opt.start_opacity_floor)
+                                   / max(1, total_iters_opacity - opt.start_opacity_floor)))
+            floor_now = min(init_opacity + (final_opacity - init_opacity) * a_floor,
+                            final_opacity)
+            opacity_pool_beta = pool_beta(
+                iteration, floor_now, opt.start_opacity_floor, total_iters_opacity,
+                opt.opacity_pool_k_start, opt.opacity_pool_k_end)
+
+        render_pkg = render(viewpoint_cam, triangles, pipe, bg,
+                            opacity_pool_beta=opacity_pool_beta)
         image = render_pkg["render"]
         if endpoint_render is not None:
             image = endpoint_image(image, endpoint_render)

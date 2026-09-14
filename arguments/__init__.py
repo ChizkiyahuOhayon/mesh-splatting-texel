@@ -168,6 +168,12 @@ class OptimizationParams(ParamGroup):
         self.sigma_until = 30000
         self.final_opacity_iter = 24000
         self.final_opacity = 0.9999
+        # Softmin routing of the shared per-vertex opacity gradient. Off is the
+        # published hard-argmin backward. See sota/opacity_pooling.py; the ramp
+        # reuses the opacity-floor window [start_opacity_floor, final_opacity_iter].
+        self.opacity_pool = False
+        self.opacity_pool_k_start = 1.0
+        self.opacity_pool_k_end = 100.0
         # SoftTail v2: visibility-aware terminal opacity (sota/visibility.py).
         # Off by default => the v1 global-floor path, byte for byte. When on,
         # each vertex ends at tau_v = low + (final_opacity - low) * d_v, where

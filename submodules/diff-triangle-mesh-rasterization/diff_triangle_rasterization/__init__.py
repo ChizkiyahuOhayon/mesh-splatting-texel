@@ -235,6 +235,10 @@ class _RasterizeTriangles(torch.autograd.Function):
         # carries only the depth term. See cuda_rasterizer/backward.cu.
         ctx.screen_space_gradients = getattr(
             raster_settings, "screen_space_gradients", False)
+        # Softmin temperature for splitting a face's opacity gradient over its three
+        # vertices. <= 0 is the published hard-argmin routing. See backward.cu.
+        ctx.opacity_pool_beta = getattr(
+            raster_settings, "opacity_pool_beta", 0.0)
         ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels, edge_details, face_edge_ids, sigma_face)
         return color, radii, scaling, depth, max_blending, was_rendered
 
@@ -283,6 +287,7 @@ class _RasterizeTriangles(torch.autograd.Function):
                 binningBuffer,
                 imgBuffer,
                 ctx.screen_space_gradients,
+                ctx.opacity_pool_beta,
                 raster_settings.debug)
 
         # Compute gradients for relevant tensors by invoking backward method
@@ -343,6 +348,12 @@ class TriangleRasterizationSettings(NamedTuple):
     # Evaluation-only approximation: assign the remaining transmittance to the
     # terminal fragment instead of exposing the background.
     absorb_transmittance_tail : bool = False
+    # Softmin temperature used when a face's opacity gradient is split over its
+    # three vertices. 0.0 is the published behaviour: the whole gradient goes to
+    # the argmin vertex and the other two receive nothing from this face. Larger
+    # values approach that limit; smaller positive values spread the gradient.
+    # The forward pass is unaffected at every value.
+    opacity_pool_beta : float = 0.0
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):

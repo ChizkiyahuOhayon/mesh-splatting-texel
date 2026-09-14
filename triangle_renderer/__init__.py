@@ -120,6 +120,7 @@ def render(
     opacity_scale_override=None,
     transmittance_threshold_override=None,
     absorb_transmittance_tail=False,
+    opacity_pool_beta=0.0,
 ):
     """
     Render the scene. 
@@ -164,6 +165,9 @@ def render(
         raise TypeError("absorb_transmittance_tail must be boolean")
     if absorb_transmittance_tail and torch.is_grad_enabled():
         raise ValueError("transmittance-tail absorption is evaluation-only")
+    opacity_pool_beta = float(opacity_pool_beta)
+    if not math.isfinite(opacity_pool_beta):
+        raise ValueError("opacity pool beta must be finite")
 
     raster_settings = TriangleRasterizationSettings(
         image_height=H,
@@ -182,6 +186,7 @@ def render(
         screen_space_gradients=getattr(pipe, "screen_space_gradients", False),
         transmittance_threshold=transmittance_threshold,
         absorb_transmittance_tail=absorb_transmittance_tail,
+        opacity_pool_beta=opacity_pool_beta,
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)
