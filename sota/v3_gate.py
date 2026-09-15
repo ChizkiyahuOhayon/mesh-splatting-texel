@@ -41,8 +41,14 @@ def _delta(arm, reference, metric):
     return -change if metric in LOWER_IS_BETTER else change
 
 
-def build(formal_table, runs_root, scenes):
-    reference_rows = json.loads(Path(formal_table).read_text(encoding="utf-8"))["rows"]
+def build(formal_table, ablation_table, runs_root, scenes):
+    # ours_opacity is a stage of the opacity ablation, not a main-table arm, so
+    # each arm is compared against the table that actually froze it.
+    reference_rows = {
+        "ours_quality": json.loads(Path(formal_table).read_text(encoding="utf-8"))["rows"],
+        "ours_speed": json.loads(Path(formal_table).read_text(encoding="utf-8"))["rows"],
+        "ours_opacity": json.loads(Path(ablation_table).read_text(encoding="utf-8"))["rows"],
+    }
     report = {
         "experiment": "softtail-v3-softmin-opacity-routing",
         "scenes": list(scenes),
@@ -54,9 +60,8 @@ def build(formal_table, runs_root, scenes):
     }
 
     for arm in ARMS:
-        reference_arm = "ours_quality" if arm == "ours_quality" else arm
         pooled = {scene: _load_arm(runs_root, scene, arm) for scene in scenes}
-        baseline = {scene: reference_rows[scene][reference_arm] for scene in scenes}
+        baseline = {scene: reference_rows[arm][scene][arm] for scene in scenes}
 
         report["per_scene"][arm] = {
             scene: {
@@ -96,12 +101,13 @@ def build(formal_table, runs_root, scenes):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("formal_table")
+    parser.add_argument("ablation_table")
     parser.add_argument("runs_root")
     parser.add_argument("scenes", nargs="*", default=["room", "bicycle", "garden"])
     args = parser.parse_args()
 
     scenes = args.scenes or ["room", "bicycle", "garden"]
-    report = build(args.formal_table, args.runs_root, scenes)
+    report = build(args.formal_table, args.ablation_table, args.runs_root, scenes)
     out = Path(args.runs_root) / "gate.json"
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report["headline"], indent=2))
