@@ -6,7 +6,11 @@ evaluator are identical, so the per-scene deltas below isolate that change.
 
 Usage:
     python -m sota.v3_gate <formal_table.json> <ablation_table.json> <runs_root>
-        [scene ...] [--experiment NAME]
+        [scene ...] [--experiment NAME] [--paired-reference ROOT]
+
+With ``--paired-reference`` the baseline rows come from ``ROOT/<scene>/<arm>``
+instead of the frozen tables: both arms were then cut from the same trained
+model, so the delta isolates a post-training change exactly.
 
 Writes ``<runs_root>/gate.json``.
 """
@@ -42,7 +46,7 @@ def _delta(arm, reference, metric):
     return -change if metric in LOWER_IS_BETTER else change
 
 
-def build(formal_table, ablation_table, runs_root, scenes, experiment):
+def build(formal_table, ablation_table, runs_root, scenes, experiment, paired_reference=None):
     # ours_opacity is a stage of the opacity ablation, not a main-table arm, so
     # each arm is compared against the table that actually froze it.
     formal_rows = json.loads(Path(formal_table).read_text(encoding="utf-8"))["rows"]
@@ -51,10 +55,16 @@ def build(formal_table, ablation_table, runs_root, scenes, experiment):
         "ours_speed": formal_rows,
         "ours_opacity": json.loads(Path(ablation_table).read_text(encoding="utf-8"))["rows"],
     }
+
+    def reference(scene, arm):
+        if paired_reference is not None:
+            return _load_arm(paired_reference, scene, arm)
+        return reference_rows[arm][scene][arm]
+
     report = {
         "experiment": experiment,
         "scenes": list(scenes),
-        "reference": str(formal_table),
+        "reference": str(paired_reference or formal_table),
         "per_scene": {},
         "means": {},
         "deltas": {},
@@ -63,7 +73,7 @@ def build(formal_table, ablation_table, runs_root, scenes, experiment):
 
     for arm in ARMS:
         candidate = {scene: _load_arm(runs_root, scene, arm) for scene in scenes}
-        baseline = {scene: reference_rows[arm][scene][arm] for scene in scenes}
+        baseline = {scene: reference(scene, arm) for scene in scenes}
 
         report["per_scene"][arm] = {
             scene: {
@@ -107,10 +117,11 @@ def main():
     parser.add_argument("runs_root")
     parser.add_argument("scenes", nargs="*")
     parser.add_argument("--experiment", default="softtail-v3-softmin-opacity-routing")
+    parser.add_argument("--paired-reference", default=None)
     args = parser.parse_args()
 
     report = build(args.formal_table, args.ablation_table, args.runs_root,
-                   args.scenes or SCENES, args.experiment)
+                   args.scenes or SCENES, args.experiment, args.paired_reference)
     out = Path(args.runs_root) / "gate.json"
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report["headline"], indent=2))
