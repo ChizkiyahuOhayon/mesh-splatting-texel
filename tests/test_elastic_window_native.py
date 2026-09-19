@@ -39,7 +39,7 @@ VERTICES = ((-0.50, -0.42, 2.0), (0.50, -0.42, 2.0), (0.0, 0.52, 2.0))
 COLORS = ((0.20, 0.34, 0.42), (0.43, 0.18, 0.12), (0.11, 0.51, 0.25))
 
 
-def _render(device, elastic, sigma, vertices=VERTICES):
+def _render(device, elastic, sigma, vertices=VERTICES, colors=COLORS):
     field_of_view = 1.0
     settings = TriangleRasterizationSettings(
         image_height=SIZE,
@@ -66,7 +66,7 @@ def _render(device, elastic, sigma, vertices=VERTICES):
         vertex_weights=torch.full((3,), 0.9, dtype=torch.float32, device=device),
         sigma=sigma,
         scaling=torch.zeros(1, dtype=torch.float32, device=device),
-        colors_precomp=torch.tensor(COLORS, dtype=torch.float32, device=device),
+        colors_precomp=torch.tensor(colors, dtype=torch.float32, device=device),
     )[0]
 
 
@@ -107,12 +107,17 @@ class ElasticWindowNativeTest(unittest.TestCase):
         sharp = _render(self.DEVICE, True, 1e-2).sum()
         self.assertGreater(float(sharp), float(soft))
 
-    def test_position_gradient_follows_finite_differences(self):
-        """Both windows omit the inradius term of the position derivative (the
-        published backward does too), so the check is on direction, not size."""
+    def _window_gradient_cosine(self, elastic):
+        """Cosine between the analytic and numerical in-plane vertex gradient.
+
+        A uniform colour removes the colour-interpolation term, which the
+        published backward drops with screen_space_gradients off, so only the
+        window moves the image. Both windows also omit the inradius term of the
+        derivative, so the comparison is of direction, not size."""
+        uniform = ((0.3, 0.3, 0.3),) * 3
         base = torch.tensor(VERTICES, dtype=torch.float32, device=self.DEVICE)
         vertices = base.clone().requires_grad_(True)
-        _loss(_render(self.DEVICE, True, 1.0, vertices)).backward()
+        _loss(_render(self.DEVICE, elastic, 1.0, vertices, uniform)).backward()
         analytic = vertices.grad[:, :2].flatten()
         numeric = torch.zeros_like(analytic)
         step = 2e-3
@@ -122,10 +127,15 @@ class ElasticWindowNativeTest(unittest.TestCase):
             down = base.clone()
             up[row, col] += step
             down[row, col] -= step
-            numeric[index] = (_loss(_render(self.DEVICE, True, 1.0, up))
-                              - _loss(_render(self.DEVICE, True, 1.0, down))) / (2 * step)
-        cosine = torch.nn.functional.cosine_similarity(analytic, numeric, dim=0)
-        self.assertGreater(float(cosine), 0.8, f"analytic {analytic} numeric {numeric}")
+            numeric[index] = (_loss(_render(self.DEVICE, elastic, 1.0, up, uniform))
+                              - _loss(_render(self.DEVICE, elastic, 1.0, down, uniform))) / (2 * step)
+        return float(torch.nn.functional.cosine_similarity(analytic, numeric, dim=0)), analytic, numeric
+
+    def test_position_gradient_follows_finite_differences(self):
+        cosine, analytic, numeric = self._window_gradient_cosine(True)
+        published, _, _ = self._window_gradient_cosine(False)
+        print(f"window-gradient cosine: elastic {cosine:.3f}, published {published:.3f}")
+        self.assertGreater(cosine, 0.8, f"analytic {analytic} numeric {numeric}")
 
     def test_gradients_stay_finite_in_the_sharp_limit(self):
         vertices = torch.tensor(VERTICES, dtype=torch.float32, device=self.DEVICE)
