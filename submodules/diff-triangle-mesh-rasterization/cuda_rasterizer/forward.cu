@@ -181,7 +181,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 uint2* rect_max,
 	 const dim3 grid,
 	 uint32_t* tiles_touched,
-	 bool prefiltered)
+	 bool prefiltered,
+	 const bool opacity_field)
  {
  
 	 auto idx = cg::this_grid().thread_rank();
@@ -202,6 +203,7 @@ __global__ void computeVertexSH1FactorsCUDA(
  
 	 float3 center_triangle = {0.0f, 0.0f, 0.0f};
 	 float min_weight = INFINITY;
+	 float max_weight = -INFINITY;
 	 for (int i = 0; i < 3; i++) {
 		indices[cumsum_for_triangle + i] = i;
 
@@ -216,6 +218,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		if (weight < min_weight) {
 			min_weight = weight;
 		}
+		max_weight = fmaxf(max_weight, weight);
 	 }
  
 	 center_triangle.x /= 3;
@@ -397,7 +400,10 @@ __global__ void computeVertexSH1FactorsCUDA(
 		return;
 	}
 
-	if (eff_min_weight < stopping_influence){
+	// Under the per-vertex opacity field a face is transparent only where all
+	// three corners are, so it is culled on its most opaque corner instead.
+	const float cull_weight = opacity_field ? max_weight : eff_min_weight;
+	if (cull_weight < stopping_influence){
 		return;
 	}
 
@@ -577,6 +583,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float2* __restrict__ p_image,
 	 const float transmittance_threshold,
 	 const bool absorb_transmittance_tail,
+	 const float* __restrict__ opacity_field,
 	 float* __restrict__ final_T,
 	 uint32_t* __restrict__ n_contrib,
 	 const float* __restrict__ bg_color,
@@ -747,7 +754,15 @@ __global__ void computeVertexSH1FactorsCUDA(
 			 float sigma_j = per_face_sigma ? collected_sigma[j] : sigma;
 			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma_j));
 
-			 float alpha = min(0.999f, con_o.w * Cx);
+			 // Face opacity: the published min over the three corners, or with
+			 // `opacity_field` the corners interpolated at this pixel.
+			 float opacity = con_o.w;
+			 if (opacity_field != nullptr) {
+				 float3 w;
+				 opacity = interpolateOpacity(collected_p_images + base,
+					 triangles_indices + 3 * j_id, opacity_field, pixf, w);
+			 }
+			 float alpha = min(0.999f, opacity * Cx);
 			 if (alpha < 1.0f / 255.0f)
 				 continue;
 			
@@ -926,6 +941,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float2* p_image,
 	 const float transmittance_threshold,
 	 const bool absorb_transmittance_tail,
+	 const float* opacity_field,
 	 float* final_T,
 	 uint32_t* n_contrib,
 	 const float* bg_color,
@@ -964,6 +980,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 p_image,
 		 transmittance_threshold,
 		 absorb_transmittance_tail,
+		 opacity_field,
 		 final_T,
 		 n_contrib,
 		 bg_color,
@@ -1036,7 +1053,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 uint2* rect_max,
 	 const dim3 grid,
 	 uint32_t* tiles_touched,
-	 bool prefiltered)
+	 bool prefiltered,
+	 const bool opacity_field)
  {
 	 preprocessCUDA<NUM_CHANNELS> << <(P + 255) / 256, 256 >> > (
 		 P, D, M,
@@ -1074,6 +1092,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 rect_max,
 		 grid,
 		 tiles_touched,
-		 prefiltered
+		 prefiltered,
+		 opacity_field
 		 );
  }

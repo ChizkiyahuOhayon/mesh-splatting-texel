@@ -1,12 +1,12 @@
-"""Three-scene comparison for softmin opacity-gradient routing.
+"""Three-scene comparison of a candidate arm against the frozen v1 runs.
 
-The pooled arm differs from the frozen v1 runs in exactly one respect: how a
-face's opacity gradient is split over its three vertices. Everything else -- the
-endpoint, the schedules, the renderer, the evaluator -- is identical, so the
-per-scene deltas below isolate the routing.
+The candidate differs from v1 in exactly one declared respect (a gradient
+routing, an opacity model); the endpoint, the schedules, the renderer and the
+evaluator are identical, so the per-scene deltas below isolate that change.
 
 Usage:
-    python -m sota.v3_gate <formal_table.json> <runs_root> [scene ...]
+    python -m sota.v3_gate <formal_table.json> <ablation_table.json> <runs_root>
+        [scene ...] [--experiment NAME]
 
 Writes ``<runs_root>/gate.json``.
 """
@@ -20,6 +20,7 @@ METRICS = ("psnr", "ssim", "lpips_vgg", "l1", "fps")
 # Lower is better for these; the rest improve upward.
 LOWER_IS_BETTER = ("lpips_vgg", "l1")
 SIZE_KEYS = ("checkpoint_bytes", "triangles", "vertices")
+SCENES = ["room", "bicycle", "garden"]
 
 
 def _mean(values):
@@ -36,21 +37,22 @@ def _load_arm(runs_root, scene, arm):
 
 
 def _delta(arm, reference, metric):
-    """Signed improvement: positive always means the pooled arm is better."""
+    """Signed improvement: positive always means the candidate is better."""
     change = arm[metric] - reference[metric]
     return -change if metric in LOWER_IS_BETTER else change
 
 
-def build(formal_table, ablation_table, runs_root, scenes):
+def build(formal_table, ablation_table, runs_root, scenes, experiment):
     # ours_opacity is a stage of the opacity ablation, not a main-table arm, so
     # each arm is compared against the table that actually froze it.
+    formal_rows = json.loads(Path(formal_table).read_text(encoding="utf-8"))["rows"]
     reference_rows = {
-        "ours_quality": json.loads(Path(formal_table).read_text(encoding="utf-8"))["rows"],
-        "ours_speed": json.loads(Path(formal_table).read_text(encoding="utf-8"))["rows"],
+        "ours_quality": formal_rows,
+        "ours_speed": formal_rows,
         "ours_opacity": json.loads(Path(ablation_table).read_text(encoding="utf-8"))["rows"],
     }
     report = {
-        "experiment": "softtail-v3-softmin-opacity-routing",
+        "experiment": experiment,
         "scenes": list(scenes),
         "reference": str(formal_table),
         "per_scene": {},
@@ -60,31 +62,31 @@ def build(formal_table, ablation_table, runs_root, scenes):
     }
 
     for arm in ARMS:
-        pooled = {scene: _load_arm(runs_root, scene, arm) for scene in scenes}
+        candidate = {scene: _load_arm(runs_root, scene, arm) for scene in scenes}
         baseline = {scene: reference_rows[arm][scene][arm] for scene in scenes}
 
         report["per_scene"][arm] = {
             scene: {
-                "pooled": pooled[scene],
+                "candidate": candidate[scene],
                 "v1": baseline[scene],
-                "delta": {m: _delta(pooled[scene], baseline[scene], m) for m in METRICS},
+                "delta": {m: _delta(candidate[scene], baseline[scene], m) for m in METRICS},
             }
             for scene in scenes
         }
         report["means"][arm] = {
-            "pooled": {m: _mean([pooled[s][m] for s in scenes]) for m in METRICS},
+            "candidate": {m: _mean([candidate[s][m] for s in scenes]) for m in METRICS},
             "v1": {m: _mean([baseline[s][m] for s in scenes]) for m in METRICS},
         }
         report["deltas"][arm] = {
-            m: report["means"][arm]["pooled"][m] - report["means"][arm]["v1"][m]
+            m: report["means"][arm]["candidate"][m] - report["means"][arm]["v1"][m]
             for m in METRICS
         }
         report["win_counts"][arm] = {
-            m: sum(1 for s in scenes if _delta(pooled[s], baseline[s], m) > 0)
+            m: sum(1 for s in scenes if _delta(candidate[s], baseline[s], m) > 0)
             for m in METRICS
         }
         for key in SIZE_KEYS:
-            report["means"][arm]["pooled"][key] = _mean([pooled[s][key] for s in scenes])
+            report["means"][arm]["candidate"][key] = _mean([candidate[s][key] for s in scenes])
             report["means"][arm]["v1"][key] = _mean([baseline[s][key] for s in scenes])
 
     quality = report["deltas"]["ours_quality"]
@@ -103,11 +105,12 @@ def main():
     parser.add_argument("formal_table")
     parser.add_argument("ablation_table")
     parser.add_argument("runs_root")
-    parser.add_argument("scenes", nargs="*", default=["room", "bicycle", "garden"])
+    parser.add_argument("scenes", nargs="*")
+    parser.add_argument("--experiment", default="softtail-v3-softmin-opacity-routing")
     args = parser.parse_args()
 
-    scenes = args.scenes or ["room", "bicycle", "garden"]
-    report = build(args.formal_table, args.ablation_table, args.runs_root, scenes)
+    report = build(args.formal_table, args.ablation_table, args.runs_root,
+                   args.scenes or SCENES, args.experiment)
     out = Path(args.runs_root) / "gate.json"
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report["headline"], indent=2))

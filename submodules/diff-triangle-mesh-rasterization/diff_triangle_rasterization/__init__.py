@@ -207,6 +207,7 @@ class _RasterizeTriangles(torch.autograd.Function):
             raster_settings.debug,
             raster_settings.transmittance_threshold,
             raster_settings.absorb_transmittance_tail,
+            raster_settings.opacity_field,
         )
 
 
@@ -239,6 +240,7 @@ class _RasterizeTriangles(torch.autograd.Function):
         # vertices. <= 0 is the published hard-argmin routing. See backward.cu.
         ctx.opacity_pool_beta = getattr(
             raster_settings, "opacity_pool_beta", 0.0)
+        ctx.opacity_field = raster_settings.opacity_field
         ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels, edge_details, face_edge_ids, sigma_face)
         return color, radii, scaling, depth, max_blending, was_rendered
 
@@ -288,6 +290,7 @@ class _RasterizeTriangles(torch.autograd.Function):
                 imgBuffer,
                 ctx.screen_space_gradients,
                 ctx.opacity_pool_beta,
+                ctx.opacity_field,
                 raster_settings.debug)
 
         # Compute gradients for relevant tensors by invoking backward method
@@ -354,6 +357,11 @@ class TriangleRasterizationSettings(NamedTuple):
     # values approach that limit; smaller positive values spread the gradient.
     # The forward pass is unaffected at every value.
     opacity_pool_beta : float = 0.0
+    # Per-vertex opacity field. False is the published model: a face's opacity
+    # is the min over its three vertices. True interpolates the three vertex
+    # opacities across the face with the barycentrics that interpolate colour,
+    # so opacity varies within a face and every vertex gets an exact gradient.
+    opacity_field : bool = False
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):
@@ -448,6 +456,8 @@ class TriangleRasterizer(nn.Module):
             raise ValueError("GoRFE design export requires transmittance_threshold=1e-4")
         if raster_settings.absorb_transmittance_tail:
             raise ValueError("GoRFE design export does not support tail absorption")
+        if raster_settings.opacity_field:
+            raise ValueError("GoRFE design export assumes the per-face min opacity")
         if output_scaling != 4:
             raise ValueError(
                 f"GoRFE-V1 output_scaling must equal 4, got {output_scaling}"
@@ -500,6 +510,7 @@ class TriangleRasterizer(nn.Module):
             raster_settings.debug,
             raster_settings.transmittance_threshold,
             raster_settings.absorb_transmittance_tail,
+            False,  # opacity_field, refused above
         )
         (
             num_rendered,

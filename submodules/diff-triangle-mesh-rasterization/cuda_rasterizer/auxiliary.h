@@ -68,6 +68,27 @@ __forceinline__ __device__ float ndc2Pix(float v, int S)
 	return ((v + 1.0) * S - 1.0) * 0.5;
 }
 
+// Opacity of a face at pixel `p` under the per-vertex opacity field: the three
+// corner opacities interpolated with the screen-space barycentrics that already
+// interpolate colour, so opacity varies across a face exactly as colour does.
+// The arithmetic mirrors the colour path term for term, so both see the same
+// weights. `w` receives them in corner order, for the backward pass.
+__forceinline__ __device__ float interpolateOpacity(
+	const float2* corners, const int* face, const float* opacity_field,
+	const float2 p, float3& w)
+{
+	const float2 e0 = { corners[1].x - corners[0].x, corners[1].y - corners[0].y };
+	const float2 e1 = { corners[2].x - corners[0].x, corners[2].y - corners[0].y };
+	const float2 d = { p.x - corners[0].x, p.y - corners[0].y };
+	const float inv_den = 1.0f / (e0.x * e1.y - e1.x * e0.y);
+	const float b0 = ( d.x * e1.y - e1.x * d.y) * inv_den;
+	const float b1 = (-d.x * e0.y + e0.x * d.y) * inv_den;
+	w = { 1.0f - b0 - b1, b0, b1 };
+	return w.x * opacity_field[face[0]]
+		 + w.y * opacity_field[face[1]]
+		 + w.z * opacity_field[face[2]];
+}
+
 __forceinline__ __device__ float distance_point(float3 p1, float3 p2) {
     float dx = p1.x - p2.x;
     float dy = p1.y - p2.y;

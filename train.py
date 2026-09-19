@@ -88,6 +88,7 @@ def training(
 
     # Load parameters, triangles and scene
     triangles = TriangleModel(dataset.sh_degree)
+    triangles.opacity_field = opt.opacity_field
 
     scene = Scene(dataset, triangles, opt.set_weight, opt.set_sigma)
 

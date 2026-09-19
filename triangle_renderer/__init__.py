@@ -187,6 +187,7 @@ def render(
         transmittance_threshold=transmittance_threshold,
         absorb_transmittance_tail=absorb_transmittance_tail,
         opacity_pool_beta=opacity_pool_beta,
+        opacity_field=bool(getattr(pc, "opacity_field", False)),
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)

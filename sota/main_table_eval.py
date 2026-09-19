@@ -162,6 +162,7 @@ def run(dataset, pipeline, args):
         "checkpoint_bytes": checkpoint.stat().st_size,
         "triangles": int(triangles.get_triangle_indices.shape[0]),
         "vertices": int(triangles.get_vertices.shape[0]),
+        "opacity_field": bool(triangles.opacity_field),
         "opacity_floor": setting["opacity_floor"],
         "adaptive_opacity": (
             dict(triangles.adaptive_opacity) | {

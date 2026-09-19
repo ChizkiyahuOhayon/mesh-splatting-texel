@@ -174,6 +174,10 @@ class OptimizationParams(ParamGroup):
         self.opacity_pool = False
         self.opacity_pool_k_start = 1.0
         self.opacity_pool_k_end = 100.0
+        # Per-vertex opacity field: interpolate the three vertex opacities across
+        # each face instead of taking their min. A property of the trained model,
+        # so it is stored in the checkpoint and every later render follows it.
+        self.opacity_field = False
         # SoftTail v2: visibility-aware terminal opacity (sota/visibility.py).
         # Off by default => the v1 global-floor path, byte for byte. When on,
         # each vertex ends at tau_v = low + (final_opacity - low) * d_v, where

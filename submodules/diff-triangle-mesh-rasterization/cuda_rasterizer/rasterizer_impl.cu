@@ -258,6 +258,7 @@
 	 const bool prefiltered,
 	 const float transmittance_threshold,
 	 const bool absorb_transmittance_tail,
+	 const bool opacity_field,
 	 float* out_color,
 	 float* out_others,
 	 float* max_blending,
@@ -327,7 +328,8 @@
 		 geomState.rect_max,
 		 tile_grid,
 		 geomState.tiles_touched,
-		 prefiltered
+		 prefiltered,
+		 opacity_field
 	 ), debug)
 
 
@@ -432,6 +434,7 @@
 		 geomState.p_image,
 		 transmittance_threshold,
 		 absorb_transmittance_tail,
+		 opacity_field ? vertex_weights : nullptr,
 		 imgState.accum_alpha,
 		 imgState.n_contrib,
 		 background,
@@ -490,6 +493,7 @@
 	 float* dL_dsigma_face,
 	 bool screen_space_gradients,
 	 const float opacity_pool_beta,
+	 const bool opacity_field,
 	 bool debug)
  {
 	 // Backward never runs with donors (the Python wrapper raises first), so the
@@ -558,7 +562,9 @@
 		 dL_dedge_sh1,
 		 dL_dpoints2D,
 		 dL_dvertice_depth,
-		 dL_dsigma_face), debug)
+		 dL_dsigma_face,
+		 opacity_field ? vertex_weights : nullptr,
+		 opacity_field ? (float*)dL_dvertice_weights : nullptr), debug)
 	if (colors_precomp == nullptr) {
 		// Compute vertex color gradients in parallel
 		CHECK_CUDA(BACKWARD::computeVertexColorGradients(

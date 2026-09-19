@@ -70,7 +70,11 @@
 		 float* dL_dedge_sh1,
 		 float* dL_dpoints2D,
 		 float* dL_dvertice_depth,
-		 float* dL_dsigma_face);
+		 float* dL_dsigma_face,
+		 // Per-vertex opacities interpolated across each face, and their
+		 // gradient; both null on the published per-face min path.
+		 const float* opacity_field,
+		 float* dL_dopacity_field);
 
 	 void computeVertexSH1Gradients(
 		 int V,

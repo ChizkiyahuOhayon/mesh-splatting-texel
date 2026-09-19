@@ -77,7 +77,8 @@
 		 uint2* rect_max,
 		 const dim3 grid,
 		 uint32_t* tiles_touched,
-		 bool prefiltered);
+		 bool prefiltered,
+		 const bool opacity_field);
 
 	void computeVertexColors(
 		int V, int D, int M,
@@ -127,6 +128,9 @@
 		 const float2* p_image,
 		 const float transmittance_threshold,
 		 const bool absorb_transmittance_tail,
+		 // Per-vertex opacities to interpolate across each face; null keeps the
+		 // published per-face min.
+		 const float* opacity_field,
 		 float* final_T,
 		 uint32_t* n_contrib,
 		 const float* bg_color,

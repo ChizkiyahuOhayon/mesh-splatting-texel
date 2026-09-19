@@ -688,7 +688,9 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	 float* __restrict__ dL_dedge_sh1,
 	 float* __restrict__ dL_dpoints2D,
 	 float* __restrict__ dL_dvertice_depth,
-	 float* __restrict__ dL_dsigma_face)
+	 float* __restrict__ dL_dsigma_face,
+	 const float* __restrict__ opacity_field,
+	 float* __restrict__ dL_dopacity_field)
  {
 	 // We rasterize again. Compute necessary block info.
 	 auto block = cg::this_thread_block();
@@ -836,7 +838,14 @@ __global__ void computeVertexGeometryGradientsCUDA(
 			 float sigma_j = per_face_sigma ? collected_sigma[j] : sigma;
 			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma_j));
  
-			 const float alpha = min(0.99f, con_o.w * Cx);
+			 // Mirror the forward: the per-face min, or the per-vertex field
+			 // interpolated at this pixel (`w_opacity` in corner order).
+			 float opacity = con_o.w;
+			 float3 w_opacity = { 0.0f, 0.0f, 0.0f };
+			 if (opacity_field != nullptr)
+				 opacity = interpolateOpacity(collected_p_images + base,
+					 triangles_indices + 3 * j_id, opacity_field, pixf, w_opacity);
+			 const float alpha = min(0.99f, opacity * Cx);
  
 			 if (alpha < 1.0f / 255.0f)
 				 continue;
@@ -1029,6 +1038,48 @@ __global__ void computeVertexGeometryGradientsCUDA(
 				  atomicAdd(&dL_dvertice_depth[vertex_idx2], dL_dmedian_depth * wC);
 			  }
 
+ 
+			 // Propagate gradients w.r.t ray-splat depths
+			 accum_depth_rec = last_alpha * last_depth + (1.f - last_alpha) * accum_depth_rec;
+			 last_depth = depth_interp; // not collected_depths[j]
+			 dL_dalpha += (depth_interp - accum_depth_rec) * dL_ddepth;
+			 // Propagate gradients w.r.t. color ray-splat alphas
+			 accum_alpha_rec = last_alpha * 1.0 + (1.f - last_alpha) * accum_alpha_rec;
+			 dL_dalpha += (1 - accum_alpha_rec) * dL_daccum;
+  
+			 for (int ch = 0; ch < 3; ch++) {
+				 accum_normal_rec[ch] = last_alpha * last_normal[ch] + (1.f - last_alpha) * accum_normal_rec[ch];
+				 last_normal[ch] = normal[ch];
+				 dL_dalpha += (normal[ch] - accum_normal_rec[ch]) * dL_dnormal2D[ch];
+				 atomicAdd((&dL_dnormal3D[global_id * 3 + ch]), alpha * T * dL_dnormal2D[ch]);
+			 }
+ 
+			 dL_dalpha *= T;
+			 // Update last alpha (to be used in the next iteration)
+			 last_alpha = alpha;
+ 
+			 // Account for fact that alpha also influences how much of
+			 // the background color is added if nothing left to blend
+			 float bg_dot_dpixel = 0;
+			 for (int i = 0; i < C; i++)
+				 bg_dot_dpixel += bg_color[i] * dL_dpixel[i];
+			 dL_dalpha += (-T_final / (1.f - alpha)) * bg_dot_dpixel;
+
+			 // o(p) = wA*o0 + wB*o1 + wC*o2 is linear in each corner opacity and
+			 // in the barycentrics, so every corner receives its exact share and
+			 // the barycentrics pick up the opacity term beside the colour term.
+			 // The screen-space position block below therefore runs only now,
+			 // once dL_dalpha is complete.
+			 if (opacity_field != nullptr) {
+				 const float dL_do = dL_dalpha * Cx;
+				 atomicAdd(&dL_dopacity_field[vertex_idx0], w_opacity.x * dL_do);
+				 atomicAdd(&dL_dopacity_field[vertex_idx1], w_opacity.y * dL_do);
+				 atomicAdd(&dL_dopacity_field[vertex_idx2], w_opacity.z * dL_do);
+				 dL_db2 += opacity_field[vertex_idx0] * dL_do;
+				 dL_db0 += opacity_field[vertex_idx1] * dL_do;
+				 dL_db1 += opacity_field[vertex_idx2] * dL_do;
+			 }
+
 			 // Recompute necessary terms for derivatives
 			 float denom_val = v0.x * v1.y - v1.x * v0.y;
 			 float N0 = v2.x * v1.y - v1.x * v2.y;
@@ -1096,35 +1147,9 @@ __global__ void computeVertexGeometryGradientsCUDA(
 			 atomicAdd(&dL_dpoints2D[vertex_idx1 * 2 + 1], dL_dy1);
 			 atomicAdd(&dL_dpoints2D[vertex_idx2 * 2], dL_dx2);
 			 atomicAdd(&dL_dpoints2D[vertex_idx2 * 2 + 1], dL_dy2); 
- 
-			 // Propagate gradients w.r.t ray-splat depths
-			 accum_depth_rec = last_alpha * last_depth + (1.f - last_alpha) * accum_depth_rec;
-			 last_depth = depth_interp; // not collected_depths[j]
-			 dL_dalpha += (depth_interp - accum_depth_rec) * dL_ddepth;
-			 // Propagate gradients w.r.t. color ray-splat alphas
-			 accum_alpha_rec = last_alpha * 1.0 + (1.f - last_alpha) * accum_alpha_rec;
-			 dL_dalpha += (1 - accum_alpha_rec) * dL_daccum;
-  
-			 for (int ch = 0; ch < 3; ch++) {
-				 accum_normal_rec[ch] = last_alpha * last_normal[ch] + (1.f - last_alpha) * accum_normal_rec[ch];
-				 last_normal[ch] = normal[ch];
-				 dL_dalpha += (normal[ch] - accum_normal_rec[ch]) * dL_dnormal2D[ch];
-				 atomicAdd((&dL_dnormal3D[global_id * 3 + ch]), alpha * T * dL_dnormal2D[ch]);
-			 }
- 
-			 dL_dalpha *= T;
-			 // Update last alpha (to be used in the next iteration)
-			 last_alpha = alpha;
- 
-			 // Account for fact that alpha also influences how much of
-			 // the background color is added if nothing left to blend
-			 float bg_dot_dpixel = 0;
-			 for (int i = 0; i < C; i++)
-				 bg_dot_dpixel += bg_color[i] * dL_dpixel[i];
-			 dL_dalpha += (-T_final / (1.f - alpha)) * bg_dot_dpixel;
- 
+
 			 // Helpful reusable temporary variables
-			 const float dL_dC = con_o.w * dL_dalpha;
+			 const float dL_dC = opacity * dL_dalpha;
 			
 			// Calculate gradient w.r.t phi_x 
 			float dL_dphi_x = dL_dC * (sigma_j / phi_x) * Cx;
@@ -1145,8 +1170,10 @@ __global__ void computeVertexGeometryGradientsCUDA(
 				}
 			 }
  
-			 // Update gradients w.r.t. opacity of the Triangle
-			 atomicAdd(&(dL_dopacity[global_id]), dL_dalpha * Cx);
+			 // Update gradients w.r.t. opacity of the Triangle. Under the field
+			 // they went straight to the corners above.
+			 if (opacity_field == nullptr)
+				 atomicAdd(&(dL_dopacity[global_id]), dL_dalpha * Cx);
  
 		 }
 	 }
@@ -1293,7 +1320,9 @@ void BACKWARD::computeVertexColorGradients(
 	 float* dL_dedge_sh1,
 	 float* dL_dpoints2D,
 	 float* dL_dvertice_depth,
-	 float* dL_dsigma_face
+	 float* dL_dsigma_face,
+	 const float* opacity_field,
+	 float* dL_dopacity_field
 	)
  {
 	 renderCUDA<NUM_CHANNELS> << <grid, block >> >(
@@ -1334,7 +1363,9 @@ void BACKWARD::computeVertexColorGradients(
 		 dL_dedge_sh1,
 		 dL_dpoints2D,
 		 dL_dvertice_depth,
-		 dL_dsigma_face
+		 dL_dsigma_face,
+		 opacity_field,
+		 dL_dopacity_field
 		 );
  }
 

@@ -71,6 +71,7 @@ namespace CudaRasterizer
 			const bool prefiltered,
 			const float transmittance_threshold,
 			const bool absorb_transmittance_tail,
+			const bool opacity_field,
 			float* out_color,
 			float* out_others,
 			float* max_blending,
@@ -123,6 +124,7 @@ namespace CudaRasterizer
 			float* dL_dsigma_face,
 			bool screen_space_gradients,
 			const float opacity_pool_beta,
+			const bool opacity_field,
 			bool debug);
 	};
 };
