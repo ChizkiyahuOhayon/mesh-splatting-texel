@@ -57,6 +57,7 @@ RasterizetrianglesCUDA(
 	const float transmittance_threshold,
 	const bool absorb_transmittance_tail,
 	const bool opacity_field,
+	const bool elastic_window,
 	const torch::Tensor& integrated_blending);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
@@ -108,6 +109,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	const bool screen_space_gradients,
 	const float opacity_pool_beta,
 	const bool opacity_field,
+	const bool elastic_window,
 	const bool debug);
 		
 torch::Tensor markVisible(

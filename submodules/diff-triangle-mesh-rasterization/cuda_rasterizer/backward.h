@@ -74,7 +74,8 @@
 		 // Per-vertex opacities interpolated across each face, and their
 		 // gradient; both null on the published per-face min path.
 		 const float* opacity_field,
-		 float* dL_dopacity_field);
+		 float* dL_dopacity_field,
+		 const bool elastic_window);
 
 	 void computeVertexSH1Gradients(
 		 int V,

@@ -182,7 +182,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const dim3 grid,
 	 uint32_t* tiles_touched,
 	 bool prefiltered,
-	 const bool opacity_field)
+	 const bool opacity_field,
+	 const bool elastic_window)
  {
  
 	 auto idx = cg::this_grid().thread_rank();
@@ -499,15 +500,19 @@ __global__ void computeVertexSH1FactorsCUDA(
 	uint2 rect_min_triangle_test = { grid.x, grid.y };
 	uint2 rect_max_triangle_test = { 0, 0 };
 
+	// The elastic window reaches one inradius (-dist) beyond every edge, so
+	// the conservative box grows by that much.
+	const float pad = elastic_window ? 5.0f - dist : 5.0f;
+
 	// Include all three vertices in the bounding box
 	for (int i = 0; i < 3; i++) {
 		float2 vertex_pos = p_image[cumsum_for_triangle + i];
 		
 		// Convert to tile coordinates with conservative expansion
-		uint bx_min = (uint)floorf((vertex_pos.x - 5.0f) / BLOCK_X); // Expand by 2 pixels
-		uint by_min = (uint)floorf((vertex_pos.y - 5.0f) / BLOCK_Y);
-		uint bx_max = (uint)ceilf((vertex_pos.x + 5.0f) / BLOCK_X);
-		uint by_max = (uint)ceilf((vertex_pos.y + 5.0f) / BLOCK_Y);
+		uint bx_min = (uint)floorf((vertex_pos.x - pad) / BLOCK_X); // Expand by 2 pixels
+		uint by_min = (uint)floorf((vertex_pos.y - pad) / BLOCK_Y);
+		uint bx_max = (uint)ceilf((vertex_pos.x + pad) / BLOCK_X);
+		uint by_max = (uint)ceilf((vertex_pos.y + pad) / BLOCK_Y);
 		
 		// Clamp to grid boundaries
 		bx_min = min(grid.x, max(0, bx_min));
@@ -584,6 +589,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float transmittance_threshold,
 	 const bool absorb_transmittance_tail,
 	 const float* __restrict__ opacity_field,
+	 const bool elastic_window,
 	 float* __restrict__ final_T,
 	 uint32_t* __restrict__ n_contrib,
 	 const float* __restrict__ bg_color,
@@ -727,13 +733,16 @@ __global__ void computeVertexSH1FactorsCUDA(
 
 				 if (dist > 0) {
 					outside = true;
-					break;
+					// The elastic window still covers this pixel, so it
+					// needs the full maximum over the three edges.
+					if (!elastic_window)
+						break;
 				 }
  
 				 max_val = fmaxf(max_val, dist);
 			 }
 
-			 if (outside)
+			 if (outside && !elastic_window)
 				continue;
 
 			 if (donor_windows_active && collected_donor[j]) {
@@ -753,7 +762,13 @@ __global__ void computeVertexSH1FactorsCUDA(
 			 float phi_x = max_val;
 			 float phi_final = phi_x * phi_center_min.x;
 			 float sigma_j = per_face_sigma ? collected_sigma[j] : sigma;
-			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma_j));
+			 float Cx;
+			 if (elastic_window) {
+				 float unused;
+				 Cx = elasticWindow(phi_final, sigma_j, unused);
+			 }
+			 else
+				 Cx = fmaxf(0.0f,  __powf(phi_final, sigma_j));
 
 			 // Face opacity: the published min over the three corners, or with
 			 // `opacity_field` the corners interpolated at this pixel.
@@ -947,6 +962,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const float transmittance_threshold,
 	 const bool absorb_transmittance_tail,
 	 const float* opacity_field,
+	 const bool elastic_window,
 	 float* final_T,
 	 uint32_t* n_contrib,
 	 const float* bg_color,
@@ -987,6 +1003,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 transmittance_threshold,
 		 absorb_transmittance_tail,
 		 opacity_field,
+		 elastic_window,
 		 final_T,
 		 n_contrib,
 		 bg_color,
@@ -1061,7 +1078,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 const dim3 grid,
 	 uint32_t* tiles_touched,
 	 bool prefiltered,
-	 const bool opacity_field)
+	 const bool opacity_field,
+	 const bool elastic_window)
  {
 	 preprocessCUDA<NUM_CHANNELS> << <(P + 255) / 256, 256 >> > (
 		 P, D, M,
@@ -1100,6 +1118,7 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 grid,
 		 tiles_touched,
 		 prefiltered,
-		 opacity_field
+		 opacity_field,
+		 elastic_window
 		 );
  }

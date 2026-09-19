@@ -78,6 +78,7 @@ assert "screen_space_gradients" in rasterizer.TriangleRasterizationSettings._fie
 assert "transmittance_threshold" in rasterizer.TriangleRasterizationSettings._fields
 assert "absorb_transmittance_tail" in rasterizer.TriangleRasterizationSettings._fields
 assert "opacity_field" in rasterizer.TriangleRasterizationSettings._fields
+assert "elastic_window" in rasterizer.TriangleRasterizationSettings._fields
 assert "sigma_face" in inspect.signature(rasterizer.TriangleRasterizer.forward).parameters
 assert hasattr(rasterizer._C, "rasterize_triangles")
 ' >/dev/null 2>&1

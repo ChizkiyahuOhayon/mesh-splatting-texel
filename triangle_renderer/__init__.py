@@ -190,6 +190,7 @@ def render(
         opacity_pool_beta=opacity_pool_beta,
         opacity_field=bool(getattr(pc, "opacity_field", False)),
         integrated_blending=integrated_blending,
+        elastic_window=bool(getattr(pc, "elastic_window", False)),
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)
@@ -274,6 +275,15 @@ def render(
         gorfe_face_edge_ids = gorfe_face_edge_ids.to(
             device=vertices.device, dtype=torch.int32
         ).contiguous()
+
+    # The elastic window extends past every edge, where the per-face exponent,
+    # the donors, the texel lookup, the edge details and the opacity field all
+    # assume barycentrics inside the face. Refuse rather than extrapolate them.
+    if raster_settings.elastic_window and (
+        sigma_face is not None or window_donors is not None or texels is not None
+        or edge_details is not None or raster_settings.opacity_field
+    ):
+        raise ValueError("the elastic window supports the plain vertex-colour model only")
 
     # Rasterize visible triangles to image, obtain their radii (on screen).
     raster_args = dict(

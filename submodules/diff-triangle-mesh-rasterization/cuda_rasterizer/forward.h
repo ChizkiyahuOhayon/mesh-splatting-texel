@@ -78,7 +78,8 @@
 		 const dim3 grid,
 		 uint32_t* tiles_touched,
 		 bool prefiltered,
-		 const bool opacity_field);
+		 const bool opacity_field,
+		 const bool elastic_window);
 
 	void computeVertexColors(
 		int V, int D, int M,
@@ -131,6 +132,8 @@
 		 // Per-vertex opacities to interpolate across each face; null keeps the
 		 // published per-face min.
 		 const float* opacity_field,
+		 // Elastic Triangle Splatting window; false keeps phi^sigma.
+		 const bool elastic_window,
 		 float* final_T,
 		 uint32_t* n_contrib,
 		 const float* bg_color,

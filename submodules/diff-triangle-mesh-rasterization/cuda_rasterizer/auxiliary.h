@@ -89,6 +89,28 @@ __forceinline__ __device__ float interpolateOpacity(
 		 + w.z * opacity_field[face[2]];
 }
 
+// Elastic window (Elastic Triangle Splatting, Eq. 5): G(x) = exp(-sigma x^(2/sigma))
+// with x = 1 - phi, so x = 0 at the incenter, 1 on the edges, and x > 1 outside,
+// up to the cull at x = 2 (one inradius beyond the edge). Unlike phi^sigma it has
+// support on both sides of every edge, and its edge value exp(-sigma) tends to
+// one as sigma anneals, so it ends at the same opaque step. `dG_dx` receives the
+// derivative; it is zero wherever G underflows, which also keeps the huge powers
+// of the sharp limit out of the product.
+__forceinline__ __device__ float elasticWindow(const float phi, const float sigma, float& dG_dx)
+{
+	const float x = 1.0f - phi;
+	dG_dx = 0.0f;
+	if (x >= 2.0f)
+		return 0.0f;
+	if (x <= 0.0f)
+		return 1.0f;
+	const float power = __powf(x, 2.0f / sigma);
+	const float G = __expf(-sigma * power);
+	if (G > 0.0f)
+		dG_dx = -2.0f * G * power / x;
+	return G;
+}
+
 __forceinline__ __device__ float distance_point(float3 p1, float3 p2) {
     float dx = p1.x - p2.x;
     float dy = p1.y - p2.y;

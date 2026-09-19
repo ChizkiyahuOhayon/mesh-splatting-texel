@@ -178,6 +178,10 @@ class OptimizationParams(ParamGroup):
         # each face instead of taking their min. A property of the trained model,
         # so it is stored in the checkpoint and every later render follows it.
         self.opacity_field = False
+        # Elastic window (Elastic Triangle Splatting, Eq. 5) in place of phi^sigma:
+        # gradient support on both sides of every edge and an edge value that
+        # anneals to one, ending at the same opaque mesh. Stored in the checkpoint.
+        self.elastic_window = False
         # SoftTail v2: visibility-aware terminal opacity (sota/visibility.py).
         # Off by default => the v1 global-floor path, byte for byte. When on,
         # each vertex ends at tau_v = low + (final_opacity - low) * d_v, where

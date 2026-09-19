@@ -690,7 +690,8 @@ __global__ void computeVertexGeometryGradientsCUDA(
 	 float* __restrict__ dL_dvertice_depth,
 	 float* __restrict__ dL_dsigma_face,
 	 const float* __restrict__ opacity_field,
-	 float* __restrict__ dL_dopacity_field)
+	 float* __restrict__ dL_dopacity_field,
+	 const bool elastic_window)
  {
 	 // We rasterize again. Compute necessary block info.
 	 auto block = cg::this_thread_block();
@@ -823,20 +824,26 @@ __global__ void computeVertexGeometryGradientsCUDA(
 				
 				 if (dist > 0) {
 					outside = true;
-					break;
+					if (!elastic_window)
+						break;
 				 }
  
 				 distances[k] = dist;
 				 max_val = fmaxf(max_val, dist);
 			 }
 
-			 if (outside)
+			 if (outside && !elastic_window)
 				 continue;
  
 			 float phi_x = max_val;
 			 float phi_final = phi_x * phi_center_min.x;
 			 float sigma_j = per_face_sigma ? collected_sigma[j] : sigma;
-			 float Cx = fmaxf(0.0f,  __powf(phi_final, sigma_j));
+			 // dG/dx of the elastic window; the published window's derivative
+			 // is taken in closed form below.
+			 float dG_dx = 0.0f;
+			 float Cx = elastic_window
+				 ? elasticWindow(phi_final, sigma_j, dG_dx)
+				 : fmaxf(0.0f,  __powf(phi_final, sigma_j));
  
 			 // Mirror the forward: the per-face min, or the per-vertex field
 			 // interpolated at this pixel (`w_opacity` in corner order).
@@ -1151,8 +1158,11 @@ __global__ void computeVertexGeometryGradientsCUDA(
 			 // Helpful reusable temporary variables
 			 const float dL_dC = opacity * dL_dalpha;
 			
-			// Calculate gradient w.r.t phi_x 
-			float dL_dphi_x = dL_dC * (sigma_j / phi_x) * Cx;
+			// Calculate gradient w.r.t phi_x. For the elastic window x = 1 - phi
+			// and phi = phi_x * phi_center, so dx/dphi_x = -phi_center.
+			float dL_dphi_x = elastic_window
+				? dL_dC * dG_dx * (-phi_center_min.x)
+				: dL_dC * (sigma_j / phi_x) * Cx;
 
 			// d(phi ** sigma)/d(sigma). phi_final is in (0, 1] here, so the log is
 			// finite wherever the face contributed at all.
@@ -1322,7 +1332,8 @@ void BACKWARD::computeVertexColorGradients(
 	 float* dL_dvertice_depth,
 	 float* dL_dsigma_face,
 	 const float* opacity_field,
-	 float* dL_dopacity_field
+	 float* dL_dopacity_field,
+	 const bool elastic_window
 	)
  {
 	 renderCUDA<NUM_CHANNELS> << <grid, block >> >(
@@ -1365,7 +1376,8 @@ void BACKWARD::computeVertexColorGradients(
 		 dL_dvertice_depth,
 		 dL_dsigma_face,
 		 opacity_field,
-		 dL_dopacity_field
+		 dL_dopacity_field,
+		 elastic_window
 		 );
  }
 

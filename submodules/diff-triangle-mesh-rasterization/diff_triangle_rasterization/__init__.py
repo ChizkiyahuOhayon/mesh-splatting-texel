@@ -215,6 +215,7 @@ class _RasterizeTriangles(torch.autograd.Function):
             raster_settings.transmittance_threshold,
             raster_settings.absorb_transmittance_tail,
             raster_settings.opacity_field,
+            raster_settings.elastic_window,
             _accumulator(raster_settings.integrated_blending, vertices),
         )
 
@@ -249,6 +250,7 @@ class _RasterizeTriangles(torch.autograd.Function):
         ctx.opacity_pool_beta = getattr(
             raster_settings, "opacity_pool_beta", 0.0)
         ctx.opacity_field = raster_settings.opacity_field
+        ctx.elastic_window = raster_settings.elastic_window
         ctx.save_for_backward(vertices, triangles_indices, vertex_weights, colors_precomp, radii, sh, geomBuffer, binningBuffer, imgBuffer, texels, edge_details, face_edge_ids, sigma_face)
         return color, radii, scaling, depth, max_blending, was_rendered
 
@@ -299,6 +301,7 @@ class _RasterizeTriangles(torch.autograd.Function):
                 ctx.screen_space_gradients,
                 ctx.opacity_pool_beta,
                 ctx.opacity_field,
+                ctx.elastic_window,
                 raster_settings.debug)
 
         # Compute gradients for relevant tensors by invoking backward method
@@ -375,6 +378,13 @@ class TriangleRasterizationSettings(NamedTuple):
     # the integral over the training set. None disables it; a forward-only
     # statistic, it never enters the backward.
     integrated_blending : Optional[torch.Tensor] = None
+    # Window shape. False is the published one-sided phi^sigma, which is zero on
+    # every edge and outside the face. True is the elastic window of Elastic
+    # Triangle Splatting, exp(-sigma x^(2/sigma)): support on both sides of each
+    # edge and an edge value exp(-sigma) that tends to one, so it anneals to the
+    # same opaque step. Not combined with per-face sigma, donors, texels, edge
+    # details or the opacity field, whose code assumes an interior-only window.
+    elastic_window : bool = False
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):
@@ -471,6 +481,8 @@ class TriangleRasterizer(nn.Module):
             raise ValueError("GoRFE design export does not support tail absorption")
         if raster_settings.opacity_field:
             raise ValueError("GoRFE design export assumes the per-face min opacity")
+        if raster_settings.elastic_window:
+            raise ValueError("GoRFE design export assumes the phi^sigma window")
         if output_scaling != 4:
             raise ValueError(
                 f"GoRFE-V1 output_scaling must equal 4, got {output_scaling}"
@@ -524,6 +536,7 @@ class TriangleRasterizer(nn.Module):
             raster_settings.transmittance_threshold,
             raster_settings.absorb_transmittance_tail,
             False,  # opacity_field, refused above
+            False,  # elastic_window, refused above
             _accumulator(None, vertices),
         )
         (

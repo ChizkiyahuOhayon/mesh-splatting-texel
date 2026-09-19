@@ -143,6 +143,9 @@ class TriangleModel:
         # False: a face's opacity is the min over its vertices (published). True:
         # the vertex opacities are interpolated across the face like colour.
         self.opacity_field = False
+        # False: the published one-sided window phi^sigma. True: the elastic
+        # window, bilateral around every edge (triangle_renderer, auxiliary.h).
+        self.elastic_window = False
 
         self.exponential_activation = lambda x:math.exp(x)
         self.inverse_exponential_activation = lambda y: math.log(y)
@@ -240,6 +243,7 @@ class TriangleModel:
         point_cloud_state_dict["pixel_count"] = self.pixel_count
         point_cloud_state_dict["opacity_floor"] = float(self.opacity_floor)
         point_cloud_state_dict["opacity_field"] = bool(self.opacity_field)
+        point_cloud_state_dict["elastic_window"] = bool(self.elastic_window)
         # SoftTail v2: the per-vertex terminal floor is part of the representation;
         # without it the checkpoint would reload as a v1 global-floor model.
         if self.opacity_floor_vertex is not None:
@@ -430,6 +434,7 @@ class TriangleModel:
         self.opacity_floor = restored_opacity_floor
         # Checkpoints written before the field existed are min-pooled.
         self.opacity_field = bool(state.get("opacity_field", False))
+        self.elastic_window = bool(state.get("elastic_window", False))
         self.opacity_floor_vertex = None
         self.adaptive_opacity = None
         self.visibility_dominance = None
