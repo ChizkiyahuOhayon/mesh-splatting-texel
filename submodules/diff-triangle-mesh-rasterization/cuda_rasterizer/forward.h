@@ -137,7 +137,9 @@
 		 float* out_color,
 		 float* out_others, 
 		 float* max_blending,
-		 int* was_rendered);
+		 int* was_rendered,
+		 // [P] accumulator of alpha*T per face; null skips it.
+		 float* integrated_blending);
  }
  
  

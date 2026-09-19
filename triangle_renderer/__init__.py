@@ -121,6 +121,7 @@ def render(
     transmittance_threshold_override=None,
     absorb_transmittance_tail=False,
     opacity_pool_beta=0.0,
+    integrated_blending=None,
 ):
     """
     Render the scene. 
@@ -188,6 +189,7 @@ def render(
         absorb_transmittance_tail=absorb_transmittance_tail,
         opacity_pool_beta=opacity_pool_beta,
         opacity_field=bool(getattr(pc, "opacity_field", False)),
+        integrated_blending=integrated_blending,
     )
 
     rasterizer = TriangleRasterizer(raster_settings=raster_settings)

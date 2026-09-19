@@ -226,6 +226,11 @@ class OptimizationParams(ParamGroup):
         # is the published behaviour; setting it makes the criterion
         # independent of the training schedule.
         self.cleanup_scaling = 0
+        # OATS: also save the model just before the final cleanup, so both
+        # cleanup rules can be applied offline to the same trained model
+        # (sota/survival_cleanup.py). The cleanup runs after the last optimizer
+        # step, so offline application is exactly the in-training rule.
+        self.save_precleanup = False
 
         self.size_probs_zero = 7.5e-05
         self.size_probs_zero_image_space = 0.0

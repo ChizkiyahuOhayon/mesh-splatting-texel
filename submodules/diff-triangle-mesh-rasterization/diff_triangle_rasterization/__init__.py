@@ -18,7 +18,7 @@
 # For inquiries contact jan.held@uliege.be
 #
 
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 import torch.nn as nn
 import torch
 from . import _C
@@ -131,6 +131,13 @@ def export_gorfe_rows(
     return pixel_ids, group_ids, features, diagnostics
 
 
+def _accumulator(buffer, like):
+    """The integrated-blending buffer, or an empty tensor meaning 'off'."""
+    if buffer is None:
+        return torch.zeros(0, device=like.device, dtype=torch.float32)
+    return buffer
+
+
 class _RasterizeTriangles(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -208,6 +215,7 @@ class _RasterizeTriangles(torch.autograd.Function):
             raster_settings.transmittance_threshold,
             raster_settings.absorb_transmittance_tail,
             raster_settings.opacity_field,
+            _accumulator(raster_settings.integrated_blending, vertices),
         )
 
 
@@ -362,6 +370,11 @@ class TriangleRasterizationSettings(NamedTuple):
     # opacities across the face with the barycentrics that interpolate colour,
     # so opacity varies within a face and every vertex gets an exact gradient.
     opacity_field : bool = False
+    # OATS: an optional caller-owned [F] float32 buffer. The forward adds each
+    # face's alpha*T into it, so passing the same buffer for every view yields
+    # the integral over the training set. None disables it; a forward-only
+    # statistic, it never enters the backward.
+    integrated_blending : Optional[torch.Tensor] = None
 
 class TriangleRasterizer(nn.Module):
     def __init__(self, raster_settings):
@@ -511,6 +524,7 @@ class TriangleRasterizer(nn.Module):
             raster_settings.transmittance_threshold,
             raster_settings.absorb_transmittance_tail,
             False,  # opacity_field, refused above
+            _accumulator(None, vertices),
         )
         (
             num_rendered,

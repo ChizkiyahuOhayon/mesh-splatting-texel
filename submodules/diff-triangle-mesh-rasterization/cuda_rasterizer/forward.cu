@@ -590,7 +590,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 float* __restrict__ out_color,
 	 float* __restrict__ out_others,
 	 float* __restrict__ max_blending,
-	 int* __restrict__ was_rendered)
+	 int* __restrict__ was_rendered,
+	 float* __restrict__ integrated_blending)
  {
 	 // Identify current tile and associated min/max pixel range.
 	 auto block = cg::this_thread_block();
@@ -780,6 +781,10 @@ __global__ void computeVertexSH1FactorsCUDA(
 			 float blending_weight = absorb_tail ? T : alpha * T;
 			 // Update the maximum blending weight in a thread-safe way
 			 atomicMax(((int*)max_blending) + j_id, *((int*)(&blending_weight)));
+			 // OATS: the same weight integrated over pixels (and, when the caller
+			 // reuses the buffer, over views) instead of its maximum.
+			 if (integrated_blending != nullptr)
+				 atomicAdd(integrated_blending + j_id, blending_weight);
 
 			 // COLOR INTERPOLATION
 
@@ -948,7 +953,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 	 float* out_color,
 	 float* out_others,
 	float* max_blending,
-	int* was_rendered)
+	int* was_rendered,
+	float* integrated_blending)
  {
 	 renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		 ranges,
@@ -987,7 +993,8 @@ __global__ void computeVertexSH1FactorsCUDA(
 		 out_color,
 		 out_others,
 		 max_blending,
-		 was_rendered
+		 was_rendered,
+		 integrated_blending
 		 );
  }
 

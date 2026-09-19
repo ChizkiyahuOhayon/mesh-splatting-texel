@@ -1,85 +1,132 @@
 """Opacity-aware topology survival (OATS): native rasterizer contract.
 
-The kernel change is one `atomicAdd(integrated_blending + j_id, blending_weight)`
-beside the existing `atomicMax` at forward.cu:767, behind a null-pointer guard.
-These tests prove (a) the new accumulator is correct, and (b) adding it did not
-perturb anything the v1 results depend on.
+The kernel change is one ``atomicAdd(integrated_blending + j_id, blending_weight)``
+beside the existing ``atomicMax``, into a caller-owned buffer passed through
+the raster settings. These tests prove the accumulator is the integral of
+``alpha * T`` and that adding it perturbs nothing v1 depends on.
 
-They need the rebuilt native extension and a CUDA device, so they skip on the
-Mac and must be run on the A40 before any training with --survival_cleanup.
-See handover/OATS_PLAN.md §5.
+Needs the rebuilt extension and a CUDA device, so it skips elsewhere.
 """
 
+import math
 import unittest
 
 import torch
 
 try:
     from diff_triangle_rasterization import (
-        GaussianRasterizationSettings,
-        GaussianRasterizer,
+        TriangleRasterizationSettings,
+        TriangleRasterizer,
     )
+    from utils.graphics_utils import getProjectionMatrix
     RASTERIZER_AVAILABLE = True
-except Exception:  # noqa: BLE001 - native extension absent on the laptop
+except Exception:  # noqa: BLE001 - native extension absent off the A40
     RASTERIZER_AVAILABLE = False
 
-CUDA_AVAILABLE = torch.cuda.is_available()
-
-INTEGRATED_BLENDING_IMPLEMENTED = RASTERIZER_AVAILABLE and hasattr(
-    GaussianRasterizationSettings, "_fields"
-) and "accumulate_integrated_blending" in getattr(
-    GaussianRasterizationSettings, "_fields", ()
+ACCUMULATOR_SUPPORTED = RASTERIZER_AVAILABLE and "integrated_blending" in getattr(
+    TriangleRasterizationSettings, "_fields", ()
 )
 
-_SKIP = (
-    "needs a CUDA device and a rebuilt rasterizer exporting "
-    "integrated_blending (handover/OATS_PLAN.md §4)"
+SIZE = 64
+# Two overlapping faces at different depths, so the back face is partly
+# occluded and its T is below one where they overlap.
+VERTICES = (
+    (-0.62, -0.52, 2.0), (0.62, -0.52, 2.0), (0.0, 0.64, 2.0),
+    (-0.40, -0.70, 3.0), (0.80, -0.30, 3.0), (0.20, 0.80, 3.0),
 )
+FACES = ((0, 1, 2), (3, 4, 5))
+OPACITIES = (0.6, 0.6, 0.6, 0.7, 0.7, 0.7)
+GREY = 0.5
+
+
+def _render(device, buffer=None, faces=FACES, colors=None):
+    field_of_view = 1.0
+    settings = TriangleRasterizationSettings(
+        image_height=SIZE,
+        image_width=SIZE,
+        tanfovx=math.tan(field_of_view / 2),
+        tanfovy=math.tan(field_of_view / 2),
+        bg=torch.zeros(3, dtype=torch.float32, device=device),
+        scale_modifier=1.0,
+        viewmatrix=torch.eye(4, dtype=torch.float32, device=device),
+        projmatrix=getProjectionMatrix(0.01, 100.0, field_of_view, field_of_view)
+        .transpose(0, 1)
+        .to(device),
+        sh_degree=0,
+        campos=torch.zeros(3, dtype=torch.float32, device=device),
+        prefiltered=False,
+        debug=False,
+        integrated_blending=buffer,
+    )
+    if colors is None:
+        colors = torch.full((len(VERTICES), 3), GREY, dtype=torch.float32, device=device)
+    return TriangleRasterizer(settings)(
+        vertices=torch.tensor(VERTICES, dtype=torch.float32, device=device),
+        triangles_indices=torch.tensor(faces, dtype=torch.int32, device=device),
+        vertex_weights=torch.tensor(OPACITIES, dtype=torch.float32, device=device),
+        sigma=1.0,
+        scaling=torch.zeros(1, dtype=torch.float32, device=device),
+        colors_precomp=colors,
+    )
+
+
+def _zeros(faces=len(FACES)):
+    return torch.zeros(faces, dtype=torch.float32, device="cuda")
 
 
 @unittest.skipUnless(
-    RASTERIZER_AVAILABLE and CUDA_AVAILABLE and INTEGRATED_BLENDING_IMPLEMENTED,
-    _SKIP,
+    ACCUMULATOR_SUPPORTED and torch.cuda.is_available(),
+    "needs a CUDA device and a rasterizer rebuilt with integrated_blending",
 )
 class IntegratedBlendingTest(unittest.TestCase):
-    """`S_f` must equal the analytic sum of alpha*T, and must not disturb the
-    statistics v1 already depends on."""
+    DEVICE = "cuda"
 
-    def test_buffer_shape_and_dtype_when_enabled(self):
-        """integrated_blending is [F] float32 on the render device."""
-        raise NotImplementedError(
-            "fill in from tests/test_rasterizer*.py once the kernel is built")
+    def test_every_output_is_unchanged_by_the_accumulator(self):
+        """Colors, depth, radii, max_blending and was_rendered with the buffer
+        on must equal the buffer-off render bitwise: v1 depends on all five."""
+        off = _render(self.DEVICE)
+        on = _render(self.DEVICE, buffer=_zeros())
+        for index, (a, b) in enumerate(zip(off, on)):
+            self.assertTrue(torch.equal(a, b), f"output {index} changed")
 
-    def test_absent_or_unwritten_when_disabled(self):
-        """With the flag off the kernel must take the null-pointer branch: no
-        allocation, or an all-zero buffer that the kernel never touched."""
-        raise NotImplementedError(
-            "fill in from tests/test_rasterizer*.py once the kernel is built")
-
-    def test_matches_analytic_alpha_times_T_on_a_two_face_scene(self):
-        """Hand-built scene with known alpha and T: S_f equals the summed
-        alpha*T to float tolerance, for both the front and the occluded face."""
-        raise NotImplementedError(
-            "fill in from tests/test_rasterizer*.py once the kernel is built")
+    def test_integral_equals_the_summed_weight_of_a_lone_face(self):
+        """Alone on a black background, a uniformly grey face renders
+        alpha * grey in every pixel with T = 1, so its integral is the image
+        sum divided by grey."""
+        buffer = _zeros(1)
+        image = _render(self.DEVICE, buffer=buffer, faces=FACES[:1])[0]
+        expected = float(image[0].sum()) / GREY
+        self.assertGreater(expected, 10.0)
+        self.assertAlmostEqual(float(buffer[0]), expected, delta=1e-3 * expected)
 
     def test_integral_dominates_the_max(self):
-        """S_f >= max_blending_f always, since the sum contains the max term.
-        This is the cheapest end-to-end sanity check on a real scene."""
-        raise NotImplementedError(
-            "fill in from tests/test_rasterizer*.py once the kernel is built")
+        """The sum over pixels contains the max term."""
+        buffer = _zeros()
+        max_blending = _render(self.DEVICE, buffer=buffer)[4]
+        self.assertTrue(bool((buffer >= max_blending - 1e-6).all()))
+        self.assertTrue(bool((buffer > 0).all()))
 
-    def test_max_blending_is_unchanged_by_the_new_accumulator(self):
-        """The whole v1 cleanup depends on max_blending. With the flag ON, it
-        must still equal the value the flag-off path produces, bitwise."""
-        raise NotImplementedError(
-            "fill in from tests/test_rasterizer*.py once the kernel is built")
+    def test_occlusion_lowers_the_back_face(self):
+        """The back face alone versus behind the front face: T < 1 where they
+        overlap, so its integral must drop."""
+        alone = _zeros(1)
+        _render(self.DEVICE, buffer=alone, faces=FACES[1:])
+        both = _zeros()
+        _render(self.DEVICE, buffer=both)
+        self.assertLess(float(both[1]), float(alone[0]))
 
-    def test_flag_off_is_bitwise_identical_to_the_v1_build(self):
-        """Colors, depth, radii, max_blending and was_rendered on a fixed scene
-        and camera, against values recorded from the pre-change build. This is
-        the guard that lets the frozen v1 numbers stay comparable."""
-        raise NotImplementedError(
-            "record reference tensors from 62233b6 and compare")
+    def test_reusing_the_buffer_sums_over_views(self):
+        """The cleanup pass hands one buffer to every view."""
+        once = _zeros()
+        _render(self.DEVICE, buffer=once)
+        twice = _zeros()
+        _render(self.DEVICE, buffer=twice)
+        _render(self.DEVICE, buffer=twice)
+        self.assertTrue(torch.allclose(twice, 2 * once, rtol=1e-5))
+
+    def test_a_buffer_of_the_wrong_size_is_refused(self):
+        with self.assertRaises(RuntimeError):
+            _render(self.DEVICE, buffer=_zeros(3))
 
 
 if __name__ == "__main__":

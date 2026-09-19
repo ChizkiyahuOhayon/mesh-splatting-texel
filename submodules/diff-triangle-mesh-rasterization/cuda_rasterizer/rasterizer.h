@@ -77,7 +77,8 @@ namespace CudaRasterizer
 			float* max_blending,
 			int* radii = nullptr,
 			int* was_rendered = nullptr,
-			bool debug = false);
+			bool debug = false,
+			float* integrated_blending = nullptr);
 
 		static void backward(
 			const int P, const int V, int D, int M, int R,

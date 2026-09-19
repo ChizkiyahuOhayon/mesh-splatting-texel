@@ -83,7 +83,8 @@ RasterizetrianglesCUDA(
 	const bool debug,
 	const float transmittance_threshold,
 	const bool absorb_transmittance_tail,
-	const bool opacity_field)
+	const bool opacity_field,
+	const torch::Tensor& integrated_blending)
 {
 
   TORCH_CHECK(std::isfinite(transmittance_threshold)
@@ -93,6 +94,15 @@ RasterizetrianglesCUDA(
               transmittance_threshold);
 
   const int P = triangles_indices.size(0);
+  // Caller-owned accumulator, summed into across calls; empty disables it.
+  if (integrated_blending.numel() > 0) {
+    TORCH_CHECK(integrated_blending.is_cuda() && integrated_blending.is_contiguous()
+                && integrated_blending.scalar_type() == torch::kFloat32,
+                "integrated_blending must be a contiguous float32 CUDA tensor");
+    TORCH_CHECK(integrated_blending.dim() == 1 && integrated_blending.size(0) == P,
+                "integrated_blending must have one entry per face (", P, "), got ",
+                integrated_blending.sizes());
+  }
   if (donor_mode != 0) {
     TORCH_CHECK(donor_mode >= 1 && donor_mode <= 7, "donor_mode must be a bitmask in [1, 7], got ", donor_mode);
     TORCH_CHECK(window_source.dim() == 1 && window_source.size(0) == P,
@@ -221,7 +231,8 @@ RasterizetrianglesCUDA(
 		max_blending.contiguous().data_ptr<float>(),
 		radii.contiguous().data_ptr<int>(),
 		was_rendered.contiguous().data_ptr<int>(),
-		debug);
+		debug,
+		integrated_blending.numel() > 0 ? integrated_blending.data_ptr<float>() : nullptr);
   }
   return std::make_tuple(rendered, out_color, out_others, radii, was_rendered, geomBuffer, binningBuffer, imgBuffer, scaling, max_blending);
 }

@@ -570,6 +570,12 @@ def training(
     # training schedule instead of inheriting whatever factor training ended on.
     if opt.cleanup_scaling:
         triangles.scaling = opt.cleanup_scaling
+    if opt.save_precleanup:
+        precleanup = scene.save("precleanup")
+        with open(os.path.join(os.path.dirname(precleanup), "cleanup.json"), "w",
+                  encoding="utf-8") as handle:
+            json.dump({"cleanup_scaling": int(triangles.scaling),
+                       "final_iteration": int(iteration)}, handle)
     viewpoint_stack = scene.getTrainCameras().copy()
     triangles.importance_score = torch.zeros((triangles._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
     while viewpoint_stack:
