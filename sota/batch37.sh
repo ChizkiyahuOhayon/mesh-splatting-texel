@@ -13,7 +13,7 @@ NAS_ROOT=${NAS_ROOT:-/home/smbu/dy/nas/meshsplatting_smbu}
 DATA_ROOT=${DATA_ROOT:-/home/smbu/dy/nas/dy/mesh-splatting/data/mipnerf360}
 FORMAL_ROOT=${FORMAL_ROOT:-$NAS_ROOT/experiments/formal_main_table_01}
 OPACITY_ROOT=${OPACITY_ROOT:-$NAS_ROOT/experiments/formal_opacity_ablation_01}
-RUNS=${RUNS:-$NAS_ROOT/experiments/softtail_v4_01}
+RUNS=${RUNS:-$NAS_ROOT/experiments/softtail_v4_02}
 GPU=${GPU:-0}
 export CUDA_VISIBLE_DEVICES=$GPU DATA_ROOT RUNS
 

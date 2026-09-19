@@ -536,6 +536,18 @@ class TriangleModel:
         feats_main = torch.cat((features_dc, features_rest), dim=1)  # [Vmain, F, 3]
         return feats_main
        
+    def face_opacity(self):
+        """[F] opacity of each face as the renderer defines it.
+
+        Under the min model a face is as opaque as its most transparent corner.
+        Under the per-vertex field its mean opacity over the face is exactly the
+        mean of the three corners, since a linear field integrates to its
+        vertex average. Opacity-based pruning must read the same quantity the
+        renderer draws, or it deletes faces the model still shows.
+        """
+        corners = self.opacity_activation(self.vertex_weight[self._triangle_indices]).squeeze(-1)
+        return corners.mean(dim=1) if self.opacity_field else corners.min(dim=1).values
+
     @property
     def get_vertex_weight(self):
         main_w = self.opacity_activation(self.vertex_weight)

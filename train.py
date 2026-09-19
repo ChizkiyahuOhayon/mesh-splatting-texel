@@ -475,12 +475,7 @@ def training(
             if iteration % 500 == 0 and iteration < run_restricted_delaunay and not cgr_active:
                 
                 # Building masks to delete triangles
-                triangle_vertex_weights = triangles.opacity_activation(
-                    triangles.vertex_weight[triangles._triangle_indices]
-                ) 
-                min_weights = triangle_vertex_weights.min(dim=1).values
-
-                mask_opacity     = (min_weights <= prune_triangles).squeeze()              # delete if too low
+                mask_opacity     = (triangles.face_opacity() <= prune_triangles)          # delete if too low
                 mask_importance  = (triangles.importance_score <= prune_triangles).squeeze()  # delete if too low
                 mask_size        = (triangles.image_size > prune_size).squeeze()                 # delete if too big
 
