@@ -82,7 +82,8 @@ def run(dataset, pipeline, out):
     for arm in ("v1", "oats"):
         (out / arm).mkdir()
         for name in ("cfg_args", "cameras.json"):
-            shutil.copy2(run_dir / name, out / arm / name)
+            # Contents only: the NAS refuses to set timestamps (copy2 fails).
+            shutil.copyfile(run_dir / name, out / arm / name)
 
     faces_v1 = _prune_and_save(triangles, keep_v1, out / "v1", iteration)
     faces_v1_indices = triangles._triangle_indices.detach().cpu()
