@@ -140,4 +140,7 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parsed = get_combined_args(parser)
     safe_state(parsed.quiet)
-    run(model.extract(parsed), pipeline.extract(parsed), Path(parsed.out), parsed.budget)
+    # get_combined_args drops every argument whose value is None, so an
+    # omitted --budget leaves no attribute at all.
+    run(model.extract(parsed), pipeline.extract(parsed), Path(parsed.out),
+        getattr(parsed, "budget", None))

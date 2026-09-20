@@ -85,5 +85,26 @@ class IntegratedScoreBufferTest(unittest.TestCase):
             TriangleModel.validate_face_state(model)
 
 
+class CombinedArgsTest(unittest.TestCase):
+    """``get_combined_args`` merges the run's cfg_args over the command line and
+    drops every argument whose value is None, so an optional flag that is left
+    out has no attribute at all. survival_cleanup reads --budget that way."""
+
+    def test_an_omitted_optional_argument_is_absent(self):
+        from argparse import ArgumentParser
+        from unittest import mock
+
+        from arguments import get_combined_args
+
+        parser = ArgumentParser()
+        # model_path None sends get_combined_args down its "no cfg_args" path.
+        parser.add_argument("--model_path", "-m", default=None)
+        parser.add_argument("--budget", type=int, default=None)
+        with mock.patch("sys.argv", ["prog"]):
+            parsed = get_combined_args(parser)
+        self.assertFalse(hasattr(parsed, "budget"))
+        self.assertIsNone(getattr(parsed, "budget", None))
+
+
 if __name__ == "__main__":
     unittest.main()
