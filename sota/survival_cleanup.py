@@ -6,6 +6,11 @@ done. Both rules see the same trained model and the same renders, and OATS
 keeps as many faces as v1, so the two output models differ only in *which*
 faces survived. See handover/OATS_PLAN.md and sota/survival.py.
 
+``--budget N`` writes a third copy, ``<out>/matched``: the *published* rule cut
+to an explicit face count instead of its own. A run whose training kept more
+faces than its control can then be scored at the control's size, which
+separates a better choice of survivors from a larger mesh.
+
 Writes two evaluable model directories (``<out>/v1`` and ``<out>/oats``, each
 with ``point_cloud/iteration_<final>/``) and ``<out>/survival.json``. The v1
 copy must reproduce the run's own saved checkpoint face for face; this is
@@ -67,7 +72,7 @@ def _prune_and_save(triangles, keep, destination, iteration, extra=None):
     return int(triangles.get_triangle_indices.shape[0])
 
 
-def run(dataset, pipeline, out):
+def run(dataset, pipeline, out, budget=None):
     run_dir = Path(dataset.model_path)
     precleanup = run_dir / "point_cloud" / "iteration_precleanup"
     meta = json.loads((precleanup / "cleanup.json").read_text(encoding="utf-8"))
@@ -78,8 +83,9 @@ def run(dataset, pipeline, out):
     keep_v1 = v1_keep(peak)
     keep_oats, stats = budget_matched_keep(integral, int(keep_v1.sum()), return_stats=True)
 
+    arms = ["v1", "oats"] + (["matched"] if budget else [])
     out.mkdir(parents=True, exist_ok=False)
-    for arm in ("v1", "oats"):
+    for arm in arms:
         (out / arm).mkdir()
         for name in ("cfg_args", "cameras.json"):
             # Contents only: the NAS refuses to set timestamps (copy2 fails).
@@ -101,11 +107,20 @@ def run(dataset, pipeline, out):
             f"offline v1 cleanup kept {faces_v1} faces, training kept {faces_trained}, "
             "or the same count with different faces")
 
+    faces_matched = None
+    if budget:
+        # Same statistic as the published cleanup, cut to the given count: only
+        # the mesh size differs from the v1 copy above.
+        keep_matched = budget_matched_keep(peak, int(budget))
+        _, triangles = _load(dataset)
+        faces_matched = _prune_and_save(triangles, keep_matched, out / "matched", iteration)
+
     report = {
         "run": str(run_dir),
         "cleanup_scaling": meta["cleanup_scaling"],
         "faces_before": int(peak.numel()),
-        "faces_kept": {"v1": faces_v1, "oats": faces_oats, "trained": faces_trained},
+        "faces_kept": ({"v1": faces_v1, "oats": faces_oats, "trained": faces_trained}
+                       | ({"matched": faces_matched} if faces_matched is not None else {})),
         "disagreement": rule_disagreement(keep_v1, keep_oats),
         "kept_with_zero_score": stats["kept_with_zero_score"],
         "integral": {"v1_kept_mean": float(integral[keep_v1].mean()),
@@ -120,7 +135,9 @@ if __name__ == "__main__":
     model = ModelParams(parser, sentinel=True)
     pipeline = PipelineParams(parser)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--budget", type=int, default=None,
+                        help="also write <out>/matched: the published rule cut to this face count")
     parser.add_argument("--quiet", action="store_true")
     parsed = get_combined_args(parser)
     safe_state(parsed.quiet)
-    run(model.extract(parsed), pipeline.extract(parsed), Path(parsed.out))
+    run(model.extract(parsed), pipeline.extract(parsed), Path(parsed.out), parsed.budget)
