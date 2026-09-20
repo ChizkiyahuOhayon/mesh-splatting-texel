@@ -146,6 +146,10 @@ class TriangleModel:
         # False: the published one-sided window phi^sigma. True: the elastic
         # window, bilateral around every edge (triangle_renderer, auxiliary.h).
         self.elastic_window = False
+        # False: pruning and densification rank a face by its single brightest
+        # pixel (max_blending, published). True: by the integrated contribution
+        # sum(alpha * T) the OATS cleanup already scores survivors with.
+        self.integrated_importance = False
 
         self.exponential_activation = lambda x:math.exp(x)
         self.inverse_exponential_activation = lambda y: math.log(y)
@@ -214,6 +218,7 @@ class TriangleModel:
         self.image_size = 0
         self.pixel_count = 0
         self.importance_score = 0
+        self.integrated_score = 0
         self.add_percentage = 1.0
 
         self.scaling = 1
@@ -239,11 +244,14 @@ class TriangleModel:
         point_cloud_state_dict["features_dc"] = self._features_dc
         point_cloud_state_dict["features_rest"] = self._features_rest
         point_cloud_state_dict["importance_score"] = self.importance_score
+        point_cloud_state_dict["integrated_score"] = self.integrated_score
         point_cloud_state_dict["image_size"] = self.image_size
         point_cloud_state_dict["pixel_count"] = self.pixel_count
         point_cloud_state_dict["opacity_floor"] = float(self.opacity_floor)
         point_cloud_state_dict["opacity_field"] = bool(self.opacity_field)
         point_cloud_state_dict["elastic_window"] = bool(self.elastic_window)
+        # Training-time only: recorded for provenance, not read by rendering.
+        point_cloud_state_dict["integrated_importance"] = bool(self.integrated_importance)
         # SoftTail v2: the per-vertex terminal floor is part of the representation;
         # without it the checkpoint would reload as a v1 global-floor model.
         if self.opacity_floor_vertex is not None:
@@ -353,6 +361,7 @@ class TriangleModel:
 
         self.image_size = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.importance_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
+        self.integrated_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.pixel_count = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.int, device="cuda")
 
         if training_args != None:
@@ -386,6 +395,13 @@ class TriangleModel:
         self._features_dc        = state["features_dc"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
         self._features_rest      = state["features_rest"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
         self.importance_score = state["importance_score"].to(device).to(torch.float32).detach().clone().requires_grad_(True)
+        # Older checkpoints predate the integrated statistic; it is a training-time
+        # buffer, so an empty one is rebuilt at the next pruning window.
+        integrated = state.get("integrated_score")
+        self.integrated_score = (
+            integrated.to(device).to(torch.float32).detach().clone()
+            if isinstance(integrated, torch.Tensor)
+            else torch.zeros(self._triangle_indices.shape[0], dtype=torch.float32, device=device))
         restored_opacity_floor = float(state.get("opacity_floor", 0.999))
         if not math.isfinite(restored_opacity_floor) or not 0.0 <= restored_opacity_floor < 1.0:
             raise ValueError("checkpoint opacity_floor must be finite and in [0, 1)")
@@ -435,6 +451,7 @@ class TriangleModel:
         # Checkpoints written before the field existed are min-pooled.
         self.opacity_field = bool(state.get("opacity_field", False))
         self.elastic_window = bool(state.get("elastic_window", False))
+        self.integrated_importance = bool(state.get("integrated_importance", False))
         self.opacity_floor_vertex = None
         self.adaptive_opacity = None
         self.visibility_dominance = None
@@ -464,6 +481,7 @@ class TriangleModel:
 
         self.image_size = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.importance_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
+        self.integrated_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.pixel_count = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.int, device="cuda")
 
 
@@ -633,6 +651,7 @@ class TriangleModel:
         # Per-triangle buffers (match Delaunay sizing by triangles count)
         self.image_size = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float32, device="cuda")
         self.importance_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float32, device="cuda")
+        self.integrated_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float32, device="cuda")
         self.pixel_count = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.int, device="cuda")
 
       
@@ -759,6 +778,7 @@ class TriangleModel:
 
         self.image_size = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.importance_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
+        self.integrated_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.pixel_count = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.int, device="cuda")
 
 
@@ -914,6 +934,8 @@ class TriangleModel:
                 self.image_size = self.image_size[valid_tris]
             if isinstance(self.importance_score, torch.Tensor) and self.importance_score.numel() > 0:
                 self.importance_score = self.importance_score[valid_tris]
+            if isinstance(self.integrated_score, torch.Tensor) and self.integrated_score.numel() > 0:
+                self.integrated_score = self.integrated_score[valid_tris]
             if isinstance(self.pixel_count, torch.Tensor) and self.pixel_count.numel() > 0:
                 self.pixel_count = self.pixel_count[valid_tris]
             
@@ -1146,7 +1168,7 @@ class TriangleModel:
         """Assert every face-indexed tensor is aligned to the current face count.
         Cheap; call after any topology mutation to catch desync immediately."""
         F = self._triangle_indices.shape[0]
-        for name in ("image_size", "importance_score", "pixel_count"):
+        for name in ("image_size", "importance_score", "integrated_score", "pixel_count"):
             t = getattr(self, name)
             if isinstance(t, torch.Tensor) and t.numel() > 0:
                 assert t.shape[0] == F, f"{name} has {t.shape[0]} rows, expected {F} faces"
@@ -1165,6 +1187,7 @@ class TriangleModel:
         self._triangle_indices = self._triangle_indices.to(torch.int32)
         self.image_size = self.image_size[mask]
         self.importance_score = self.importance_score[mask]
+        self.integrated_score = self.integrated_score[mask]
         self.pixel_count = self.pixel_count[mask]
         self.validate_face_state()
 
@@ -1186,8 +1209,11 @@ class TriangleModel:
         if num_gs <= 0:
             return 0
 
-        # Find indexes based on proba
-        triangle_transp = self.importance_score
+        # Find indexes based on proba. The integrated statistic is a sum over
+        # pixels and views, so it is unbounded; multinomial only needs relative
+        # weights, and the size rules below zero the same faces either way.
+        triangle_transp = (self.integrated_score if self.integrated_importance
+                           else self.importance_score)
         probs = triangle_transp.squeeze()
 
         areas = self.triangle_areas().squeeze()
@@ -1275,4 +1301,5 @@ class TriangleModel:
 
         self.image_size = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.importance_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
+        self.integrated_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.pixel_count = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.int, device="cuda")

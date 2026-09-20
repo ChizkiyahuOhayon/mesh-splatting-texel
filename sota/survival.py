@@ -39,6 +39,28 @@ def budget_matched_keep(scores, budget, return_stats=False):
     }
 
 
+def budget_matched_delete(peak_delete, integrated):
+    """Training-time OATS: the same substitution inside the pruning loop.
+
+    ``train.py`` deletes a face whose peak ``max_blending`` sits at or below a
+    rising threshold. The integral lives on a different scale, so the threshold
+    cannot be carried over; instead the integral re-picks the faces, as many as
+    the peak rule would have deleted. Returns the peak mask untouched when the
+    face count and the mask disagree, which only a desync could cause.
+    """
+    if peak_delete.shape != integrated.shape:
+        raise ValueError(
+            f"mask and scores differ in shape: {tuple(peak_delete.shape)} vs {tuple(integrated.shape)}")
+    cut = int(peak_delete.sum())
+    delete = torch.zeros_like(peak_delete)
+    if cut > 0:
+        # Stable ascending sort: ties break by face index, so faces that never
+        # contributed (score 0) go first, exactly as under the peak rule.
+        order = torch.sort(integrated, stable=True).indices
+        delete[order[:cut]] = True
+    return delete
+
+
 def rule_disagreement(keep_a, keep_b):
     """Symmetric difference and Jaccard overlap of two kept sets."""
     if keep_a.shape != keep_b.shape:

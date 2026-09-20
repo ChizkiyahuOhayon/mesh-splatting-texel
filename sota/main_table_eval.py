@@ -164,6 +164,7 @@ def run(dataset, pipeline, args):
         "vertices": int(triangles.get_vertices.shape[0]),
         "opacity_field": bool(triangles.opacity_field),
         "elastic_window": bool(triangles.elastic_window),
+        "integrated_importance": bool(triangles.integrated_importance),
         "opacity_floor": setting["opacity_floor"],
         "adaptive_opacity": (
             dict(triangles.adaptive_opacity) | {

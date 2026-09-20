@@ -182,6 +182,10 @@ class OptimizationParams(ParamGroup):
         # gradient support on both sides of every edge and an edge value that
         # anneals to one, ending at the same opaque mesh. Stored in the checkpoint.
         self.elastic_window = False
+        # Training-time OATS: rank faces for pruning and densification by the
+        # integrated contribution sum(alpha * T) instead of the single brightest
+        # pixel. Budget-matched, so the face count follows the published rule.
+        self.integrated_importance = False
         # SoftTail v2: visibility-aware terminal opacity (sota/visibility.py).
         # Off by default => the v1 global-floor path, byte for byte. When on,
         # each vertex ends at tau_v = low + (final_opacity - low) * d_v, where

@@ -44,6 +44,7 @@ from sota.visibility import (
     endpoint_from_ambiguity,
     shuffle_control,
 )
+from sota.survival import budget_matched_delete
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -90,6 +91,7 @@ def training(
     triangles = TriangleModel(dataset.sh_degree)
     triangles.opacity_field = opt.opacity_field
     triangles.elastic_window = opt.elastic_window
+    triangles.integrated_importance = opt.integrated_importance
 
     scene = Scene(dataset, triangles, opt.set_weight, opt.set_sigma)
 
@@ -238,6 +240,7 @@ def training(
             viewpoint_stack = scene.getTrainCameras().copy()
             if len(scene.getTrainCameras()) + iteration == opt.iterations:
                 triangles.importance_score = torch.zeros((triangles._triangle_indices.shape[0]), dtype=torch.float, device="cuda") # reset to 0 to ensure that everything is deleted with an importance score of 0
+                triangles.integrated_score = torch.zeros((triangles._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
 
         endpoint_render = None
@@ -266,8 +269,13 @@ def training(
                 iteration, floor_now, opt.start_opacity_floor, total_iters_opacity,
                 opt.opacity_pool_k_start, opt.opacity_pool_k_end)
 
+        # The kernel adds alpha * T into this buffer for every face it touches,
+        # so the sum runs over the pixels of this view and over every view since
+        # the last densification, which is the window the peak statistic spans.
+        integrated_buffer = triangles.integrated_score if opt.integrated_importance else None
         render_pkg = render(viewpoint_cam, triangles, pipe, bg,
-                            opacity_pool_beta=opacity_pool_beta)
+                            opacity_pool_beta=opacity_pool_beta,
+                            integrated_blending=integrated_buffer)
         image = render_pkg["render"]
         if endpoint_render is not None:
             image = endpoint_image(image, endpoint_render)
@@ -478,6 +486,9 @@ def training(
                 # Building masks to delete triangles
                 mask_opacity     = (triangles.face_opacity() <= prune_triangles)          # delete if too low
                 mask_importance  = (triangles.importance_score <= prune_triangles).squeeze()  # delete if too low
+                if opt.integrated_importance:
+                    mask_importance = budget_matched_delete(
+                        mask_importance, triangles.integrated_score.squeeze())
                 mask_size        = (triangles.image_size > prune_size).squeeze()                 # delete if too big
 
                 delete_mask = mask_opacity | mask_size
