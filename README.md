@@ -112,6 +112,19 @@ with no retraining:
 `6.6%` of the gain comes from capacity; the rest comes from *which* triangles
 survive. Reproduce with [`sota/batch43.sh`](sota/batch43.sh).
 
+### What it costs
+
+| Mip-NeRF 360, 9 scenes | + opacity floor (v1) | SoftTail |
+|---|---:|---:|
+| Training time, mean (one A40) | 1.95 h | 2.29 h |
+| Render FPS, Quality arm | 18.0 | 15.4 |
+| Render FPS, Speed arm | 21.8 | 18.6 |
+
+Training pays about `17%` for the extra accumulator, and rendering is slower
+because the runs keep `2.6–33%` more faces than v1 — the equal-budget row above
+is the like-for-like comparison. Training times are read from the run logs and
+were not measured on an idle machine, so treat them as indicative.
+
 ## Method in one paragraph
 
 A connected mesh cannot simply grow primitives where the loss is high — its
@@ -127,6 +140,18 @@ deleted; the published rule still decides **how many**
 construction. It is applied in the `4k–11k` pruning/densification passes
 (`--integrated_importance`) and once more in the final cleanup
 ([`sota/survival_cleanup.py`](sota/survival_cleanup.py)).
+
+<p align="center">
+  <img src="assets/softtail_statistic.png" width="100%" alt="Peak versus integrated contribution per face on Room">
+</p>
+
+Measured on Room's 11.4M faces ([`sota/survival_statistic.py`](sota/survival_statistic.py)):
+the two rules agree on most faces (Spearman `0.857`) but **swap 12.2% of the
+survivors**. The faces the published rule keeps and ours drops are bright once —
+mean peak `0.80` — yet carry a mean integrated contribution of only `12.9`. The
+faces ours keeps instead never look bright — mean peak `0.15` — and carry `139`,
+more than ten times as much light delivered. Ranking by the peak discards `1.6%`
+of everything the mesh renders; ranking by the integral discards `0.3%`.
 
 ## Ablation
 

@@ -51,6 +51,11 @@ def main():
     left.scatter(np.log10(peak[only_integral]), np.log10(integral[only_integral]), s=2,
                  color="#1b9e77", alpha=0.35,
                  label=f"kept only by the integral ({report['kept_only_by_integral']['faces']:,})")
+    # A handful of never-rendered faces sit on the floor and would otherwise
+    # stretch both axes over empty space.
+    seen = (peak > FLOOR) & (integral > FLOOR)
+    left.set_xlim(np.percentile(np.log10(peak[seen]), 0.2), np.log10(peak.max()) + 0.2)
+    left.set_ylim(np.percentile(np.log10(integral[seen]), 0.2), np.log10(integral.max()) + 0.2)
     left.set_xlabel(r"$\log_{10}$  peak  $\max\ \alpha T$  (published rule)")
     left.set_ylabel(r"$\log_{10}$  integral  $S_f=\sum \alpha T$  (ours)")
     left.set_title(f"Spearman {report['spearman_peak_vs_integral']:.3f}, "
@@ -58,7 +63,8 @@ def main():
     legend = left.legend(loc="lower right", frameon=True, markerscale=6, fontsize=8)
     legend.get_frame().set_linewidth(0.4)
 
-    bins = np.linspace(np.log10(FLOOR), np.log10(integral.max()), 60)
+    swapped = np.log10(integral[only_peak | only_integral])
+    bins = np.linspace(swapped.min(), swapped.max(), 50)
     for mask, color, label in (
         (only_peak, "#d95f02", "kept only by the peak rule"),
         (only_integral, "#1b9e77", "kept only by the integral"),
@@ -67,7 +73,14 @@ def main():
                    label=label)
     right.set_xlabel(r"$\log_{10}$  integrated contribution $S_f$")
     right.set_ylabel("faces (sampled)")
-    right.set_title("The faces the two rules swap")
+    # What the swap buys, over the sample: the share of all the light this mesh
+    # delivers that each rule's survivors still carry.
+    total = integral.sum()
+    right.set_title("The faces the two rules swap\n"
+                    f"survivors carry {100 * integral[keep_v1].sum() / total:.1f}% of the "
+                    f"delivered light under the peak rule, "
+                    f"{100 * integral[keep_oats].sum() / total:.1f}% under the integral",
+                    fontsize=9)
     right.legend(loc="upper left", fontsize=8, frameon=False)
 
     if args.title:
