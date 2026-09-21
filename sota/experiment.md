@@ -1093,3 +1093,505 @@ select scenes before the complete export exists.  Success requires eight
 arm-level `DONE` markers plus one root `DONE` marker.  After completion, stop
 GPU experimentation: the remaining comparison work uses verified published
 numbers, while figure composition uses only completed artifacts.
+
+## 2026-09-02 — transfer-benchmark qualitative export and figure audit
+
+- Status: **completed — export, transfer, and local verification passed**
+- Source revision: `62233b65eae2411fcb634a6bbee2f0ef22e984e8`
+- A40 output:
+  `/home/smbu/dy/nas/meshsplatting_smbu/experiments/qualitative_transfer_01`
+- Local verified copy:
+  `/Users/zhao/Desktop/MeshSplatting/artifacts/SoftTail/qualitative_transfer_01`
+- Scenes: Tanks & Temples Train and Truck; Deep Blending DrJohnson and
+  Playroom
+- Arms: matched MeshSplatting and frozen SoftTail-Quality
+- Render settings: factor-4 supersampling for both arms; matched baseline uses
+  opacity `0.9999`, cutoff `0.0001`, and no tail absorption; SoftTail uses
+  opacity `0.8`, cutoff `0.01`, and tail absorption
+
+The completed export contains all `132` official test views: `38` Train, `32`
+Truck, `33` DrJohnson, and `29` Playroom.  For every view it stores one shared
+target plus a render and fixed-scale `4×` absolute-error image for each arm,
+for `660` PNG files total.  All eight arm-level `DONE` markers and the root
+`DONE` marker are present.
+
+The A40-to-AutoDL transfer was verified against a complete AutoDL-side SHA-256
+manifest covering `677` payload files.  The local archive was then verified
+both externally and internally:
+
+- archive: `qualitative_transfer_01.tar`
+- archive SHA-256:
+  `8b9fdc66ac1a8cb134d76a6d3c9153bb47d87db60963e07defdb14bc1d6d65ff`
+- local counts: `660` PNG files and `9` `DONE` markers
+- internal manifest: `677/677` files passed
+
+The original source manifest is retained for provenance, but covered only 49
+files.  `MANIFEST.autodl.sha256` is the authoritative complete payload
+manifest for this transfer.
+
+View selection was performed after the complete export.  The audit script
+measured full-view L1 and PSNR for all 132 views, located the highest-gain
+`320×320` region per view, saved the full table to
+`figures/qualitative_transfer_audit/qualitative_view_metrics.csv`, and produced
+one top-12 contact sheet per scene.  The final selections balance full-view
+gain with a visually interpretable structure:
+
+| Scene | View | Full-view ΔPSNR | Crop `(x, y, size)` |
+|---|---|---:|---:|
+| Train | `031_00249.png` | +0.652357 dB | `(0, 115, 320)` |
+| Truck | `014_000113.png` | +0.572109 dB | `(0, 31, 320)` |
+| DrJohnson | `006_IMG_6349.png` | +0.561514 dB | `(159, 73, 320)` |
+| Playroom | `023_DSC05763.png` | +2.494518 dB | `(16, 313, 320)` |
+
+The DrJohnson selection deliberately avoids the numerically strongest view,
+whose gain is dominated by a large ceiling-visibility failure, and instead
+uses a representative interior structure.  The final four-row comparison is
+stored as `figures/qualitative_transfer.{pdf,svg,png,tiff}`.  The PDF is a
+single `493.301 × 298.495` pt page with embedded Arial text; the raster exports
+are `4110 × 2487` pixels at `600` dpi.  Every row uses the same six-column
+layout: context, ground truth, matched MeshSplatting, SoftTail, matched error
+`×4`, and SoftTail error `×4`.
+
+**Decision:** the transfer-benchmark visual evidence is complete.  Keep the
+existing Mip-NeRF360 three-scene comparison as the compact main-paper
+qualitative figure and use this four-scene figure for cross-dataset evidence
+or the appendix.  No additional rendering or GPU experiment is required for
+the qualitative section.
+
+## Planned experiment — SoftTail v2 premise check: surface dominance on frozen v1
+
+No training.  On the frozen v1 opacity-0.8 checkpoints for Room, Bicycle, and
+Garden, accumulate over every training view the per-face samples that reach a
+face (`triangle_was_rendered`) and the samples on which it is the resolved
+surface (`rend_ids`, the face at which transmittance crosses `0.5`), pool both
+to vertices, and form the surface-dominance ratio `d_v`.  Compare `d_v` between
+vertices that sit at the trained floor (`o_v < 0.82`) and vertices that are
+effectively opaque (`o_v > 0.98`) with a ROC-AUC (low dominance predicting
+"at floor").  For three fixed test views per scene, save the per-pixel dominance
+map beside the per-pixel error gain of v1 over matched stock and record their
+rank correlation.
+
+Rule: if the AUC is below `0.65` on at least two of the three scenes, the
+statistic does not identify where softness is used, the v2 premise is
+falsified, and the training gate is not launched.  A positive AUC is a
+prerequisite, not a prediction of the trained effect size.  Script:
+`sota/visibility_diag.py`; launcher: the first stage of `sota/batch33.sh`;
+output root `softtail_v2_01/premise`.
+
+## Planned experiment — SoftTail v2 three-scene gate: visibility-aware terminal opacity
+
+Train Room, Bicycle, and Garden with `--final_opacity 0.8 --adaptive_opacity
+--adaptive_opacity_low 0.6` and no other change.  After the restricted-Delaunay
+rebuild, an EMA (`rho = 0.995`) of the pooled dominant/hit counts gives each
+vertex `d_v`; at every existing floor update the endpoint is
+`tau_v = 0.6 + 0.2 * d_v`, and the unchanged linear ramp runs to it per vertex
+(`m_v(t) = 0.1 + (tau_v - 0.1) * a(t)`).  The scalar reference floor keeps the
+v1 schedule, the per-vertex floor is serialized as `opacity_floor_vertex`, and
+the final `d_v` is stored as `visibility_dominance`.  With the flag off the
+code path is the v1 path; with `low = 0.8` it is v1 again per vertex.
+
+Evaluate `adaptive_quality` (factor 4, cutoff 0.01, absorbed tail),
+`adaptive_speed` (factor 3), and `adaptive_opacity` (factor 4, cutoff 1e-4, no
+absorption) with `sota/main_table_eval.py`, which refuses a v1 arm on an
+adaptive checkpoint and vice versa.  `sota/v2_gate.py` compares the three-scene
+mean of `adaptive_quality` against the frozen v1 `ours_quality` rows
+(`formal_main_table_01`): continue only if PSNR improves by at least `0.10` dB
+(v1 mean `25.596651`), SSIM does not fall below `0.768987`, LPIPS-VGG does not
+rise above `0.269014`, and mean checkpoint bytes and triangles do not exceed
+`696118644` and `5354432`.  Room and Bicycle are reported individually; Garden
+never decides alone.  No per-scene setting, no seed sweep, no endpoint sweep.
+Launcher: `sota/batch33.sh`; root `softtail_v2_01`.
+
+If the gate passes, run the shuffled-endpoint control (`sota/batch34.sh`,
+Room and Bicycle, same endpoint multiset randomly assigned every update) and
+require the adaptive arm to beat it clearly before any 13-scene run.  If the
+gate fails, record it and move to opacity-aware topology survival.
+
+## 2026-09-14 — SoftTail v2 premise check: surface dominance on frozen v1 — FALSIFIED
+
+- Status: **completed — premise falsified on all three scenes; the training
+  gate was not launched**
+- Source revision: `72a1ab0469defdaa38c27a023efa36d6b60fe3e1` (branch
+  `softtail-v2`, on top of frozen v1 `62233b65eae2411fcb634a6bbee2f0ef22e984e8`)
+- A40 clone: `/home/smbu/dy/mesh-splatting-softtail-v2` (the frozen server repo
+  `/home/smbu/dy/mesh-splatting-texel-run` was left at `62233b6`)
+- A40 output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/softtail_v2_01/premise`
+- Launcher: `sota/batch33.sh` stage 1; script `sota/visibility_diag.py`
+- Device: A40 GPU0, `CUDA_VISIBLE_DEVICES=0`, ~27.4 GB peak
+- Runtime: about 11 minutes total for three scenes (Room, Bicycle, Garden),
+  no training
+- Local evidence: `handover/evidence/formal/softtail_v2_premise_{room,bicycle,garden}.json`,
+  SHA-256 recorded in `handover/SHA256SUMS` and verified against the A40 copies
+
+Pre-flight: the A40 suite `tests/test_adaptive_opacity_model.py`,
+`tests/test_visibility.py`, `tests/test_v2_gate.py`, `tests/test_v2_batches.py`,
+`tests/test_sota_native_contract.py`, and `tests/test_endpoint.py` passed
+`82` tests with none skipped, including all `8` real-model adaptive-opacity
+tests that skip on the Mac.  `pytest` was absent from the A40 micromamba
+environment and was installed (`pytest 9.1.1`, plus `pluggy` and `iniconfig`;
+no existing package was changed).  No code or configuration was modified.
+
+Result, over every training view of the frozen v1 opacity-`0.8` checkpoints:
+
+| Scene | Views | Vertices | AUC | at floor | opaque | `mean d` at floor | `mean d` opaque |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Room | 272 | 2174825 | `0.482066` | `0.567999` | `0.368379` | `0.156350` | `0.152920` |
+| Bicycle | 169 | 2947143 | `0.485507` | `0.443837` | `0.436188` | `0.206904` | `0.198043` |
+| Garden | 161 | 3064691 | `0.456499` | `0.535908` | `0.344849` | `0.182144` | `0.166944` |
+
+The preregistered rule is AUC `< 0.65` on at least two of three scenes.  All
+three scenes fail, and every AUC is *below* chance.  `auc_seen_only` equals the
+full AUC in each scene because every vertex was seen by at least one training
+view.  The per-view rank correlation between the per-pixel dominance map and
+the per-pixel v1-over-stock error gain is essentially zero and inconsistent in
+sign: Room `0.0038, -0.0389, 0.0445`; Bicycle `0.0250, 0.0167, 0.0057`;
+Garden `0.0055, -0.0067, -0.0070`.
+
+Two structural facts explain the failure and both contradict `V2_PLAN.md` §2:
+
+1. **The direction is inverted, not merely absent.**  In all three scenes
+   `mean_d_at_floor` is slightly *higher* than `mean_d_opaque`.  Vertices that
+   sit at the trained floor are, if anything, marginally more surface-dominant
+   than opaque ones.  Low dominance does not mark where v1's softness is used.
+2. **`d_v` is low almost everywhere, not near `1`.**  The plan assumed most
+   vertices have `d_v ≈ 1` so that `tau_v = 0.6 + 0.2 d_v` would keep them at
+   the v1 endpoint and soften only an ambiguous minority.  The measured
+   histograms give the opposite: the fraction of vertices with `d_v < 0.2` is
+   `0.7310` (Room), `0.6165` (Bicycle), `0.6825` (Garden), while the fraction
+   with `d_v > 0.9` is `0.00286`, `0.01337`, and `0.00874`.  With a mesh of
+   millions of small faces, the resolved-surface samples of any pixel are split
+   across the incident faces, so the pooled dominance ratio is structurally
+   small.  The realized endpoint would therefore have been `0.632`, `0.643`,
+   and `0.637` on average and within about `0.004` between the at-floor and
+   opaque populations — a near-global `0.63` endpoint, not a per-vertex
+   adaptation.  The intended mechanism would not have been exercised at all,
+   and the run would have been an unlabelled endpoint sweep of the kind this
+   plan exists to avoid.
+
+`batch33.sh` stopped itself at the preregistered check before any training
+step, printing `premise falsified: AUC < 0.65 on ['room', 'bicycle', 'garden']`.
+No `adaptive__*` run, evaluation, `gate.json`, or root `DONE` exists in
+`softtail_v2_01`; GPU0 was released.  The premise artifacts (three `diag.json`,
+three `vertex_statistics.pt`, and eighteen dominance/gain PNGs) are retained.
+
+**Decision:** the surface-dominance statistic `d_v` does not identify where
+v1's terminal-opacity softness is used, so visibility-aware terminal opacity
+(VATO) is closed.  This is the falsifier working as designed and it cost about
+11 GPU-minutes instead of about 7 GPU-hours.  Per `V2_PLAN.md` §6 and
+`handover/OPUS5_KICKOFF.md` step 5b, the next mechanistically distinct item is
+opacity-aware topology survival: keep v1's global `0.8` endpoint and replace
+the final `max_blending > 0.5` cleanup rule with an integrated useful
+contribution accumulated over the last training epoch, which needs one
+`atomicAdd` of `alpha * T` per face in `forward.cu` behind a null-pointer
+guard, a native test, and its own opt-in flag.  Its plan and tests are written
+first and reviewed before any training.
+
+Note for that plan: `d_v` is dilution-sensitive because it is a *ratio* over an
+EMA of pooled counts.  An integrated `alpha * T` per face is an absolute
+quantity and does not share this failure mode, but the same measurement must be
+made before training — the survival statistic has to separate faces that the
+cleanup rule keeps from those it drops on the frozen v1 checkpoints.
+
+## 2026-09-15 — SoftTail v3 component A: softmin routing of the shared opacity gradient — FALSIFIED on quality
+
+- Status: **completed — quality falsified (0/3 scenes); retained as an efficiency result**
+- Source revision: `31f7561` (branch `softtail-v3`, CUDA rebuilt from this checkout)
+- A40 output: `/home/smbu/dy/nas/meshsplatting_smbu/experiments/softtail_v3_01`
+- Launcher: `sota/batch36.sh`; gate `sota/v3_gate.py`
+- Device: A40 GPU0; runtime about 6 h for three scenes plus nine evaluations
+- Control: the frozen v1 runs (`formal_main_table_01`, `formal_opacity_ablation_01`).
+  The pooled arm is the v1 configuration plus `--opacity_pool` and differs in the
+  gradient routing alone, so no baseline was retrained.
+- Local evidence: `handover/evidence/formal/softtail_v3_softmin_routing_gate.json`
+  (SHA-256 verified against the A40 copy), nine `result.json` under
+  `artifacts/SoftTail/softtail_v3_01/`
+
+Mechanism under test: a connected mesh makes opacity a shared per-vertex
+parameter and the face opacity is `min` over three vertices, so `backward.cu`
+routes the whole face gradient to the argmin and the other two vertices receive
+nothing from that face. The change splits the same gradient mass with softmin
+weights, annealing to the exact argmin routing. The forward `min` is untouched,
+verified bitwise on the A40 (`tests/test_opacity_pooling_native.py`, 7 tests).
+
+`ours_quality`, three-scene, against the frozen v1 rows:
+
+| Scene | PSNR v1 | PSNR new | ΔPSNR | ΔSSIM | ΔLPIPS | Δtriangles | Δbytes |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Room | 28.5452 | 28.5219 | `-0.0234` | `-0.00280` | `+0.00668` | `-13.76%` | `-13.34%` |
+| Bicycle | 23.2348 | 23.1607 | `-0.0741` | `-0.00560` | `+0.00618` | `-4.90%` | `-0.65%` |
+| Garden | 25.0099 | 25.0066 | `-0.0033` | `-0.00263` | `+0.00402` | `-6.51%` | `-4.08%` |
+| **Mean** | **25.5967** | **25.5631** | **`-0.0336`** | **`-0.00367`** | **`+0.00563`** | **`-8.10%`** | **`-5.37%`** |
+
+PSNR wins `0/3`. The `ours_speed` and `ours_opacity` arms reproduce the same
+pattern (`-0.0330` and `-0.0347` dB), so the result is not an artifact of one
+render setting. Mean FPS rises `+1.083` (`+6.0%`) on the quality arm.
+
+The gate required `>= +0.10` dB. The measured mean is negative, so component A is
+falsified as a quality mechanism on trained end-to-end evidence.
+
+**Correction to the stated mechanism.** The argmin routing is the *exact*
+derivative of `min`, not a defect: a non-minimal vertex genuinely does not affect
+that face's opacity, and it receives correct gradient from the faces where it is
+the minimum. The "self-reinforcing" argument was also one-directional — when the
+loss wants a face more opaque the argmin is pushed up and another vertex takes
+over. The softmin therefore injects a biased signal, and the uniform small loss
+across every scene, arm and metric is consistent with that reading.
+
+**Retained result.** At `-0.034` dB the arm buys `-8.10%` triangles, `-5.37%`
+checkpoint bytes and `+6.0%` FPS. That is a real point on the
+quality/compactness/speed frontier and is kept as an ablation row, but it does
+not close the `0.25` dB gap to Triangle Splatting+ and is not a paper claim.
+
+**Decision:** component A is closed as a quality mechanism. Every direction
+falsified so far — ResidualGate, CGR, RITS, VATO, and now softmin routing —
+changed how existing parameters are *steered* (gating, ordering, endpoints,
+gradient routing) and none added representational capacity. The one capacity
+asymmetry remaining in the code is that colour is a per-vertex SH field
+interpolated barycentrically across a face while opacity collapses to a single
+`min` scalar. That is the next item.
+
+
+## 2026-09-17 UTC — OATS completed: small quality gain, gate not passed
+
+**Run:** `softtail_v2_oats_01`, source `4f04b600d6758f13ca25e08ac7244752ea3608db`.
+Room, Bicycle and Garden completed 30k training; all 27 evaluations and the
+root DONE are present. Raw result/log/marker files are copied locally under
+`handover/evidence/oats/results`; consolidated tables and plots are under
+`handover/evidence/oats/analysis`. No checkpoint or dataset is committed.
+
+Quality setting: 4x supersampling, cutoff 0.01, tail absorption. Peak and OATS
+share the same unpruned checkpoint and exactly the same face budget.
+
+| Scene | Frozen v1 PSNR | Paired peak | OATS | OATS minus peak | Extra vertices | Extra bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| Room | 28.545234 | 28.570033 | 28.636282 | +0.066249 | 10,318 | 2,146,176 |
+| Bicycle | 23.234833 | 23.230680 | 23.244769 | +0.014089 | 58,907 | 12,252,672 |
+| Garden | 25.009887 | 25.018633 | 25.048468 | +0.029835 | 54,409 | 11,317,056 |
+| Mean | 25.596651 | 25.606449 | 25.643173 | +0.036724 | 41,211.33 | 8,571,968 |
+
+- Against frozen v1: PSNR +0.046522 dB, SSIM +0.001768, LPIPS-VGG -0.001964;
+  checkpoint bytes +1.069%, triangles -0.184%.
+- Against paired peak: PSNR +0.036724 dB, SSIM +0.001912, LPIPS-VGG -0.002101;
+  checkpoint bytes +1.233%, equal triangles, mean FPS -0.716%.
+- Speed and opacity-only paired PSNR gains: +0.037878 / +0.036414 dB.
+- Peak/OATS selection symmetric differences are 12.48%, 11.08%, 10.90% of the
+  unpruned face sets. All three scenes improve. The selection does act, but
+  it retains more distinct vertices and therefore larger checkpoints.
+- Shuffle quality mean: 23.785917 dB. This is a shuffled-score control over
+  all parent faces, including zero-contribution faces; its large deficit is
+  not evidence that OATS is superior to every reasonable survival rule.
+- Connectivity diagnostics are mixed, so no geometric-quality gain is claimed.
+- No seed, variance, bootstrap, or CI experiments were added.
+
+**Decision:** `gate_pass=false`. Both the frozen and paired gates fail on
+PSNR gain (< +0.10 dB) and checkpoint bytes. Retain OATS as a small quality
+tradeoff/ablation; do not promote it to the main model, run 13 scenes, sweep
+cleanup thresholds, or combine it with the failed softmin routing.
+
+**Next:** use design B already listed in `NEXT_ROUND_PLAN_2026-09-16.md`:
+spatially varying barycentric vertex opacity, with the actual forward and its
+derivative changed together. Keep the v1 floor 0.8 and peak cleanup. The
+concrete scope and three-scene queue are in
+`handover/SPATIAL_OPACITY_NEXT_PLAN_2026-09-17.md`. This next candidate has not
+yet been implemented or launched. v1 remains the completed 13-scene control.
+
+## 2026-09-19 — SoftTail v4 per-vertex opacity field, attempt 01 (stopped: pruning confound)
+
+- Change: `--opacity_field` (commit `8012b6d`). A face's opacity at a pixel is its three vertex opacities interpolated with the colour barycentrics, instead of their min. The backward is exact (finite-difference test). 73/73 tests passed on the A40.
+- Root `$E/softtail_v4_01`. Room trained to 30k; Bicycle was stopped at the start of training. No evaluation arm ran and no gate.json exists; this is not a gate outcome.
+- Like-for-like training-log comparison with v1 (`opacity_floor_01/opacity08__room/train.log`, same line):
+
+| Room test (training log) | v1 | field | delta |
+|---|---:|---:|---:|
+| iter 5000 PSNR / FPS | 27.79 / 53 | 26.86 / 88 | -0.93 |
+| iter 30000 PSNR | 28.68 | 28.18 | -0.50 |
+| iter 30000 LPIPS | 0.264 | 0.318 | +0.054 |
+
+- Checkpoint (CPU): v1 has 4,646,148 faces and 2,174,825 vertices; the field run has 2,516,731 faces (-46%) and 1,281,149 vertices. 34% of vertex opacities are above 0.99 in v1 against 9.4% under the field.
+- Cause: the opacity pruning in `train.py` deletes a face when the *min* of its corners falls below a threshold that rises from 0.235 by 0.01 every 500 iterations. That is correct for the min model and wrong for the field, where the face's mean opacity is the corner mean and single vertices can be lowered cheaply. The pruner removed half the mesh, so the run measured the pruner.
+- Fix (commit `1166c59`): `TriangleModel.face_opacity()` returns the min under the min model and the corner mean under the field, and pruning reads it. The min path gives the same values. Relaunched as `$E/softtail_v4_02`.
+
+## 2026-09-19 — SoftTail v4 per-vertex opacity field, attempt 02: FALSIFIED on quality
+
+- Commits `8012b6d` (field) + `1166c59` (pruning reads the model's face opacity). Root `$E/softtail_v4_02`. Control is the frozen v1 runs; gate `sota/v3_gate.py --experiment softtail-v4-opacity-field`.
+- Archived as `handover/evidence/formal/softtail_v4_opacity_field_gate.json`, SHA-256 `ac0dbf824abb2e0c419f81c6fab1488e3f86ecee6e2a6c1d5f892cff412334ca`.
+- Headline (`ours_quality`): **psnr_gain_db −0.1356, psnr_wins 0/3**, SSIM −0.0040, LPIPS +0.0040 (worse).
+
+| scene | PSNR v1 → field | ΔPSNR | ΔSSIM | ΔLPIPS | Δtriangles | Δbytes |
+|---|---|---:|---:|---:|---:|---:|
+| room | 28.5452 → 28.2381 | −0.3071 | −0.00347 | +0.00355 | +6.5% | +5.9% |
+| bicycle | 23.2348 → 23.1480 | −0.0869 | −0.00632 | +0.00551 | −4.1% | +0.5% |
+| garden | 25.0099 → 24.9972 | −0.0127 | −0.00229 | +0.00294 | −4.3% | −1.1% |
+| mean | 25.5967 → 25.4611 | −0.1356 | −0.0040 | +0.0040 | −1.1% | |
+
+- `ours_speed` −0.1292 dB and `ours_opacity` −0.1273 dB repeat the same pattern.
+- The triangle budget matches v1 (−1.1% mean), so after the pruning fix this is a clean measurement of the field itself. In the training logs the field is level with or slightly ahead of v1 at iteration 11k on all three scenes, and falls behind while the opacity floor ramps (11k–24k).
+- **Decision:** the per-vertex opacity field is closed as a quality mechanism. With component A (softmin routing, −0.034 dB), both changes to how the mesh shares opacity are now measured negative at matched budget. Next on the plan: component B, OATS (`sota/batch38.sh`, root `$E/softtail_oats_01`).
+
+## 2026-09-20 — OATS integrated survival (component B): consistent positive, below the +0.10 dB gate
+
+- Commits `87dbff9`, `982b952`, `a586117`. Root `$E/softtail_oats_01`. Each scene trained once in the v1 configuration with `--save_precleanup`. Both cleanup rules were applied offline to that one state at an equal face budget (`sota/survival_cleanup.py`), and the gate is paired against the v1 cut of the same run (`--paired-reference`).
+- Neutral check passed on all 3 scenes: the offline v1 cut equals the trained checkpoint face for face.
+- Archived as `handover/evidence/formal/softtail_oats_integrated_survival_gate.json` (SHA-256 in `handover/SHA256SUMS`).
+
+| scene | faces before cleanup | kept (both) | rules disagree | PSNR v1-rule → OATS | ΔPSNR | ΔSSIM | ΔLPIPS |
+|---|---:|---:|---:|---|---:|---:|---:|
+| room | 9,227,029 | 4,662,823 | 12.5% | 28.6387 → 28.6772 | +0.0385 | +0.0014 | −0.0025 |
+| bicycle | 9,267,702 | 4,997,902 | 11.0% | 23.2462 → 23.2588 | +0.0126 | +0.0023 | −0.0020 |
+| garden | 11,348,162 | 6,399,919 | 10.9% | 24.9977 → 25.0316 | +0.0339 | +0.0018 | −0.0013 |
+| mean | | | | 25.6276 → 25.6559 | **+0.0283** | **+0.0018** | **−0.0019** |
+
+- Wins: PSNR 3/3, SSIM 3/3, LPIPS 3/3 and L1 3/3 on every evaluation arm. `ours_speed` +0.0292 dB and `ours_opacity` +0.0284 dB. FPS is unchanged at an equal face count.
+- **Outcome:** this is the first change in the project that improves every metric on every scene. The effect is small (+0.028 dB) and below the preregistered +0.10 dB bar, so it does not carry a paper claim alone. It is a zero-cost, post-training module and stays in the method.
+- The cleanup discards about 45% of the faces, and choosing the survivors by integrated contribution instead of the single-pixel peak helps everywhere. The opacity-pruning passes during training (every 500 iterations, 4k–11k) still use the peak `max_blending` statistic; they are the next place the same statistic applies.
+
+## 2026-09-20 — Elastic window (Elastic Triangle Splatting kernel) on the connected mesh: FALSIFIED on Room, run stopped
+
+- Commits `89a9161`, `41cbe4b`, `642e35a`. `--elastic_window` replaces the window `phi^sigma` with `exp(-sigma x^(2/sigma))`, `x = 1 - phi`, culled at `x >= 2` (Elastic Triangle Splatting, Eq. 5). The window is bilateral and anneals to the same opaque step. Tests: 103/103 on the A40, and the window gradient agrees with finite differences (cosine 0.997).
+- Root `$E/softtail_elastic_01`, `sota/batch39.sh`. Room trained to 30k. The batch was stopped before Bicycle, so there is no gate.json. Room alone was scored with the frozen evaluator; the result is archived as `handover/evidence/formal/softtail_elastic_window_room_result.json` (SHA-256 `a53fae66…`).
+
+| Room test (training log) | 2k | 5k | 11k | 20k | 30k |
+|---|---:|---:|---:|---:|---:|
+| v1 PSNR | 24.51 | 27.79 | 29.01 | 28.87 | 28.68 |
+| elastic PSNR | 25.56 | 27.96 | 28.75 | 28.39 | 27.93 |
+| delta | +1.05 | +0.17 | −0.27 | −0.49 | −0.75 |
+
+| Room formal (`ours_quality`) | PSNR | SSIM | LPIPS | FPS | triangles | vertices |
+|---|---:|---:|---:|---:|---:|---:|
+| stock MeshSplatting | 28.4755 | 0.8746 | 0.2705 | 17.3 | 5,628,158 | 2,563,186 |
+| v1 | 28.5452 | 0.8777 | 0.2673 | 17.8 | 4,646,148 | 2,174,825 |
+| elastic | **27.8535** | 0.8722 | 0.2908 | 17.6 | 2,145,609 | 1,201,372 |
+| elastic − v1 | **−0.6917** | −0.0055 | +0.0236 | | −54% | −45% |
+
+- The elastic window is ahead while the window is soft (+1.05 dB at 2k) and falls behind as it hardens. It has 43% fewer vertices when the vertex set freezes at the 11k Delaunay step. From then on, with the vertex count fixed, it loses 0.82 dB against v1's 0.33 dB. So the size deficit does not explain the whole loss.
+- Reading: a connected mesh cannot separate its faces. The elastic support reaches over each shared edge into the neighbour, and the edge value `exp(-sigma)` tends to one, so neighbours double-cover the seam. The optimiser lowers opacities to avoid this, and the opacity pruning (4k–11k) then removes them. The published soup model avoids this because each triangle can shrink on its own. This matches why Elastic Triangle Splatting and 2DTS leave connected meshes as future work.
+- **Decision:** the elastic window is closed on the connected mesh. Bicycle and Garden would each need about +0.5 dB to lift the three-scene mean over +0.10. The flag stays in the code, default off, and is refused together with the other appearance modes.
+
+## 2026-09-20 — Training-time OATS (integrated contribution in pruning and densification): PASSES the gate, and passes at an equal budget
+
+- Commits `a003838` (statistic) and `2fa75c3` (equal-budget recheck). Roots `$E/softtail_integrated_01` (gate) and its `cut__<scene>` subdirectories (recheck). Control is the frozen v1 runs in `formal_main_table_01`; no baseline retrained.
+- `--integrated_importance`: the 4k-11k pruning passes and the densification sampler rank a face by the integral `S_f = sum(alpha * T)` instead of its single brightest pixel `max_blending`. Budget-matched by construction (`sota/survival.py:budget_matched_delete`): the integral re-picks the faces the peak rule would have deleted, never a different number. No kernel change — the accumulator the OATS cleanup already uses is handed to the training render.
+- Archived: `handover/evidence/formal/softtail_integrated_importance_gate.json` (SHA-256 `7e49f165…`) and `..._equal_budget.json`.
+
+**Gate (`ours_quality`, three scenes): psnr_gain_db +0.1100, psnr_wins 3/3**, SSIM +0.00536, LPIPS −0.01000, L1 3/3. `ours_speed` and `ours_opacity` repeat 3/3 on PSNR, SSIM, LPIPS and L1. FPS 0/3 (−2.44), which the face counts explain.
+
+| scene | PSNR v1 → ours | ΔPSNR | ΔSSIM | ΔLPIPS | Δtriangles |
+|---|---|---:|---:|---:|---:|
+| room | 28.5452 → 28.7677 | +0.2225 | +0.0045 | −0.0119 | +22.1% |
+| bicycle | 23.2348 → 23.3337 | +0.0989 | +0.0100 | −0.0152 | +12.0% |
+| garden | 25.0099 → 25.0185 | +0.0086 | +0.0016 | −0.0030 | +2.6% |
+| mean | 25.5966 → 25.7066 | **+0.1100** | +0.0054 | −0.0100 | |
+
+**Equal-budget recheck.** The arm finished with 2.6–22% more faces and the per-scene gain tracked the excess, so the gain and the mesh size were confounded. The runs saved their pre-cleanup state, so each was cut with the *published* rule down to exactly the face count v1 finished with (`matched`), and scored. The `oats` column adds the integral in the cleanup as well: the full method.
+
+| scene | v1 | matched (equal faces) | Δ | trained | Δ | oats | Δ |
+|---|---|---|---:|---|---:|---|---:|
+| room | 28.5452 | 28.7560 | +0.2108 | 28.7677 | +0.2225 | 28.8183 | +0.2731 |
+| bicycle | 23.2348 | 23.3355 | +0.1007 | 23.3337 | +0.0989 | 23.3424 | +0.1076 |
+| garden | 25.0099 | 25.0176 | +0.0077 | 25.0185 | +0.0086 | 25.0457 | +0.0358 |
+| mean | | | **+0.1064** | | +0.1100 | | **+0.1388** |
+
+- At identical face counts the gain survives: **+0.1064 dB, 3/3**. The extra faces are worth 0.0036 dB, 3% of the effect; the rest is which faces were kept. On bicycle the equal-budget cut even scores *above* the run's own larger mesh.
+- The two applications stack: integral in training and in the cleanup gives **+0.1388 dB**, above either alone, on all three scenes.
+- The v1 cut reproduced each run's own checkpoint face for face (neutral check) on all three scenes. Rule disagreement at the cleanup: room 12.2%, bicycle 10.9%.
+- **Outcome:** the first change in the project to clear the preregistered +0.10 dB bar, and it clears it at a matched budget on every scene and every arm. It stays in the method together with the cleanup-time OATS. Next: the full benchmark with both applications on.
+
+## 2026-09-21 — Nine-scene Mip-NeRF360 main table for the full method: 9/9 over v1, SSIM and LPIPS ahead of Triangle Splatting+
+
+- Commit `89c9598` (`sota/batch42.sh`) plus the fix `e93b633`. Root `$E/softtail_integrated_01`; the three gate scenes were reused, the other six trained. Control: the frozen v1 rows in `formal_main_table_01`. Archived as `handover/evidence/formal/softtail_nine_scene_main_table.json`.
+- The method is one statistic in two places: the integral `S_f = sum(alpha * T)` ranks faces in the 4k–11k pruning and densification passes (`--integrated_importance`) and again in the final cleanup (OATS, offline on the `--save_precleanup` state).
+
+| mean over 9 scenes | PSNR | SSIM | LPIPS | L1 | FPS |
+|---|---:|---:|---:|---:|---:|
+| MeshSplatting (stock) | 24.7971 | 0.7317 | 0.3075 | 0.0393 | 18.06 |
+| v1 (opacity floor 0.8) | 24.9596 | 0.7392 | 0.3006 | 0.0386 | 18.02 |
+| **ours (full method)** | **25.1654** | **0.7478** | **0.2846** | **0.0377** | 15.36 |
+| Triangle Splatting+ (published) | 25.21 | 0.742 | 0.294 | — | — |
+
+- **PSNR wins 9/9 against v1** on `ours_quality` (+0.2058 dB) and 9/9 on `ours_speed` (+0.1959). Against stock MeshSplatting the gap is +0.368 dB.
+- SSIM 0.7478 and LPIPS 0.2846 are **better than the published Triangle Splatting+ numbers** (0.742 / 0.294) while ours is a fully connected mesh and theirs is a triangle soup. PSNR is still 0.045 dB behind their 25.21.
+
+| scene | stock | v1 | ours | Δ vs v1 | Δfaces |
+|---|---|---|---|---:|---:|
+| bicycle | 23.0413 | 23.2348 | 23.3424 | +0.1076 | +12.0% |
+| flowers | 19.1879 | 19.3744 | 19.6792 | +0.3048 | +9.6% |
+| garden | 24.9520 | 25.0099 | 25.0457 | +0.0358 | +2.6% |
+| stump | 24.9058 | 25.1523 | 25.3314 | +0.1791 | +6.4% |
+| treehill | 20.5538 | 20.7826 | 20.9193 | +0.1367 | +6.6% |
+| room | 28.4755 | 28.5452 | 28.8183 | +0.2731 | +22.1% |
+| counter | 26.3702 | 26.5126 | 26.7391 | +0.2265 | +26.8% |
+| kitchen | 27.4621 | 27.5700 | 27.7545 | +0.1845 | +33.1% |
+| bonsai | 28.2254 | 28.4544 | 28.8591 | +0.4047 | +8.5% |
+
+- **Open item:** the runs carry 2.6–33% more faces than v1 and FPS drops 18.0 → 15.4. On the three gate scenes the equal-budget recheck showed the extra faces are worth 0.0036 dB of the 0.1100 (3%), so the effect is the choice of survivors, not the size. The same recheck has **not** been run on the other six scenes; kitchen (+33% faces) and counter (+26.8%) are the ones a reviewer will ask about. `sota/batch41.sh` does this without retraining.
+- Interrupted twice by infrastructure, neither affecting results: the AutoDL jump host restarted (the A40 itself kept running, resumed on the same port), and three duplicate launches were started and stopped before any of them wrote overlapping output.
+
+## 2026-09-21 — Nine-scene equal-budget recheck: the gain survives at the control's face count (+0.1922 dB, 9/9)
+
+- Commit `a86ebb3` (`sota/batch43.sh`, `--budget` now also writes `matched_oats`). Root `$E/softtail_integrated_01/cutb__<scene>`, written beside the main table's `cut__<scene>` without touching it. No retraining: each scene's saved pre-cleanup state was cut with the *integral* down to exactly the face count v1 finished with. Archived as `handover/evidence/formal/softtail_nine_scene_equal_budget.json`.
+
+| scene | v1 | at v1's face count | Δ | at its own count | Δ |
+|---|---|---|---:|---|---:|
+| bicycle | 23.2348 | 23.3437 | +0.1088 | 23.3424 | +0.1076 |
+| flowers | 19.3744 | 19.6495 | +0.2751 | 19.6792 | +0.3047 |
+| garden | 25.0099 | 25.0459 | +0.0360 | 25.0457 | +0.0358 |
+| stump | 25.1523 | 25.3322 | +0.1799 | 25.3314 | +0.1791 |
+| treehill | 20.7826 | 20.9188 | +0.1362 | 20.9193 | +0.1367 |
+| room | 28.5452 | 28.7987 | +0.2535 | 28.8183 | +0.2731 |
+| counter | 26.5126 | 26.7059 | +0.1933 | 26.7391 | +0.2265 |
+| kitchen | 27.5700 | 27.7257 | +0.1557 | 27.7545 | +0.1845 |
+| bonsai | 28.4544 | 28.8459 | +0.3915 | 28.8591 | +0.4046 |
+| **mean** | 24.9596 | **25.1518** | **+0.1922** | 25.1654 | +0.2058 |
+
+- **PSNR wins 9/9 at an identical face count.** The extra faces account for 0.0136 dB of the 0.2058, i.e. **6.6% of the gain**; 93.4% is which faces were kept.
+- The two rows a reviewer would attack hold up: kitchen carries 33% more faces and still gains +0.1557 at v1's count, counter 27% more and +0.1933. On bicycle, garden, stump and treehill the matched cut scores *above* the run's own larger mesh, so there the extra faces are a liability.
+- This closes the open item on the main table. The paper reports the free-budget table as the headline and this as the controlled ablation.
+
+## 2026-09-22 — Tanks & Temples and Deep Blending for the full method: the benchmark is complete
+
+- Commit `c71639a` (`sota/batch44.sh`). Root `$E/softtail_tandt_db_01`. Controls are the frozen v1 runs in `formal_tandt_01` and `formal_deep_blending_01`, evaluated with `-i images` exactly as those runs were (the first draft of the launcher omitted the flag, which would have scored a different resolution; caught before launch). Archived as `handover/evidence/formal/softtail_tandt_deep_blending_table.json`.
+
+| dataset | method | PSNR | SSIM | LPIPS |
+|---|---|---:|---:|---:|
+| Tanks & Temples (2) | MeshSplatting | 20.6637 | 0.7589 | 0.2760 |
+| | v1 | 20.9181 | 0.7689 | 0.2617 |
+| | **ours** | **21.0629** | **0.7776** | **0.2487** |
+| Deep Blending (2) | MeshSplatting | 27.0886 | 0.8419 | 0.3352 |
+| | v1 | 27.3663 | 0.8487 | 0.3266 |
+| | **ours** | **27.7320** | **0.8537** | **0.3154** |
+
+| scene | v1 | ours | ΔPSNR | ΔSSIM | ΔLPIPS | faces |
+|---|---|---|---:|---:|---:|---:|
+| train | 19.0536 | 19.0299 | **−0.0237** | +0.0041 | −0.0078 | 4,309,663 (+18.2%) |
+| truck | 22.7827 | 23.0959 | +0.3132 | +0.0132 | −0.0183 | 3,106,476 (+17.5%) |
+| drjohnson | 26.7386 | 27.0530 | +0.3144 | +0.0054 | −0.0109 | 7,193,390 (+4.6%) |
+| playroom | 27.9940 | 28.4110 | +0.4170 | +0.0047 | −0.0116 | 7,113,299 (−4.9%) |
+
+- T&T +0.1448 dB (wins 1/2), Deep Blending +0.3657 (2/2). `ours_speed` repeats both (21.0498 and 27.7141).
+- **train is the only scene in the whole benchmark where PSNR falls** (−0.0237), and its SSIM and LPIPS still improve. It is the hardest T&T scene, it carries a 2.5M primitive cap, and the run kept 18% more faces without converting them into PSNR: under a hard cap the integral's advantage narrows. Report it as is.
+- playroom gains the most (+0.4170) with 4.9% *fewer* faces than v1.
+
+**Benchmark summary across all 13 scenes** (`ours_quality`, against v1 / against stock MeshSplatting):
+
+| dataset | scenes | ΔPSNR vs v1 | wins | ΔPSNR vs stock |
+|---|---:|---:|---:|---:|
+| Mip-NeRF360 | 9 | +0.2058 | 9/9 | +0.368 |
+| Tanks & Temples | 2 | +0.1448 | 1/2 | +0.399 |
+| Deep Blending | 2 | +0.3657 | 2/2 | +0.643 |
+
+- Against the published Triangle Splatting+ on Mip-NeRF360 (25.21 / 0.742 / 0.294) ours is **ahead on SSIM (0.7478) and LPIPS (0.2846)** and 0.045 dB behind on PSNR, with a fully connected mesh against their soup.
+
+## 2026-09-22 — Nine-scene component ablation: the training-time half carries three quarters of the gain
+
+- Commit `c694e73` (`sota/batch45.sh`), root `$E/softtail_integrated_01`. Evaluation only, no training: `survival_cleanup` already wrote the *published peak-rule* cut of every integral-trained run as `cut__<scene>/v1`, at the same face budget as the integral cut beside it, so the training-only corner was nine evaluations of existing checkpoints (~40 min total). Archived as `handover/evidence/formal/softtail_nine_scene_ablation.json`.
+
+| training statistic | cleanup statistic | PSNR | SSIM | LPIPS | ΔPSNR vs v1 | wins |
+|---|---|---:|---:|---:|---:|---:|
+| peak (published) | peak (published) | 24.9596 | 0.7392 | 0.3006 | — | — |
+| integral | peak | 25.1174 | 0.7457 | 0.2875 | +0.1578 | 9/9 |
+| **integral** | **integral** | **25.1654** | **0.7478** | **0.2846** | **+0.2058** | **9/9** |
+
+- Training-time survival is **76.7%** of the gain (+0.1578 of +0.2058); the cleanup adds the remaining +0.0480 on top of it. Both halves move SSIM and LPIPS monotonically as well, so the decomposition is not a PSNR artefact.
+- The fourth corner (peak training, integral cleanup) was measured earlier on bicycle/garden/room: +0.0367 dB. The same three scenes carry the **shuffle control** — re-picking the same number of faces at random — at **−1.8205 dB**. The budget is not slack: an arbitrary re-pick at the identical face count destroys 1.8 dB, so the +0.037 and the +0.158 are about the ranking, not about perturbing the cleanup.
+- Ordering note: applying the integral only in the cleanup gains little (+0.037) because by then the mesh is already the one the peak rule built. Applying it during training changes which faces exist at all, which is where the budget is actually decided.
+

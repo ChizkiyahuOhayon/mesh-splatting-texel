@@ -1,0 +1,46 @@
+% Generated from results/formal/*.json (SHA-256 in results/SHA256SUMS).
+% Regenerate with results/make_tables.py; do not edit numbers by hand.
+
+\begin{tabular}{l ccc ccc ccc}
+\toprule
+ & \multicolumn{3}{c}{Mip-NeRF360} & \multicolumn{3}{c}{Tanks\&Temples} & \multicolumn{3}{c}{Deep Blending} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+Method & PSNR$\uparrow$ & SSIM$\uparrow$ & LPIPS$\downarrow$ & PSNR$\uparrow$ & SSIM$\uparrow$ & LPIPS$\downarrow$ & PSNR$\uparrow$ & SSIM$\uparrow$ & LPIPS$\downarrow$ \\
+\midrule
+MeshSplatting & 24.80 & 0.732 & 0.308 & 20.66 & 0.759 & 0.276 & 27.09 & 0.842 & 0.335 \\
++ opacity floor (v1) & 24.96 & 0.739 & 0.301 & 20.92 & 0.769 & 0.262 & 27.37 & 0.849 & 0.327 \\
+\textbf{Ours} & 25.17 & 0.748 & 0.285 & 21.06 & 0.778 & 0.249 & 27.73 & 0.854 & 0.315 \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{l rrr r}
+\toprule
+Scene & v1 & Ours & $\Delta$ & Ours @ v1's face count \\
+\midrule
+bicycle & 23.23 & 23.34 & +0.108 & 23.34 \\
+flowers & 19.37 & 19.68 & +0.305 & 19.65 \\
+garden & 25.01 & 25.05 & +0.036 & 25.05 \\
+stump & 25.15 & 25.33 & +0.179 & 25.33 \\
+treehill & 20.78 & 20.92 & +0.137 & 20.92 \\
+room & 28.55 & 28.82 & +0.273 & 28.80 \\
+counter & 26.51 & 26.74 & +0.226 & 26.71 \\
+kitchen & 27.57 & 27.75 & +0.184 & 27.73 \\
+bonsai & 28.45 & 28.86 & +0.405 & 28.85 \\
+\midrule
+mean & 24.960 & 25.165 & +0.206 & 25.152 \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{cc rrr r}
+\toprule
+Training & Cleanup & PSNR$\uparrow$ & SSIM$\uparrow$ & LPIPS$\downarrow$ & $\Delta$PSNR \\
+\midrule
+peak & peak & 24.960 & 0.7392 & 0.3006 & -- \\
+integral & peak & 25.117 & 0.7457 & 0.2875 & +0.158 (9/9) \\
+\textbf{integral} & \textbf{integral} & 25.165 & 0.7478 & 0.2846 & +0.206 (9/9) \\
+\midrule
+\multicolumn{6}{l}{\footnotesize On bicycle, garden, room only, with the training statistic held at the peak rule:} \\
+peak & integral & 25.643 & 0.7708 & 0.2670 & +0.037 \\
+peak & random & 23.786 & 0.6932 & 0.3326 & -1.821 \\
+\bottomrule
+\end{tabular}

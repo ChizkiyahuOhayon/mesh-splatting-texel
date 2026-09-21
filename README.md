@@ -1,237 +1,319 @@
-<h1 align="center">MeshSplatting: Differentiable Rendering with Opaque Meshes [CVPR 2026] </h1>
+<h1 align="center">SoftTail</h1>
+
 <p align="center">
-  Jan Held, Sanghyun Son, Renaud Vandeghen, Daniel Rebain, Matheus Gadelha, Yi Zhou, Anthony Cioppa, Ming C. Lin, Marc Van Droogenbroeck, Andrea Tagliasacchi
+  <strong>Opacity-relaxed connected mesh splatting with integrated-contribution triangle survival</strong>
 </p>
 
-<div align="center">
-  <a href="https://meshsplatting.github.io">Project page</a> &nbsp;|&nbsp;
-  <a href="https://arxiv.org/abs/2512.06818">ArXiv</a>
-  <br>
-</div>
+<p align="center">
+  <a href="#installation"><img alt="Python 3.11" src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white"></a>
+  <a href="#installation"><img alt="PyTorch 2.7.1" src="https://img.shields.io/badge/PyTorch-2.7.1-EE4C2C?logo=pytorch&logoColor=white"></a>
+  <a href="#installation"><img alt="CUDA 12.6" src="https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia&logoColor=white"></a>
+  <a href="LICENSE.md"><img alt="License" src="https://img.shields.io/badge/license-see%20LICENSE-blue"></a>
+  <a href="#model-zoo-and-release-artifacts"><img alt="Checkpoints" src="https://img.shields.io/badge/checkpoints-Google%20Drive-4285F4?logo=googledrive&logoColor=white"></a>
+</p>
 
-<br>
+<p align="center">
+  <a href="#results">Results</a> ·
+  <a href="#method-in-one-paragraph">Method</a> ·
+  <a href="#ablation">Ablation</a> ·
+  <a href="#installation">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#reproduce-every-table-in-the-paper">Reproduce</a> ·
+  <a href="#model-zoo-and-release-artifacts">Models</a> ·
+  <a href="docs/REPRODUCIBILITY.md">Reproducibility</a>
+</p>
 
-<div align="center">
-🚀 Real-time viewer coming soon, stay tuned 🚀
-</div>
+<p align="center">
+  <img src="assets/softtail_qualitative.png" width="100%" alt="SoftTail qualitative comparisons on Tanks and Temples and Deep Blending">
+</p>
 
-<br>
+SoftTail renders a **single connected colored triangle mesh** — not a soup of
+disconnected primitives — directly with a differentiable rasterizer, and it
+beats its mesh-based baseline on all three standard novel-view-synthesis
+benchmarks while shipping a smaller mesh.
 
-<div align="center">
-  <img src="assets/teaser.png" width="800" height="304" alt="Abstract Image">
-</div>
+Two changes, both about the same thing: *a connected mesh has a hard triangle
+budget, so every triangle that survives has to earn its place.*
 
-⭐️ This repo contains the official implementation for the paper "MeshSplatting: Differentiable Rendering with Opaque Meshes". ⭐️
+1. **Opacity-relaxed training.** The hardening schedule ends at `0.8` instead of
+   pushing every triangle to opacity one, and the renderer absorbs the residual
+   transmittance at ray termination so no radiance is lost.
+2. **Integrated-contribution triangle survival (OATS).** Face importance is the
+   integrated contribution `S_f = Σ_pixels α·T` — how much light a triangle
+   actually delivers across the whole dataset — instead of the single brightest
+   pixel it ever touched. The same statistic drives pruning and densification
+   during training *and* the final cleanup, at an **unchanged face budget**.
 
+One trained checkpoint gives two deployment points: **SoftTail-Quality** (`4×`
+supersampling) and **SoftTail-Speed** (`3×`).
 
-## Cloning the Repository + Installation
+## Highlights
 
-The code has been used and tested with Python 3.11 and CUDA 12.6.
+- **Three benchmarks, 13 scenes, 12/13 scenes improved.** Mean PSNR, SSIM and
+  LPIPS all improve over the matched mesh baseline on Mip-NeRF 360,
+  Tanks & Temples and Deep Blending.
+- **The gain is not bought with extra triangles.** Re-cutting our mesh down to
+  the baseline's exact face count keeps `+0.192` dB of the `+0.206` dB
+  Mip-NeRF 360 gain (9/9 scenes) — only **6.6%** of the gain is capacity.
+- **A one-line statistic, not a new architecture.** No teacher, no router, no
+  extra network: one `atomicAdd` beside the rasterizer's existing `atomicMax`.
+- **Everything is auditable.** Every number below is produced by a frozen
+  evaluator, archived as JSON, and hashed in a SHA-256 manifest. The tables in
+  the paper are *generated* by [`results/make_tables.py`](results/make_tables.py)
+  from the JSONs in [`results/formal/`](results/formal), so they cannot drift.
 
-You should clone the repository with the different submodules by running the following command:
+## Results
+
+All rows are trained and evaluated with the same code, splits, metric
+implementation, iteration count and GPU (NVIDIA A40). **Baseline** is
+MeshSplatting reproduced in this repository.
+
+### Mip-NeRF 360 (9 scenes)
+
+| Method | PSNR ↑ | SSIM ↑ | LPIPS ↓ | FPS ↑ |
+|---|---:|---:|---:|---:|
+| MeshSplatting (baseline) | 24.797 | 0.7317 | 0.3075 | 18.1 |
+| **SoftTail-Quality** | **25.165** | **0.7478** | **0.2846** | 15.4 |
+| SoftTail-Speed | 25.122 | 0.7461 | 0.2858 | 18.6 |
+
+### Tanks & Temples (2 scenes)
+
+| Method | PSNR ↑ | SSIM ↑ | LPIPS ↓ | FPS ↑ |
+|---|---:|---:|---:|---:|
+| MeshSplatting (baseline) | 20.664 | 0.7589 | 0.2760 | 16.0 |
+| **SoftTail-Quality** | **21.063** | **0.7776** | **0.2487** | 27.4 |
+| SoftTail-Speed | 21.050 | 0.7763 | 0.2505 | **32.8** |
+
+### Deep Blending (2 scenes)
+
+| Method | PSNR ↑ | SSIM ↑ | LPIPS ↓ | FPS ↑ |
+|---|---:|---:|---:|---:|
+| MeshSplatting (baseline) | 27.089 | 0.8419 | 0.3352 | 21.6 |
+| **SoftTail-Quality** | **27.732** | **0.8537** | **0.3154** | 21.3 |
+| SoftTail-Speed | 27.714 | 0.8528 | 0.3169 | 25.6 |
+
+Per-scene values, runtime settings, checkpoint sizes and source revisions are in
+[`sota/experiment.md`](sota/experiment.md); the machine-readable tables, with
+per-view metrics for every scene and arm, are in
+[`results/formal/`](results/formal).
+
+### The gain is not extra capacity
+
+Any change to a pruning rule also changes how many triangles survive, so a
+quality gain and a bigger mesh are confounded. We therefore re-cut the *same*
+trained model offline down to the baseline's exact face count and re-score it,
+with no retraining:
+
+| Mip-NeRF 360, 9 scenes | Mean ΔPSNR vs baseline | Scenes improved |
+|---|---:|---:|
+| SoftTail at its own face count | +0.206 dB | 9 / 9 |
+| SoftTail re-cut to the baseline's face count | **+0.192 dB** | **9 / 9** |
+
+`6.6%` of the gain comes from capacity; the rest comes from *which* triangles
+survive. Reproduce with [`sota/batch43.sh`](sota/batch43.sh).
+
+## Method in one paragraph
+
+A connected mesh cannot simply grow primitives where the loss is high — its
+triangle budget is fixed by the topology it must keep. The published rule ranks
+a face by `max_blending`, the largest `α·T` it ever produced **at one pixel**.
+That statistic rewards a triangle that flashes once in one view and punishes a
+triangle that is quietly visible everywhere, which is exactly backwards for a
+representation whose faces are shared. SoftTail ranks a face by the integral of
+the same quantity, `S_f = Σ α·T`, accumulated by one `atomicAdd` next to the
+rasterizer's existing `atomicMax`. The integral decides **which** faces are
+deleted; the published rule still decides **how many**
+([`sota/survival.py`](sota/survival.py)), so mesh sizes stay comparable by
+construction. It is applied in the `4k–11k` pruning/densification passes
+(`--integrated_importance`) and once more in the final cleanup
+([`sota/survival_cleanup.py`](sota/survival_cleanup.py)).
+
+## Ablation
+
+The integral is applied twice — during training and in the final cleanup — so
+the two halves are separated on all nine Mip-NeRF 360 scenes. Every row keeps
+the published face budget, so the rows differ only in *which* faces survive:
+
+| Training statistic | Cleanup statistic | PSNR ↑ | SSIM ↑ | LPIPS ↓ | ΔPSNR |
+|---|---|---:|---:|---:|---:|
+| peak (published) | peak (published) | 24.960 | 0.7392 | 0.3006 | — |
+| **integral** | peak | 25.117 | 0.7457 | 0.2875 | +0.158 (9/9) |
+| **integral** | **integral** | **25.165** | **0.7478** | **0.2846** | **+0.206 (9/9)** |
+
+Training-time survival carries roughly three quarters of the gain, and the
+cleanup adds the rest; neither half is free. Holding the training statistic at
+the published rule and changing only the cleanup (bicycle, garden, room) gives
+`+0.037` dB — and **re-picking the same number of faces at random collapses the
+mesh by `-1.82` dB**, which is the control that says the gain comes from the
+ranking, not from disturbing the cleanup.
+
+Reproduce with [`sota/batch45.sh`](sota/batch45.sh) (evaluation only); the raw
+numbers are in
+[`results/formal/softtail_nine_scene_ablation.json`](results/formal/softtail_nine_scene_ablation.json).
+
+## Installation
+
+The formal experiments use Python 3.11, PyTorch 2.7.1 and CUDA 12.6.
 
 ```bash
-git clone https://github.com/meshsplatting/mesh-splatting --recursive
-cd mesh-splatting
-```
+git clone --recursive https://github.com/ChizkiyahuOhayon/mesh-splatting-texel.git
+cd mesh-splatting-texel
 
-Then, we suggest to use a virtual environment to install the dependencies.
-
-```bash
 micromamba create -n mesh_splatting python=3.11
 micromamba activate mesh_splatting
 micromamba install nvidia/label/cuda-12.6.0::cuda
 
 pip install torch==2.7.1 torchvision==0.22.1
 pip install -r requirements.txt
-```
-
-Finally, you can compile the custom CUDA kernels by running the following command:
-
-```bash
 bash compile.sh
-cd submodules/simple-knn
-pip install . --no-build-isolation
-cd submodules/effrdel
-pip install -e .
+pip install ./submodules/simple-knn --no-build-isolation
+pip install ./submodules/effrdel --no-build-isolation
 ```
 
-[Optional] We integrated the drop-in replacements from [Taming-3dgs](https://humansensinglab.github.io/taming-3dgs/)<sup>1</sup> with [fused ssim](https://github.com/rahul-goel/fused-ssim/tree/main) into the original codebase to speed up training times. To install fused_ssim. you just have to install:
-```
-# Install from GitHub (recommended)
-pip install git+https://github.com/rahul-goel/fused-ssim/ --no-build-isolation
+Every formal script sources
+[`sota/ensure_environment.sh`](sota/ensure_environment.sh), which checks that
+PyTorch and NVCC agree on the CUDA version and rebuilds the native rasterizer
+whenever its source revision changes — a stale kernel can silently invalidate a
+whole table, so this is not optional.
 
-# Or clone and install locally
-git clone https://github.com/rahul-goel/fused-ssim.git
-cd fused-ssim
-pip install . --no-build-isolation
-```
-The codebase will automatically switch to fused_ssim after installation.
-
-## Training
-To train our model, you can use the following command:
-```bash
-python train.py -s <path_to_scenes> -m <output_model_path> --eval
-```
-
-If you want to train the model on indoor scenes, you should add the following command:  
-```bash
-python train.py -s <path_to_scenes> -m <output_model_path> --indoor --eval
-```
-
-## Full evaluation on MipNeRF-360
-To run the full evaluation on MipNeRF-360, you can use the following command:
-```bash
-bash bash_scripts/run_all.sh <path_to_save>
-```
-Note that this command assumes you are using a machine with slurm.
-Alternatively, you can run the full evaluation without slurm by using the following command:
-```bash
-python full_eval.py --mipnerf360 <path_to_mipnerf360> --output_path <path_to_save>
-```
-
-### Normal supervision
-If you want to use supervised normals, you must first extract them:
+Sanity check (no GPU needed for the rule tests):
 
 ```bash
-python extract_normals.py -s <path_to_dataset>
+python -m unittest tests.test_integrated_importance -v
 ```
-If your dataset uses a different image resolution (e.g., images_2 or images_4), specify it with -i. 
-More information can be found under [the following link](https://github.com/YvanYin/Metric3D). You can also use any other normal estimator.
 
-### Depth supervision
-To have better reconstructed scenes we use depth maps as priors during optimization with each input images.
-For real world datasets depth maps should be generated for each input images, to generate them please do the following:
+## Datasets
 
-1. Clone [Depth Anything v2](https://github.com/DepthAnything/Depth-Anything-V2?tab=readme-ov-file#usage):
-    ```
-    git clone https://github.com/DepthAnything/Depth-Anything-V2.git
-    ```
-2. Download weights from [Depth-Anything-V2-Large](https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth?download=true) and place it under `Depth-Anything-V2/checkpoints/`
-3. Generate depth maps:
-   ```
-   python Depth-Anything-V2/run.py --encoder vitl --pred-only --grayscale --img-path <path to input images> --outdir <output path>
-   ```
-   Create a folder named 'depth' to store the depth maps. This folder should be placed alongside the folders containing the RGB images, for example: MipNeRF360/Garden/depth.
-5. Generate a `depth_params.json` file using:
-    ```
-    python utils/make_depth_scale.py --base_dir <path to colmap> --depths_dir <path to generated depths>
-    ```
+Download the datasets from their authors; we do not redistribute their images.
 
- The depth regularization we integrated is that used in our [Hierarchical 3DGS](https://repo-sam.inria.fr/fungraph/hierarchical-3d-gaussians/) pape.
+| Dataset | Official source | Evaluated scenes | Expected layout |
+|---|---|---|---|
+| Mip-NeRF 360 | [project page](https://jonbarron.info/mipnerf360/) | bicycle, flowers, garden, stump, treehill, room, counter, kitchen, bonsai | `images[_2/_4]`, `sparse/0` |
+| Tanks & Temples | [official downloader](https://www.tanksandtemples.org/download/) · [licence](https://www.tanksandtemples.org/license/) | train, truck | `images`, `sparse/0` |
+| Deep Blending | [author release](https://github.com/Phog/DeepBlending#usage) | drjohnson, playroom | `images`, `sparse/0` |
 
+Resolution, indoor overrides and the primitive caps are applied automatically
+per scene by [`sota/run.sh`](sota/run.sh) — outdoor Mip-NeRF 360 scenes use
+`images_4`, indoor ones `images_2` with `--indoor`, `train`/`truck` cap
+primitives at `2.5M`/`2.0M`. The full protocol is in
+[`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
 
-## Rendering
-To render a scene, you can use the following command:
+## Quick start
+
+### 1. Train one scene
+
 ```bash
-python render.py -m <path_to_model>
+export DATA_ROOT=/path/to/mipnerf360
+export RUNS=/path/to/runs
+export CUDA_VISIBLE_DEVICES=0
+
+bash sota/run.sh softtail garden \
+  --final_opacity 0.8 --integrated_importance --save_precleanup
 ```
 
-To create a video, you can use the following command:
+`--final_opacity 0.8` relaxes the hardening schedule, `--integrated_importance`
+switches training-time survival to the integral, and `--save_precleanup` keeps
+the pre-cleanup state so the final cleanup can be re-run offline at any budget.
+
+### 2. Cleanup by integrated survival
+
 ```bash
-python create_video.py -m <path_to_model> -s <path_to_scenes>
+python -m sota.survival_cleanup \
+  -s "$DATA_ROOT/garden" -m "$RUNS/softtail__garden" \
+  -i images_4 --eval --out "$RUNS/cut__garden"
 ```
 
-## Create custom PLY files of optimized scenes
+This writes both arms side by side — `v1/` (published peak rule) and `oats/`
+(integral) — at the **same face count**, plus `survival.json` recording how much
+the two rules disagree. Add `--budget N` to cut to an explicit face count, which
+is how the equal-budget control above is produced.
 
-To save your optimized scene after training, just run:
+### 3. Evaluate the two operating points
 
-```
-python create_ply.py <output_model_path>
-```
-
-## Download optimized ply files (+-100MB)
-
-If you want to run some scene on a game engine for yourself, you can download the <em>Garden</em> and <em>Room</em> scenes from the following <a href="https://drive.google.com/drive/folders/1fHMm1-asUx8pJbKZC_3jHhBx5ZMoTDP3" target="_blank">link</a>.
-To achieve the highest visual quality, you should use 4× supersampling.
-Note that all PLY files store only RGB colors, which on average leads to a 2 dB drop in PSNR. For the highest visual quality, please refer to our viewer.
-
-## Download the Unity project to explore physics-based interactions and walkable scenes
-
-If you want to try out physics interactions or explore the environment with a character, you can download the Unity project from the link below: <a href="https://drive.google.com/drive/folders/12WHLj4nkdzafMsGnm7Otj58iWXYRQyKm?usp=sharing">link</a>. To achieve the highest visual quality, you should use 4× supersampling.
-Note that all PLY files store only RGB colors, which on average leads to a 2 dB drop in PSNR. For the highest visual quality, please refer to our viewer.
-
-## Object Extraction
-First, you need to create a mask of the objects you want to extract. 
-We created a lightweight utiliy script to create a json file for a given image.
 ```bash
-python annotate_points_boxes.py <Image.png>
+python -m sota.main_table_eval \
+  -s "$DATA_ROOT/garden" -m "$RUNS/cut__garden/oats" \
+  -i images_4 --eval --iteration 30000 \
+  --scene garden --arm ours_quality \
+  --output /path/to/eval/garden/quality
 ```
 
-This code relies on [Segment Anything Model 2 (SAM)](https://github.com/facebookresearch/sam2). You can follow the instructions in the repository to install it, or run the following command to install it automatically:
+The evaluator, not the checkpoint, fixes the deployment settings per arm:
+
+| Arm | Opacity floor | Supersampling | Tail cutoff | Absorb tail |
+|---|---:|---:|---:|:---:|
+| `stock` | 0.9999 | 4× | 0.0001 | no |
+| `ours_quality` | 0.8 | 4× | 0.01 | yes |
+| `ours_speed` | 0.8 | 3× | 0.01 | yes |
+
+It writes `result.json` (per-view and mean metrics, triangle and vertex counts,
+checkpoint bytes, source revision, GPU) and a `DONE` marker, and refuses to
+overwrite an existing output directory.
+
+## Reproduce every table in the paper
+
+Each launcher is resumable: re-running it picks up wherever it stopped, and
+skips scenes that already carry `DONE`.
+
+| Table | Launcher | What it does |
+|---|---|---|
+| Mip-NeRF 360 main table (9 scenes) | [`sota/batch42.sh`](sota/batch42.sh) | trains, cuts and scores both arms |
+| Equal-budget control (9 scenes) | [`sota/batch43.sh`](sota/batch43.sh) | re-cuts to the baseline's face count, evaluation only |
+| Tanks & Temples + Deep Blending | [`sota/batch44.sh`](sota/batch44.sh) | trains, cuts and scores 4 scenes |
+| Component ablation (9 scenes) | [`sota/batch45.sh`](sota/batch45.sh) | scores the training-only corner, evaluation only |
+| Paper tables (LaTeX) | [`results/make_tables.py`](results/make_tables.py) | regenerates `results/tables.tex` from the archived JSONs |
+
 ```bash
-pip install 'git+https://github.com/facebookresearch/sam2.git'
+GPU=0 \
+DATA_ROOT=/path/to/mipnerf360 \
+NAS_ROOT=/path/to/workspace \
+bash sota/batch42.sh
 ```
 
-Run the following command to get the model weights:
-```
-./checkpoints/download_ckpts.sh 
-```
+The aggregators refuse missing or mismatched scene/arm identities and write a
+JSON table only once every required result is present.
 
-To extract only the triangles corresponding to a specific object, run the following commands:
+## Model zoo and release artifacts
 
-```
-1. python -m segmentation.extract_images -s <path_to_scenes> -m <path_to_model> --eval 
-2. python -m segmentation.sam_mask_generator_json --data_path <path_to_images> --save_path <path_to_save_masks> --json_path <path_to_json_file>
-3. python -m segmentation.segment -s <path_to_scenes> -m <path_to_model> --eval --path_mask <path_to_masks> --object_id <object_id>
-4. python -m segmentation.run_single_object -s <path_to_scenes> -m <path_to_model> --eval --ratio_threshold 0.90
-5. python -m segmentation.create_ply <path_to_model>
-```
+**SoftTail release bundle:** [Google Drive](https://drive.google.com/drive/folders/1Gj7ykZadiJ2IuTUrN046vAEGZMSnA_PY)
 
-The --ratio_threshold parameter controls how confidently triangles are considered part of the object. Higher values render only triangles that are very likely to belong to the object, while lower values are recommended for object removal and higher values for object extraction.
+| Contents | Notes |
+|---|---|
+| SoftTail checkpoints, 13 scenes | `point_cloud_state_dict.pt`, loadable by `sota/main_table_eval.py` |
+| Formal result JSONs and aggregate tables | per-view metrics for every scene and arm |
+| Equal-budget and ablation evidence | the JSONs the paper tables are generated from |
+| `SHA256SUMS` | verify every archive before use |
 
-1. Extracts the training views used for segmentation.  
-2. Runs SAM on each view to generate object masks.  
-3. Identifying which triangles belong to the selected object.  
-4. Loads and renders only the triangles belonging to the object on the training views.  
-5. Saves the extracted triangles as PLY file.
+Baseline weights are not duplicated: the launchers above reproduce them from the
+same pipeline. Raw third-party datasets are intentionally not redistributed.
 
+## Reproducibility and data availability
 
-## Related Work
+Code, launchers and the exact protocol are versioned here; generated
+checkpoints, machine-readable results and figure evidence are in the release
+bundle. Mip-NeRF 360, Tanks & Temples and Deep Blending remain available from
+their official sources under their own terms. See
+[`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) for artifact mapping,
+provenance and the data-availability statement.
 
-Check out related work that led to our project:
+## Citation
 
-- **[Triangle Splatting for Real-Time Radiance Field Rendering](https://trianglesplatting.github.io/)**
-- **[3D Convex Splatting: Radiance Field Rendering with 3D Smooth Convexes](https://convexsplatting.github.io/)**
-- **[DMesh++: An Efficient Differentiable Mesh for Complex Shapes](https://sonsang.github.io/dmesh2-project/)**
-- **[DMesh: A Differentiable Mesh Representation](https://sonsang.github.io/dmesh-project/)**
-- **[MiLo: Mesh-In-the-Loop Gaussian Splatting for Detailed and Efficient Surface Reconstruction](https://anttwo.github.io/milo/)**
-
-
-
-
-## BibTeX
-If you find our work interesting or use any part of it, please cite our paper:
 ```bibtex
-@article{Held2025MeshSplatting,
-title = {MeshSplatting: Differentiable Rendering with Opaque Meshes},
-author = {Held, Jan and Son, Sanghyun and Vandeghen, Renaud and Rebain, Daniel and Gadelha, Matheus and Zhou, Yi and Cioppa, Anthony and G Lin, Ming C. and Van Droogenbroeck, Marc and Tagliasacchi, Andrea},
-journal = {arXiv},
-year = {2025}
+@misc{softtail,
+  title  = {SoftTail: Opacity-Relaxed Connected Mesh Splatting with
+            Integrated-Contribution Triangle Survival},
+  author = {Liu, Zhao},
+  year   = {2026},
+  note   = {Code: https://github.com/ChizkiyahuOhayon/mesh-splatting-texel}
 }
 ```
 
-And related work that strongly motivated and inspired MeshSplatting:
+## Acknowledgements and licence
 
-```bibtex
-@article{Held2025Triangle,
-title = {Triangle Splatting for Real-Time Radiance Field Rendering},
-author = {Held, Jan and Vandeghen, Renaud and Deliege, Adrien and Hamdi, Abdullah and Cioppa, Anthony and Giancola, Silvio and Vedaldi, Andrea and Ghanem, Bernard and Tagliasacchi, Andrea and Van Droogenbroeck, Marc},
-journal = {arXiv},
-year = {2025},
-}
-```
-
-```bibtex
-@InProceedings{held20243d,
-title={3D Convex Splatting: Radiance Field Rendering with 3D Smooth Convexes},
-  author={Held, Jan and Vandeghen, Renaud and Hamdi, Abdullah and Deliege, Adrien and Cioppa, Anthony and Giancola, Silvio and Vedaldi, Andrea and Ghanem, Bernard and Van Droogenbroeck, Marc},
-  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-  year = {2025},
-}
-```
-
-## Acknowledgements
-J. Held is funded by the F.R.S.-FNRS. The present research benefited from computational resources made available on Lucia, the Tier-1 supercomputer of the Walloon Region, infrastructure funded by the Walloon Region under the grant agreement n°1910247.
-
-Finally, we thank Bernhard Kerbl and George Kopanas for their helpful feedback and for proofreading the paper.
+SoftTail is built on the official
+[MeshSplatting](https://github.com/meshsplatting/mesh-splatting) implementation,
+which in turn builds on 3D Gaussian Splatting. We thank their authors for
+releasing the connected colored-mesh representation, the training pipeline and
+the differentiable triangle rasterizer. Please cite MeshSplatting when using
+this repository, and consult [`LICENSE.md`](LICENSE.md) and
+[`LICENSE_GS.md`](LICENSE_GS.md) for the applicable terms.
