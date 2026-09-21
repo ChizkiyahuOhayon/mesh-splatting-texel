@@ -6,10 +6,12 @@ done. Both rules see the same trained model and the same renders, and OATS
 keeps as many faces as v1, so the two output models differ only in *which*
 faces survived. See handover/OATS_PLAN.md and sota/survival.py.
 
-``--budget N`` writes a third copy, ``<out>/matched``: the *published* rule cut
-to an explicit face count instead of its own. A run whose training kept more
-faces than its control can then be scored at the control's size, which
-separates a better choice of survivors from a larger mesh.
+``--budget N`` writes two more copies at an explicit face count instead of the
+rule's own: ``<out>/matched`` (the *published* peak rule) and
+``<out>/matched_oats`` (the integral). A run whose training kept more faces than
+its control can then be scored at the control's size, which separates a better
+choice of survivors from a larger mesh. ``matched_oats`` is the full method at
+the control's budget; ``matched`` isolates the training-time statistic alone.
 
 Writes two evaluable model directories (``<out>/v1`` and ``<out>/oats``, each
 with ``point_cloud/iteration_<final>/``) and ``<out>/survival.json``. The v1
@@ -83,7 +85,7 @@ def run(dataset, pipeline, out, budget=None):
     keep_v1 = v1_keep(peak)
     keep_oats, stats = budget_matched_keep(integral, int(keep_v1.sum()), return_stats=True)
 
-    arms = ["v1", "oats"] + (["matched"] if budget else [])
+    arms = ["v1", "oats"] + (["matched", "matched_oats"] if budget else [])
     out.mkdir(parents=True, exist_ok=False)
     for arm in arms:
         (out / arm).mkdir()
@@ -107,20 +109,27 @@ def run(dataset, pipeline, out, budget=None):
             f"offline v1 cleanup kept {faces_v1} faces, training kept {faces_trained}, "
             "or the same count with different faces")
 
-    faces_matched = None
+    faces_matched = faces_matched_oats = None
     if budget:
         # Same statistic as the published cleanup, cut to the given count: only
         # the mesh size differs from the v1 copy above.
         keep_matched = budget_matched_keep(peak, int(budget))
         _, triangles = _load(dataset)
         faces_matched = _prune_and_save(triangles, keep_matched, out / "matched", iteration)
+        # The integral at the same count: the full method, sized like the control.
+        keep_matched_oats = budget_matched_keep(integral, int(budget))
+        _, triangles = _load(dataset)
+        faces_matched_oats = _prune_and_save(
+            triangles, keep_matched_oats, out / "matched_oats", iteration,
+            extra={"face_survival_score": integral[keep_matched_oats].cpu()})
 
     report = {
         "run": str(run_dir),
         "cleanup_scaling": meta["cleanup_scaling"],
         "faces_before": int(peak.numel()),
         "faces_kept": ({"v1": faces_v1, "oats": faces_oats, "trained": faces_trained}
-                       | ({"matched": faces_matched} if faces_matched is not None else {})),
+                       | ({"matched": faces_matched, "matched_oats": faces_matched_oats}
+                          if faces_matched is not None else {})),
         "disagreement": rule_disagreement(keep_v1, keep_oats),
         "kept_with_zero_score": stats["kept_with_zero_score"],
         "integral": {"v1_kept_mean": float(integral[keep_v1].mean()),
@@ -136,7 +145,7 @@ if __name__ == "__main__":
     pipeline = PipelineParams(parser)
     parser.add_argument("--out", required=True)
     parser.add_argument("--budget", type=int, default=None,
-                        help="also write <out>/matched: the published rule cut to this face count")
+                        help="also write <out>/matched and <out>/matched_oats at this face count")
     parser.add_argument("--quiet", action="store_true")
     parsed = get_combined_args(parser)
     safe_state(parsed.quiet)
