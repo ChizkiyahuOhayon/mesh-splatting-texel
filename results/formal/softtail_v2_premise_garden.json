@@ -1,0 +1,54 @@
+{
+  "experiment": "softtail-v2-visibility-premise-check-v1",
+  "scene": "garden",
+  "model": "/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_floor_01/opacity08__garden",
+  "iteration": 30000,
+  "source_revision": "72a1ab0469defdaa38c27a023efa36d6b60fe3e1",
+  "training_views": 161,
+  "vertices": 3064691,
+  "faces": 6380742,
+  "vertices_seen": 3064691,
+  "checkpoint_opacity_floor": 0.8,
+  "per_vertex_floor": false,
+  "fraction_at_floor": 0.535907506942749,
+  "fraction_opaque": 0.3448491096496582,
+  "mean_d_at_floor": 0.18214423954486847,
+  "mean_d_opaque": 0.16694416105747223,
+  "auc_low_dominance_predicts_at_floor": 0.45649928977763865,
+  "auc_seen_only": 0.45649928977763865,
+  "d_v_histogram_seen": [
+    1115455.0,
+    976294.0,
+    480421.0,
+    202317.0,
+    105859.0,
+    64287.0,
+    42275.0,
+    29334.0,
+    21658.0,
+    26791.0
+  ],
+  "views": [
+    {
+      "view": "DSC07956",
+      "foreground_pixels": 1087268,
+      "spearman_dominance_vs_gain": 0.005539790236547763,
+      "mean_gain_low_dominance": 0.0003176472964696586,
+      "mean_gain_high_dominance": 0.0005890440079383552
+    },
+    {
+      "view": "DSC08020",
+      "foreground_pixels": 1089459,
+      "spearman_dominance_vs_gain": -0.0067416139111157675,
+      "mean_gain_low_dominance": 0.00022352069208864123,
+      "mean_gain_high_dominance": -0.0004543424292933196
+    },
+    {
+      "view": "DSC08084",
+      "foreground_pixels": 1089287,
+      "spearman_dominance_vs_gain": -0.007014904415918776,
+      "mean_gain_low_dominance": 0.0005629682564176619,
+      "mean_gain_high_dominance": -0.00024081025912892073
+    }
+  ]
+}

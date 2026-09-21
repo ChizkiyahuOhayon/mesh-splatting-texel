@@ -1,0 +1,114 @@
+{
+  "experiment": "softtail-nine-scene-equal-budget",
+  "rows": [
+    {
+      "scene": "bicycle",
+      "v1_psnr": 23.23483299255371,
+      "v1_faces": 5036406,
+      "matched_psnr": 23.343669204711915,
+      "matched_faces": 5036406,
+      "matched_ssim": 0.66498171210289,
+      "matched_lpips_vgg": 0.3207330572605133,
+      "free_psnr": 23.342412796020508,
+      "free_faces": 5642013
+    },
+    {
+      "scene": "flowers",
+      "v1_psnr": 19.374407334761187,
+      "v1_faces": 4340802,
+      "matched_psnr": 19.649546796625312,
+      "matched_faces": 4340802,
+      "matched_ssim": 0.5154398612000726,
+      "matched_lpips_vgg": 0.3831047144803134,
+      "free_psnr": 19.679152748801492,
+      "free_faces": 4755892
+    },
+    {
+      "scene": "garden",
+      "v1_psnr": 25.00988745689392,
+      "v1_faces": 6380742,
+      "matched_psnr": 25.04590392112732,
+      "matched_faces": 6380742,
+      "matched_ssim": 0.7793137952685356,
+      "matched_lpips_vgg": 0.19855453198154768,
+      "free_psnr": 25.045692682266235,
+      "free_faces": 6546893
+    },
+    {
+      "scene": "stump",
+      "v1_psnr": 25.15229880809784,
+      "v1_faces": 4967374,
+      "matched_psnr": 25.33220672607422,
+      "matched_faces": 4967374,
+      "matched_ssim": 0.7056757621467113,
+      "matched_lpips_vgg": 0.28925849217921495,
+      "free_psnr": 25.331395983695984,
+      "free_faces": 5283589
+    },
+    {
+      "scene": "treehill",
+      "v1_psnr": 20.782628589206272,
+      "v1_faces": 4888988,
+      "matched_psnr": 20.918784035576714,
+      "matched_faces": 4888988,
+      "matched_ssim": 0.554798992143737,
+      "matched_lpips_vgg": 0.4032783524857627,
+      "free_psnr": 20.919293297661675,
+      "free_faces": 5211638
+    },
+    {
+      "scene": "room",
+      "v1_psnr": 28.54523399548653,
+      "v1_faces": 4646148,
+      "matched_psnr": 28.798705272185497,
+      "matched_faces": 4646148,
+      "matched_ssim": 0.8837413864258008,
+      "matched_lpips_vgg": 0.2532661064313008,
+      "free_psnr": 28.818321179120968,
+      "free_faces": 5673066
+    },
+    {
+      "scene": "counter",
+      "v1_psnr": 26.51263370513916,
+      "v1_faces": 4015827,
+      "matched_psnr": 26.705901018778484,
+      "matched_faces": 4015827,
+      "matched_ssim": 0.8572518706321717,
+      "matched_lpips_vgg": 0.2576451743642489,
+      "free_psnr": 26.739128875732423,
+      "free_faces": 5093596
+    },
+    {
+      "scene": "kitchen",
+      "v1_psnr": 27.570042310442243,
+      "v1_faces": 4371689,
+      "matched_psnr": 27.72573209490095,
+      "matched_faces": 4371689,
+      "matched_ssim": 0.873624621118818,
+      "matched_lpips_vgg": 0.19968154302665164,
+      "free_psnr": 27.754535675048828,
+      "free_faces": 5817276
+    },
+    {
+      "scene": "bonsai",
+      "v1_psnr": 28.45442529626795,
+      "v1_faces": 5082645,
+      "matched_psnr": 28.845949276073558,
+      "matched_faces": 5082645,
+      "matched_ssim": 0.8929978141913543,
+      "matched_lpips_vgg": 0.26256624307181387,
+      "free_psnr": 28.85905270963102,
+      "free_faces": 5516309
+    }
+  ],
+  "mean_psnr_gain_db": {
+    "matched_to_v1_budget": 0.19222309524501727,
+    "own_budget": 0.20584393990336894
+  },
+  "psnr_wins": {
+    "matched_to_v1_budget": 9,
+    "own_budget": 9
+  },
+  "scenes": 9,
+  "capacity_share": 0.0661707343181724
+}

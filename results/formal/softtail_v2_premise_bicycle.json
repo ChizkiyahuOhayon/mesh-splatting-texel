@@ -1,0 +1,54 @@
+{
+  "experiment": "softtail-v2-visibility-premise-check-v1",
+  "scene": "bicycle",
+  "model": "/home/smbu/dy/nas/meshsplatting_smbu/experiments/opacity_floor_01/opacity08__bicycle",
+  "iteration": 30000,
+  "source_revision": "72a1ab0469defdaa38c27a023efa36d6b60fe3e1",
+  "training_views": 169,
+  "vertices": 2947143,
+  "faces": 5036406,
+  "vertices_seen": 2947143,
+  "checkpoint_opacity_floor": 0.8,
+  "per_vertex_floor": false,
+  "fraction_at_floor": 0.44383662939071655,
+  "fraction_opaque": 0.43618786334991455,
+  "mean_d_at_floor": 0.20690374076366425,
+  "mean_d_opaque": 0.1980428844690323,
+  "auc_low_dominance_predicts_at_floor": 0.48550657576915357,
+  "auc_seen_only": 0.48550657576915357,
+  "d_v_histogram_seen": [
+    1057003.0,
+    759968.0,
+    436534.0,
+    248881.0,
+    162131.0,
+    103222.0,
+    63936.0,
+    43832.0,
+    32245.0,
+    39391.0
+  ],
+  "views": [
+    {
+      "view": "_DSC8679",
+      "foreground_pixels": 1016302,
+      "spearman_dominance_vs_gain": 0.025024168613023527,
+      "mean_gain_low_dominance": 0.0001339756272500381,
+      "mean_gain_high_dominance": 0.001905012526549399
+    },
+    {
+      "view": "_DSC8744",
+      "foreground_pixels": 1016601,
+      "spearman_dominance_vs_gain": 0.016685368267669237,
+      "mean_gain_low_dominance": 0.0011543616419658065,
+      "mean_gain_high_dominance": 0.002028633374720812
+    },
+    {
+      "view": "_DSC8808",
+      "foreground_pixels": 1016783,
+      "spearman_dominance_vs_gain": 0.005678553742305574,
+      "mean_gain_low_dominance": 0.0007597857038490474,
+      "mean_gain_high_dominance": 0.0006227522389963269
+    }
+  ]
+}

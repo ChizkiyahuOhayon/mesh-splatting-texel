@@ -1,0 +1,48 @@
+{
+  "experiment": "softtail-integrated-importance-equal-budget",
+  "rows": [
+    {
+      "scene": "room",
+      "v1_psnr": 28.54523399548653,
+      "v1_faces": 4646148,
+      "matched_psnr": 28.756009224133614,
+      "matched_faces": 4646148,
+      "oats_psnr": 28.818321179120968,
+      "oats_faces": 5673066,
+      "trained_psnr": 28.767674666184647,
+      "trained_faces": 5673066
+    },
+    {
+      "scene": "bicycle",
+      "v1_psnr": 23.23483299255371,
+      "v1_faces": 5036406,
+      "matched_psnr": 23.335495376586913,
+      "matched_faces": 5036406,
+      "oats_psnr": 23.342412796020508,
+      "oats_faces": 5642013,
+      "trained_psnr": 23.333733367919923,
+      "trained_faces": 5642013
+    },
+    {
+      "scene": "garden",
+      "v1_psnr": 25.00988745689392,
+      "v1_faces": 6380742,
+      "matched_psnr": 25.017576773961384,
+      "matched_faces": 6380742,
+      "oats_psnr": 25.045692682266235,
+      "oats_faces": 6546893,
+      "trained_psnr": 25.01853330930074,
+      "trained_faces": 6546893
+    }
+  ],
+  "mean_psnr_gain_db": {
+    "matched": 0.1063756432492499,
+    "oats": 0.13882407082451684,
+    "trained": 0.10999563282371601
+  },
+  "psnr_wins": {
+    "matched": 3,
+    "oats": 3,
+    "trained": 3
+  }
+}

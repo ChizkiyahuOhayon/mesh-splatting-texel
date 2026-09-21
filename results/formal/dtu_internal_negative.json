@@ -1,0 +1,350 @@
+{
+  "experiment": "formal-dtu-geometry-v1",
+  "source_revision": "a633578fc2b05307d7f3038864858eb25d55a960",
+  "scans": [
+    24,
+    37,
+    40,
+    55,
+    63,
+    65,
+    69,
+    83,
+    97,
+    105,
+    106,
+    110,
+    114,
+    118,
+    122
+  ],
+  "rows": {
+    "scan24": {
+      "stock": {
+        "accuracy": 2.0454848242125774,
+        "completeness": 0.4526644963419916,
+        "chamfer": 1.2490746602772844,
+        "checkpoint_bytes": 42908959,
+        "triangles": 360091,
+        "vertices": 164725
+      },
+      "ours_quality": {
+        "accuracy": 2.114704982565725,
+        "completeness": 0.4701295406218545,
+        "chamfer": 1.2924172615937897,
+        "checkpoint_bytes": 35950879,
+        "triangles": 292487,
+        "vertices": 139073
+      }
+    },
+    "scan37": {
+      "stock": {
+        "accuracy": 1.9124435634352284,
+        "completeness": 0.4839810198757441,
+        "chamfer": 1.1982122916554863,
+        "checkpoint_bytes": 55012063,
+        "triangles": 415030,
+        "vertices": 216574
+      },
+      "ours_quality": {
+        "accuracy": 1.9244086607341766,
+        "completeness": 0.5037074481964308,
+        "chamfer": 1.2140580544653037,
+        "checkpoint_bytes": 48429919,
+        "triangles": 353408,
+        "vertices": 192039
+      }
+    },
+    "scan40": {
+      "stock": {
+        "accuracy": 2.3606990145722713,
+        "completeness": 0.4140074725760307,
+        "chamfer": 1.387353243574151,
+        "checkpoint_bytes": 40588319,
+        "triangles": 301759,
+        "vertices": 160298
+      },
+      "ours_quality": {
+        "accuracy": 2.36959836129218,
+        "completeness": 0.41512832546501377,
+        "chamfer": 1.392363343378597,
+        "checkpoint_bytes": 34225119,
+        "triangles": 248022,
+        "vertices": 135907
+      }
+    },
+    "scan55": {
+      "stock": {
+        "accuracy": 2.3902246232750763,
+        "completeness": 0.35516636330345625,
+        "chamfer": 1.3726954932892663,
+        "checkpoint_bytes": 50257823,
+        "triangles": 428461,
+        "vertices": 192167
+      },
+      "ours_quality": {
+        "accuracy": 2.4482053201401057,
+        "completeness": 0.35234654221941436,
+        "chamfer": 1.4002759311797601,
+        "checkpoint_bytes": 43239135,
+        "triangles": 351396,
+        "vertices": 167316
+      }
+    },
+    "scan63": {
+      "stock": {
+        "accuracy": 2.706504908850718,
+        "completeness": 0.7437138664980572,
+        "chamfer": 1.7251093876743875,
+        "checkpoint_bytes": 45915103,
+        "triangles": 311249,
+        "vertices": 184813
+      },
+      "ours_quality": {
+        "accuracy": 2.759464080484819,
+        "completeness": 0.7237163935885679,
+        "chamfer": 1.7415902370366936,
+        "checkpoint_bytes": 42383455,
+        "triangles": 274625,
+        "vertices": 172060
+      }
+    },
+    "scan65": {
+      "stock": {
+        "accuracy": 2.6136254748632197,
+        "completeness": 0.8002738893029374,
+        "chamfer": 1.7069496820830785,
+        "checkpoint_bytes": 48064415,
+        "triangles": 356620,
+        "vertices": 189912
+      },
+      "ours_quality": {
+        "accuracy": 2.6442077192616096,
+        "completeness": 0.8090198896943802,
+        "chamfer": 1.7266138044779948,
+        "checkpoint_bytes": 39698335,
+        "triangles": 287688,
+        "vertices": 157644
+      }
+    },
+    "scan69": {
+      "stock": {
+        "accuracy": 2.37210874222884,
+        "completeness": 0.8311892114730047,
+        "chamfer": 1.6016489768509223,
+        "checkpoint_bytes": 40914399,
+        "triangles": 340387,
+        "vertices": 157409
+      },
+      "ours_quality": {
+        "accuracy": 2.369159015091594,
+        "completeness": 0.8580704960961609,
+        "chamfer": 1.6136147555938773,
+        "checkpoint_bytes": 33463263,
+        "triangles": 262401,
+        "vertices": 130585
+      }
+    },
+    "scan83": {
+      "stock": {
+        "accuracy": 2.37682932031978,
+        "completeness": 1.4281733417705498,
+        "chamfer": 1.9025013310451648,
+        "checkpoint_bytes": 51194911,
+        "triangles": 380003,
+        "vertices": 202264
+      },
+      "ours_quality": {
+        "accuracy": 2.33372223629004,
+        "completeness": 1.4210623084497758,
+        "chamfer": 1.877392272369908,
+        "checkpoint_bytes": 44775839,
+        "triangles": 315192,
+        "vertices": 178881
+      }
+    },
+    "scan97": {
+      "stock": {
+        "accuracy": 2.1312181360587026,
+        "completeness": 1.0927510178650357,
+        "chamfer": 1.611984576961869,
+        "checkpoint_bytes": 27768351,
+        "triangles": 233511,
+        "vertices": 106539
+      },
+      "ours_quality": {
+        "accuracy": 2.2949630153253286,
+        "completeness": 1.141879309638555,
+        "chamfer": 1.7184211624819419,
+        "checkpoint_bytes": 24396575,
+        "triangles": 199928,
+        "vertices": 94204
+      }
+    },
+    "scan105": {
+      "stock": {
+        "accuracy": 2.0227544203903514,
+        "completeness": 0.5025206994890669,
+        "chamfer": 1.262637559939709,
+        "checkpoint_bytes": 42705375,
+        "triangles": 341473,
+        "vertices": 165894
+      },
+      "ours_quality": {
+        "accuracy": 2.0268006199494457,
+        "completeness": 0.6049787956034133,
+        "chamfer": 1.3158897077764296,
+        "checkpoint_bytes": 36569631,
+        "triangles": 274503,
+        "vertices": 144123
+      }
+    },
+    "scan106": {
+      "stock": {
+        "accuracy": 2.497413313681639,
+        "completeness": 0.5489688159196859,
+        "chamfer": 1.5231910648006626,
+        "checkpoint_bytes": 36760095,
+        "triangles": 296441,
+        "vertices": 142508
+      },
+      "ours_quality": {
+        "accuracy": 2.638290370397556,
+        "completeness": 0.5933827663944221,
+        "chamfer": 1.6158365683959892,
+        "checkpoint_bytes": 28128671,
+        "triangles": 216376,
+        "vertices": 110249
+      }
+    },
+    "scan110": {
+      "stock": {
+        "accuracy": 3.6126203288561203,
+        "completeness": 2.332181118663147,
+        "chamfer": 2.972400723759634,
+        "checkpoint_bytes": 30505823,
+        "triangles": 235746,
+        "vertices": 119442
+      },
+      "ours_quality": {
+        "accuracy": 3.6639992178783656,
+        "completeness": 2.73899409409469,
+        "chamfer": 3.201496655986528,
+        "checkpoint_bytes": 24956127,
+        "triangles": 178767,
+        "vertices": 99335
+      }
+    },
+    "scan114": {
+      "stock": {
+        "accuracy": 2.382343464203015,
+        "completeness": 0.5648706523732354,
+        "chamfer": 1.473607058288125,
+        "checkpoint_bytes": 24548959,
+        "triangles": 198340,
+        "vertices": 95119
+      },
+      "ours_quality": {
+        "accuracy": 2.4771907174937087,
+        "completeness": 0.6065898845218419,
+        "chamfer": 1.5418903010077754,
+        "checkpoint_bytes": 20920607,
+        "triangles": 159639,
+        "vertices": 82141
+      }
+    },
+    "scan118": {
+      "stock": {
+        "accuracy": 2.468617461029675,
+        "completeness": 0.5366818219154307,
+        "chamfer": 1.5026496414725528,
+        "checkpoint_bytes": 34881439,
+        "triangles": 274744,
+        "vertices": 135979
+      },
+      "ours_quality": {
+        "accuracy": 2.5586802277114953,
+        "completeness": 0.5415166186425409,
+        "chamfer": 1.550098423177018,
+        "checkpoint_bytes": 29209631,
+        "triangles": 217343,
+        "vertices": 115333
+      }
+    },
+    "scan122": {
+      "stock": {
+        "accuracy": 2.4850528588698917,
+        "completeness": 0.4397700178189696,
+        "chamfer": 1.4624114383444307,
+        "checkpoint_bytes": 40805343,
+        "triangles": 281539,
+        "vertices": 163675
+      },
+      "ours_quality": {
+        "accuracy": 2.360453842589455,
+        "completeness": 0.4623476855295939,
+        "chamfer": 1.4114007640595243,
+        "checkpoint_bytes": 36263967,
+        "triangles": 250909,
+        "vertices": 145375
+      }
+    }
+  },
+  "means": {
+    "stock": {
+      "accuracy": 2.4251960303231406,
+      "completeness": 0.7684609203457562,
+      "chamfer": 1.5968284753344484,
+      "checkpoint_bytes": 40855425.13333333,
+      "triangles": 317026.26666666666,
+      "vertices": 159821.2
+    },
+    "ours_quality": {
+      "accuracy": 2.465589892480374,
+      "completeness": 0.8161913399171105,
+      "chamfer": 1.6408906161987422,
+      "checkpoint_bytes": 34840743.53333333,
+      "triangles": 258845.6,
+      "vertices": 137617.66666666666
+    }
+  },
+  "delta_mean_vs_stock": {
+    "ours_quality": {
+      "accuracy": 0.04039386215723351,
+      "completeness": 0.047730419571354266,
+      "chamfer": 0.04406214086429383,
+      "checkpoint_bytes": -6014681.6000000015,
+      "triangles": -58180.66666666666,
+      "vertices": -22203.533333333355
+    }
+  },
+  "win_counts_vs_stock": {
+    "ours_quality": {
+      "checkpoint_bytes": 15,
+      "vertices": 15,
+      "accuracy": 3,
+      "completeness": 3,
+      "chamfer": 2,
+      "triangles": 15
+    }
+  },
+  "paper_chamfer": {
+    "scan24": 0.77,
+    "scan37": 0.72,
+    "scan40": 0.74,
+    "scan55": 0.6,
+    "scan63": 0.89,
+    "scan65": 1.0,
+    "scan69": 0.81,
+    "scan83": 1.09,
+    "scan97": 1.19,
+    "scan105": 0.58,
+    "scan106": 0.68,
+    "scan110": 0.93,
+    "scan114": 0.63,
+    "scan118": 0.66,
+    "scan122": 0.59
+  },
+  "paper_mean_chamfer": 0.79,
+  "delta_mean_chamfer_vs_paper": 0.8508906161987422
+}

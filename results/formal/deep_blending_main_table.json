@@ -1,0 +1,149 @@
+{
+  "experiment": "formal-deep-blending-main-table-v1",
+  "scenes": [
+    "drjohnson",
+    "playroom"
+  ],
+  "rows": {
+    "drjohnson": {
+      "stock": {
+        "l1": 0.02929177764577396,
+        "psnr": 26.47169170957623,
+        "ssim": 0.8296075391046929,
+        "lpips_vgg": 0.36840161410245026,
+        "fps": 21.02369239504755,
+        "checkpoint_bytes": 879472479,
+        "triangles": 8512506,
+        "vertices": 3246002
+      },
+      "ours_speed": {
+        "l1": 0.028380650152085407,
+        "psnr": 26.723353761615176,
+        "ssim": 0.837919244260499,
+        "lpips_vgg": 0.3601942748734445,
+        "fps": 27.126103871193664,
+        "checkpoint_bytes": 719156319,
+        "triangles": 6879658,
+        "vertices": 2663657
+      },
+      "ours_quality": {
+        "l1": 0.028336232753865646,
+        "psnr": 26.73860469008937,
+        "ssim": 0.838782402602109,
+        "lpips_vgg": 0.35860112761006213,
+        "fps": 22.364760486830082,
+        "checkpoint_bytes": 719156319,
+        "triangles": 6879658,
+        "vertices": 2663657
+      }
+    },
+    "playroom": {
+      "stock": {
+        "l1": 0.02616303555410484,
+        "psnr": 27.70557110885094,
+        "ssim": 0.8542453708319828,
+        "lpips_vgg": 0.3019124598338686,
+        "fps": 22.205740023446406,
+        "checkpoint_bytes": 865992799,
+        "triangles": 8078660,
+        "vertices": 3231255
+      },
+      "ours_speed": {
+        "l1": 0.025505288118689226,
+        "psnr": 27.972872668299182,
+        "ssim": 0.8576277186130655,
+        "lpips_vgg": 0.2961809398799107,
+        "fps": 26.14701076817455,
+        "checkpoint_bytes": 809477471,
+        "triangles": 7479871,
+        "vertices": 3028637
+      },
+      "ours_quality": {
+        "l1": 0.025461670942604542,
+        "psnr": 27.994035457742626,
+        "ssim": 0.8585358837555195,
+        "lpips_vgg": 0.29469157601224966,
+        "fps": 21.94979645138967,
+        "checkpoint_bytes": 809477471,
+        "triangles": 7479871,
+        "vertices": 3028637
+      }
+    }
+  },
+  "means": {
+    "stock": {
+      "l1": 0.0277274065999394,
+      "psnr": 27.088631409213583,
+      "ssim": 0.8419264549683378,
+      "lpips_vgg": 0.33515703696815946,
+      "fps": 21.61471620924698,
+      "checkpoint_bytes": 872732639.0,
+      "triangles": 8295583.0,
+      "vertices": 3238628.5
+    },
+    "ours_speed": {
+      "l1": 0.026942969135387317,
+      "psnr": 27.34811321495718,
+      "ssim": 0.8477734814367823,
+      "lpips_vgg": 0.3281876073766776,
+      "fps": 26.63655731968411,
+      "checkpoint_bytes": 764316895.0,
+      "triangles": 7179764.5,
+      "vertices": 2846147.0
+    },
+    "ours_quality": {
+      "l1": 0.026898951848235094,
+      "psnr": 27.366320073916,
+      "ssim": 0.8486591431788142,
+      "lpips_vgg": 0.32664635181115587,
+      "fps": 22.157278469109876,
+      "checkpoint_bytes": 764316895.0,
+      "triangles": 7179764.5,
+      "vertices": 2846147.0
+    }
+  },
+  "delta_mean_vs_stock": {
+    "ours_speed": {
+      "l1": -0.0007844374645520832,
+      "psnr": 0.25948180574359725,
+      "ssim": 0.005847026468444483,
+      "lpips_vgg": -0.006969429591481835,
+      "fps": 5.02184111043713,
+      "checkpoint_bytes": -108415744.0,
+      "triangles": -1115818.5,
+      "vertices": -392481.5
+    },
+    "ours_quality": {
+      "l1": -0.0008284547517043057,
+      "psnr": 0.27768866470241704,
+      "ssim": 0.006732688210476345,
+      "lpips_vgg": -0.008510685157003595,
+      "fps": 0.5425622598628976,
+      "checkpoint_bytes": -108415744.0,
+      "triangles": -1115818.5,
+      "vertices": -392481.5
+    }
+  },
+  "win_counts_vs_stock": {
+    "ours_speed": {
+      "l1": 2,
+      "psnr": 2,
+      "ssim": 2,
+      "lpips_vgg": 2,
+      "fps": 2,
+      "checkpoint_bytes": 2,
+      "triangles": 2,
+      "vertices": 2
+    },
+    "ours_quality": {
+      "l1": 2,
+      "psnr": 2,
+      "ssim": 2,
+      "lpips_vgg": 2,
+      "fps": 1,
+      "checkpoint_bytes": 2,
+      "triangles": 2,
+      "vertices": 2
+    }
+  }
+}
