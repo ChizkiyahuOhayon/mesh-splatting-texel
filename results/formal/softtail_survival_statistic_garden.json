@@ -1,0 +1,33 @@
+{
+  "run": "/home/smbu/dy/nas/meshsplatting_smbu/experiments/softtail_integrated_01/integrated__garden",
+  "faces": 11745112,
+  "faces_kept": {
+    "v1": 6546893,
+    "oats": 6546893
+  },
+  "disagreement": {
+    "symmetric_difference": 1251068,
+    "fraction": 0.10651818390492998,
+    "jaccard": 0.8255725711812751
+  },
+  "kept_only_by_peak": {
+    "faces": 625534,
+    "peak_mean": 0.8056018352508545,
+    "integral_mean": 4.699069023132324,
+    "integral_median": 4.630099773406982
+  },
+  "kept_only_by_integral": {
+    "faces": 625534,
+    "peak_mean": 0.15716391801834106,
+    "integral_mean": 39.53883361816406,
+    "integral_median": 20.95943832397461
+  },
+  "kept_by_both": {
+    "faces": 5921359,
+    "peak_mean": 0.8058615326881409,
+    "integral_mean": 467.1959228515625,
+    "integral_median": 135.15345764160156
+  },
+  "spearman_peak_vs_integral": 0.8502794523895885,
+  "sampled": 200000
+}

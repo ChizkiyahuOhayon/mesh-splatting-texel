@@ -1599,3 +1599,5 @@ yet been implemented or launched. v1 remains the completed 13-scene control.
 
 - **What the two statistics actually disagree about** (`sota/survival_statistic.py`, room, 11,429,090 faces, 200k sampled for the figure `assets/softtail_statistic.png`): Spearman 0.857, and **12.23% of the survivors differ** (698,811 faces swapped each way at an identical budget). Faces kept only by the peak rule have mean peak 0.804 but mean integral 12.9; faces kept only by the integral have mean peak 0.155 and mean integral 139.1 — **10.8× more delivered light from faces that are five times dimmer at their best pixel**. The peak rule's survivors carry 98.4% of the scene's total integrated contribution, the integral's 99.7%.
 
+- The same measurement on bicycle and garden (`softtail_survival_statistic_<scene>.json`) reproduces it: swap 10.92% / 10.65% of survivors, Spearman 0.810 / 0.850, and the faces kept only by the integral carry 8.2× / 8.4× the integrated contribution of the faces kept only by the peak while having ~5× lower peak. The disagreement is a property of the representation, not of one scene.
+

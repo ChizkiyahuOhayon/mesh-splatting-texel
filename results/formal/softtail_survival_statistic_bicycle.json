@@ -1,0 +1,33 @@
+{
+  "run": "/home/smbu/dy/nas/meshsplatting_smbu/experiments/softtail_integrated_01/integrated__bicycle",
+  "faces": 10391545,
+  "faces_kept": {
+    "v1": 5642013,
+    "oats": 5642013
+  },
+  "disagreement": {
+    "symmetric_difference": 1134654,
+    "fraction": 0.1091901156180337,
+    "jaccard": 0.8172665693938487
+  },
+  "kept_only_by_peak": {
+    "faces": 567327,
+    "peak_mean": 0.821362316608429,
+    "integral_mean": 5.6001877784729,
+    "integral_median": 5.504261493682861
+  },
+  "kept_only_by_integral": {
+    "faces": 567327,
+    "peak_mean": 0.15912853181362152,
+    "integral_mean": 46.158626556396484,
+    "integral_median": 25.53534698486328
+  },
+  "kept_by_both": {
+    "faces": 5074686,
+    "peak_mean": 0.8175357580184937,
+    "integral_mean": 532.0546875,
+    "integral_median": 152.6464080810547
+  },
+  "spearman_peak_vs_integral": 0.8102099419822737,
+  "sampled": 200000
+}

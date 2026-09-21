@@ -1,0 +1,33 @@
+{
+  "run": "/home/smbu/dy/nas/meshsplatting_smbu/experiments/softtail_integrated_01/integrated__room",
+  "faces": 11429090,
+  "faces_kept": {
+    "v1": 5673066,
+    "oats": 5673066
+  },
+  "disagreement": {
+    "symmetric_difference": 1397622,
+    "fraction": 0.1222863762556774,
+    "jaccard": 0.7806577245605965
+  },
+  "kept_only_by_peak": {
+    "faces": 698811,
+    "peak_mean": 0.8036361932754517,
+    "integral_mean": 12.885266304016113,
+    "integral_median": 12.377913475036621
+  },
+  "kept_only_by_integral": {
+    "faces": 698811,
+    "peak_mean": 0.1539594978094101,
+    "integral_mean": 139.05113220214844,
+    "integral_median": 66.58470153808594
+  },
+  "kept_by_both": {
+    "faces": 4974255,
+    "peak_mean": 0.8027499914169312,
+    "integral_mean": 1387.060302734375,
+    "integral_median": 367.4876403808594
+  },
+  "spearman_peak_vs_integral": 0.857259570432584,
+  "sampled": 200000
+}
