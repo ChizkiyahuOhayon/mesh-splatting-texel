@@ -24,8 +24,11 @@
 </p>
 
 <p align="center">
-  <img src="assets/softtail_qualitative.png" width="100%" alt="SoftTail qualitative comparisons on Tanks and Temples and Deep Blending">
+  <img src="assets/softtail_qualitative.png" width="100%" alt="Ground truth, MeshSplatting, the opacity floor alone, and SoftTail on five scenes">
 </p>
+
+<p align="center"><em>Same test views, same crops, chosen automatically where the
+gap to the baseline is largest: bicycle, flowers, room, truck, playroom.</em></p>
 
 SoftTail renders a **single connected colored triangle mesh** — not a soup of
 disconnected primitives — directly with a differentiable rasterizer, and it
