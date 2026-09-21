@@ -33,7 +33,9 @@ gap to the baseline is largest: bicycle, flowers, room, truck, playroom.</em></p
 SoftTail renders a **single connected colored triangle mesh** — not a soup of
 disconnected primitives — directly with a differentiable rasterizer, and it
 beats its mesh-based baseline on all three standard novel-view-synthesis
-benchmarks while shipping a smaller mesh.
+benchmarks at essentially the same mesh size (`+1.6%` faces against
+MeshSplatting on Mip-NeRF 360), and keeps 9/9 of that gain when its mesh is cut
+back to the baseline's exact face count.
 
 Two changes, both about the same thing: *a connected mesh has a hard triangle
 budget, so every triangle that survives has to earn its place.*
