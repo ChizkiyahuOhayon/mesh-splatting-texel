@@ -48,8 +48,20 @@ def box_sum(image, window):
             - padded[window:, :-window] + padded[:-window, :-window])
 
 
+def detail(target):
+    """Local contrast of the ground truth, as a stand-in for "worth looking at"."""
+    grey = target.mean(2)
+    return np.abs(np.diff(grey, axis=0, prepend=grey[:1])) + \
+        np.abs(np.diff(grey, axis=1, prepend=grey[:, :1]))
+
+
 def pick(scene_dir, names):
-    """The view, and the box inside it, where SoftTail beats the baseline most."""
+    """The view, and the box inside it, where SoftTail beats the baseline most.
+
+    Restricted to boxes where the ground truth actually has detail: the largest
+    error of every method sits in regions no camera saw properly, and a crop of
+    a blank wall says nothing about a reconstruction.
+    """
     best = None
     for name in names:
         target = load(scene_dir / "targets" / name)
@@ -58,6 +70,8 @@ def pick(scene_dir, names):
         gain = baseline - ours
         window = min(CROP, gain.shape[0], gain.shape[1])
         boxes = box_sum(gain, window)
+        texture = box_sum(detail(target), window)
+        boxes = np.where(texture >= np.median(texture), boxes, -np.inf)
         index = int(np.argmax(boxes))
         row, column = divmod(index, boxes.shape[1])
         score = float(boxes.flat[index]) / (window * window)
