@@ -1601,3 +1601,21 @@ yet been implemented or launched. v1 remains the completed 13-scene control.
 
 - The same measurement on bicycle and garden (`softtail_survival_statistic_<scene>.json`) reproduces it: swap 10.92% / 10.65% of survivors, Spearman 0.810 / 0.850, and the faces kept only by the integral carry 8.2× / 8.4× the integrated contribution of the faces kept only by the peak while having ~5× lower peak. The disagreement is a property of the representation, not of one scene.
 
+
+## 2026-09-26 — public release check (github.com/ChizkiyahuOhayon/SoftTail @ d7ab7bf)
+
+- Status: **completed — the public scripts reproduce the archived room rows exactly**
+- Command: `bash scripts/run_scene.sh softtail <mipnerf360> room /home/smbu/dy/release_check_01`
+  on a symlinked copy of `softtail_integrated_01/integrated__room` (training skipped via `DONE`;
+  cleanup and all three evaluations re-run by the release code), A40 GPU 0.
+- Rasterizer tree `a580621b` identical to the formal runs, so no native rebuild.
+
+| Output | PSNR | SSIM | LPIPS | Faces | Archived |
+|---|---:|---:|---:|---:|---|
+| eval_quality | 28.8183 | 0.8840 | 0.2526 | 5,673,066 | identical (main table) |
+| eval_speed | 28.7971 | 0.8831 | 0.2540 | 5,673,066 | identical (main table) |
+| eval_train_only | 28.7677 | 0.8822 | 0.2554 | 5,673,066 | identical (ablation) |
+
+- Cleanup disagreement 12.23% of survivors, same as `softtail_survival_statistic_room.json`.
+- Checkpoints: 13 archives (8.9 GB) packaged to `nas/.../release/softtail_checkpoints`, streamed to
+  Google Drive `SoftTail Release/checkpoints` with per-file MD5 checks; folder set to anyone-with-link.
