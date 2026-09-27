@@ -8,8 +8,9 @@ until grep -q QUEUE01_DONE "$E/paper_evidence_01/batch47.log" 2>/dev/null; do sl
 until grep -q MIRROR_DONE /home/smbu/dy/mirror.log 2>/dev/null; do sleep 60; done
 mkdir -p "$E/tsplus_01" "$E/qualitative_02"
 GPU=0 bash "$HERE/batch49.sh" > "$E/tsplus_01/batch49.log" 2>&1
-GPU=0 bash "$HERE/batch50.sh" > "$E/softtail_opaque_01/batch50.log" 2>&1
 GPU=0 bash "$HERE/batch51.sh" > "$E/qualitative_02/batch51.log" 2>&1
 mkdir -p "$E/paper_evidence_01/compact"
 GPU=0 bash "$HERE/batch52.sh" > "$E/paper_evidence_01/compact/batch52.log" 2>&1
+# Opaque gate failed (2/3, +0.007 dB): the remaining opaque runs go last.
+GPU=0 bash "$HERE/batch50.sh" > "$E/softtail_opaque_01/batch50.log" 2>&1
 echo QUEUE02_DONE > "$E/queue02.done"
