@@ -590,13 +590,16 @@ def training(
                        "final_iteration": int(iteration)}, handle)
     viewpoint_stack = scene.getTrainCameras().copy()
     triangles.importance_score = torch.zeros((triangles._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
-    while viewpoint_stack:
-        viewpoint_cam = viewpoint_stack.pop(0)
-        render_pkg = render(viewpoint_cam, triangles, pipe, bg)
+    # No graph is needed for the statistic; at 4x supersampling the autograd
+    # buffers alone overflow a 24 GB card on the indoor scenes.
+    with torch.no_grad():
+        while viewpoint_stack:
+            viewpoint_cam = viewpoint_stack.pop(0)
+            render_pkg = render(viewpoint_cam, triangles, pipe, bg)
 
-        importance_score = render_pkg["max_blending"].detach()
-        mask = importance_score > triangles.importance_score
-        triangles.importance_score[mask] = importance_score[mask]
+            importance_score = render_pkg["max_blending"].detach()
+            mask = importance_score > triangles.importance_score
+            triangles.importance_score[mask] = importance_score[mask]
     mask_importance  = (triangles.importance_score <= 0.5).squeeze() 
     triangles.prune_triangles(~mask_importance) # delete all the remaining triangles that do not have an influence
 
