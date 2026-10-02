@@ -67,7 +67,8 @@ if __name__ == '__main__':
         n1 = np.floor(l1 / thr)
         n2 = np.floor(l2 / thr)
 
-        with mp.Pool() as mp_pool:
+        # A bounded pool: one worker per core copies the mesh 200+ times on large hosts.
+        with mp.Pool(processes=min(16, mp.cpu_count())) as mp_pool:
             new_pts = mp_pool.map(sample_single_tri, ((n1[i,0], n2[i,0], v1[i:i+1], v2[i:i+1], tri_vert[i:i+1,0]) for i in range(len(n1))), chunksize=1024)
 
         new_pts = np.concatenate(new_pts, axis=0)
