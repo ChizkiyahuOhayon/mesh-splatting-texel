@@ -89,12 +89,19 @@ if __name__ == '__main__':
     pbar.set_description('downsample pcd')
     nn_engine = skln.NearestNeighbors(n_neighbors=1, radius=thresh, algorithm='kd_tree', n_jobs=-1)
     nn_engine.fit(data_pcd)
-    rnn_idxs = nn_engine.radius_neighbors(data_pcd, radius=thresh, return_distance=False)
+    # Same greedy pass as before, with the neighbour lists built in chunks: a mesh
+    # with large faces samples ~1e8 points, and one radius query over all of them
+    # does not fit in memory. The visiting order, and so the result, is unchanged.
     mask = np.ones(data_pcd.shape[0], dtype=np.bool_)
-    for curr, idxs in enumerate(rnn_idxs):
-        if mask[curr]:
-            mask[idxs] = 0
-            mask[curr] = 1
+    chunk = 2_000_000
+    for start in range(0, data_pcd.shape[0], chunk):
+        rnn_idxs = nn_engine.radius_neighbors(data_pcd[start:start + chunk], radius=thresh,
+                                              return_distance=False)
+        for offset, idxs in enumerate(rnn_idxs):
+            curr = start + offset
+            if mask[curr]:
+                mask[idxs] = 0
+                mask[curr] = 1
     data_down = data_pcd[mask]
 
     pbar.update(1)
