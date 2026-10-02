@@ -108,8 +108,8 @@ def run(dataset, pipeline, args):
         palette = torch.tensor([[0.35, 0.35, 0.35], [0.82, 0.82, 0.82],
                                 [0.714, 0.263, 0.259], [0.059, 0.302, 0.573]], device="cuda")
         per_pixel = {
-            "peak_px": heat(peak[face], 0.0, 1.0, "magma"),
-            "integral_px": heat(log_integral[face], lo, hi, "magma"),
+            "peak_px": heat(peak[face].reshape(-1), 0.0, 1.0, "magma"),
+            "integral_px": heat(log_integral[face].reshape(-1), lo, hi, "magma"),
             "swap_px": palette[cls[face]].reshape(-1, 3),
         }
         for name, colors in per_pixel.items():
