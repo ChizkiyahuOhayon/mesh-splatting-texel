@@ -95,6 +95,28 @@ def run(dataset, pipeline, args):
         for name, colors in maps.items():
             package = render(view, triangles, pipeline, background, override_color=colors)
             to_image(package["render"]).save(out / f"{name}.png")
+        # Per-pixel maps: every pixel shows the value of the face that dominates it
+        # (the rasterizer's id buffer), so faces are not blended into their neighbours.
+        ids = package["rend_ids"][0].long()
+        hit = ids >= 0
+        face = ids.clamp_min(0)
+        fill = torch.ones((*ids.shape, 3), device="cuda")
+        cls = torch.zeros(faces.shape[0], dtype=torch.long, device="cuda")
+        cls[keep_peak & keep_integral] = 1
+        cls[keep_peak & ~keep_integral] = 2
+        cls[keep_integral & ~keep_peak] = 3
+        palette = torch.tensor([[0.35, 0.35, 0.35], [0.82, 0.82, 0.82],
+                                [0.714, 0.263, 0.259], [0.059, 0.302, 0.573]], device="cuda")
+        per_pixel = {
+            "peak_px": heat(peak[face], 0.0, 1.0, "magma"),
+            "integral_px": heat(log_integral[face], lo, hi, "magma"),
+            "swap_px": palette[cls[face]].reshape(-1, 3),
+        }
+        for name, colors in per_pixel.items():
+            image = fill.clone()
+            image[hit] = colors.reshape(*ids.shape, 3)[hit]
+            to_image(image.permute(2, 0, 1)).save(out / f"{name}.png")
+        np.save(out / "pixel_class.npy", cls[face].masked_fill(~hit, -1).to(torch.int8).cpu().numpy())
     report = {
         "run": str(run_dir), "view": args.view, "faces": int(faces.shape[0]),
         "kept": int(keep_peak.sum()),
