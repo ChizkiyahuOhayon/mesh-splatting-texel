@@ -1619,3 +1619,142 @@ yet been implemented or launched. v1 remains the completed 13-scene control.
 - Cleanup disagreement 12.23% of survivors, same as `softtail_survival_statistic_room.json`.
 - Checkpoints: 13 archives (8.9 GB) packaged to `nas/.../release/softtail_checkpoints`, streamed to
   Google Drive `SoftTail Release/checkpoints` with per-file MD5 checks; folder set to anyone-with-link.
+
+## 2026-10-02 — C1 compact frontier: the integral wins every cut, by up to 7.4 dB
+
+- Machine: AutoDL RTX 4090 D 48GB (st48), root `/root/autodl-tmp/st3`, script `c1_compact.sh`.
+  Inputs: the R1 SoftTail retrains of bicycle, garden, room and stump with `--save_precleanup`.
+- Protocol: `sota.survival_cleanup --budget` cuts the same pre-cleanup mesh to 10/25/50/75 % of the
+  published cleanup budget, once by the peak rule (`matched/`) and once by the integral
+  (`matched_oats/`); both evaluated with `main_table_eval --arm ours_quality`. Identical face counts
+  per pair by construction.
+- Archived: `handover/evidence/formal/softtail_compact_frontier.json`.
+
+| scene | 10 % | 25 % | 50 % | 75 % |
+|---|---|---|---|---|
+| bicycle | 12.39 → 19.83 | 20.02 → 22.72 | 22.95 → 23.27 | 23.32 → 23.33 |
+| garden | 16.35 → 20.05 | 22.55 → 24.04 | 24.83 → 24.94 | 25.00 → 25.03 |
+| room | 17.19 → 23.07 | 24.96 → 27.50 | 28.62 → 28.68 | 28.79 → 28.83 |
+| stump | 15.42 → 20.90 | 22.39 → 24.30 | 24.96 → 25.18 | 25.28 → 25.29 |
+
+- 16/16 cells positive. The gap grows as the budget shrinks: +0.01–0.04 at 75 %, +1.5–2.7 at 25 %,
+  +3.7–7.4 at 10 %. At 50 % of the faces the integral cut is within 0.01 dB of, or above, the
+  full-budget stock MeshSplatting on all four scenes, and better on SSIM and LPIPS on all four.
+
+## 2026-10-02 — G1 transfer of the survival rule to Triangle Splatting+: +0.32 dB on 13 scenes with 20 % fewer triangles
+
+- Machine st48, script `g1_tsplus.sh` + `g1_fixup.sh`; code `triangle-splatting2` (official TS+) with a
+  patch adding `--integrated_importance` (an `atomicAdd` accumulator next to TS+'s max-weight
+  statistic; every pruning decision deletes the same count the published rule would, chosen by
+  lowest integral). Arms: `tsplus` (published) and `tsplus_int`, same binary, same evaluator
+  (`render.py` + `metrics.py`).
+- Incidents: TS+'s `render.py` rejects `--indoor`, so the first render of every indoor scene failed;
+  garden's first render hit a torch.hub timeout; bicycle's first training was cut short. `g1_fixup.sh`
+  retrained bicycle (both arms) and re-rendered every failed model without `--indoor` (a training-only
+  flag), identically in both arms.
+- Archived: `handover/evidence/formal/tsplus_integrated_survival_table.json` and `..._size.json`.
+
+| group | TS+ PSNR / SSIM / LPIPS | + integral | Δ PSNR | triangles (M) |
+|---|---|---|---:|---|
+| Mip-NeRF360 (9) | 25.198 / 0.750 / 0.291 | 25.535 / 0.760 / 0.272 | +0.337 | 1.29 → 1.07 |
+| Tanks & Temples (2) | 20.735 / 0.769 / 0.253 | 20.812 / 0.771 / 0.242 | +0.076 | 0.84 → 0.54 |
+| Deep Blending (2) | 27.879 / 0.858 / 0.317 | 28.378 / 0.862 / 0.291 | +0.499 | 1.58 → 1.43 |
+
+- 13-scene mean +0.322 dB, SSIM +0.0077, LPIPS −0.0193. PSNR improves on 11/13, SSIM on 11/13,
+  LPIPS on 12/13. Regressions: treehill −0.047 dB, train −0.081 dB (worst). Triangles −19.9 % on
+  average, training time −5.5 %.
+- The reproduced TS+ Mip-NeRF360 mean (25.198) matches the published 25.21.
+- Expert gate (clearly positive mean, most scenes positive, no catastrophic regression): **passed**;
+  goes in the main paper as "transfer of the survival rule to Triangle Splatting+".
+
+## 2026-10-02 — D1 DTU Chamfer, full SoftTail vs stock, 15 scans: scoring incident
+
+- Script `d1_par.sh` (two GPU streams, background scoring). All 30 trainings, the survival cuts and
+  the mask culling completed. Every evaluation after scan24 failed at `import open3d`
+  (`GLIBCXX_3.4.30 not found`): the parallel script dropped the `LD_PRELOAD` of the system
+  libstdc++ that `d1_smoke.sh` used. `d1_rescore.sh` reruns only `eval.py` on the existing culled
+  meshes, 5 in parallel. Result entry follows when it completes.
+- Rescore attempt 1 (`d1_rescore.sh`, 5 evaluators in parallel): scan106's evaluator was OOM-killed
+  (container limit 96 GB, five evaluators at 8–12 GB RSS plus peaks) and the figure render job started
+  next to it was killed too. The container reports 224 CPUs (`nproc`) on a 20-core quota, so
+  `n_jobs=-1` in the evaluator's neighbour queries oversubscribed it ~50×: the downsample stage
+  that takes 15 min alone ran > 35 min. Fix: `OMP_NUM_THREADS=LOKY_MAX_CPU_COUNT=5`, at most 4
+  evaluators, run after the figure renders (`queue_v3.sh`). Evaluation only; meshes unchanged.
+
+## 2026-10-02 — V3 figure renders (no training)
+
+- `sota/figure_cuts.py` (new; the existing `sota/figure_renders.py` is unchanged): `compact` renders the same test view of a compact cut by the peak rule
+  and by S_f with the SoftTail-Quality evaluator settings (view = median integral−peak gap at 10 %,
+  reused at 25 %); `contrib` splits the pre-cleanup mesh into independent faces (geometry, opacity
+  and compositing unchanged) and renders an indicator colour per class (kept only by peak / only by
+  integral), so each pixel holds the class's summed blending weight Σ w_f(p).
+- The per-vertex maps of `sota/survival_maps.py` (figures_02) are not used: a vertex takes the
+  maximum class of its incident faces, which paints swapped faces over most of the surface, and the
+  per-pixel id maps show only the dominant face, which is almost always kept by both rules.
+- Script `v3_figures.sh` → `figures_03/` (room, garden, bicycle, stump).
+- Completed 2026-10-03 09:39 (st48 clock). Per-view light ratio, integral-only over peak-only summed
+  weight: bicycle 7.5×, garden 11.3×, stump 3.5×, room 14.9×. Compact median-gap views at 10 % match
+  the scene means (room view 17.23 → 23.90 dB vs mean 17.19 → 23.07). Archived:
+  `handover/evidence/formal/softtail_figure_renders_v3.json`.
+- Incident: the new script was first written over the existing `sota/figure_renders.py` (RGB/normal/
+  wireframe renders, commit 3d6fb5a) locally and on st48. Restored from git; the new code lives in
+  `sota/figure_cuts.py`. No archived render used the overwritten file after the change except
+  figures_03, which ran the new code by name.
+
+## 2026-10-03 — D1 DTU Chamfer, full SoftTail vs stock: 14/15 scans better, mean −6.3 %
+
+- Training `d1_par.sh` (RTX 4090 D), evaluation `d1_rescore.sh` (+ retry passes at 2-way after OOM kills
+  and after the user's machine restart for a disk resize). Protocol: 15 scans, 2DGS-preprocessed images at
+  half resolution, 30k iterations, no depth prior, MeshSplatting default configuration; SoftTail = 
+  `--final_opacity 0.8 --integrated_importance` + survival cleanup (`cut/oats`); 2DGS mask culling;
+  official evaluator, seed 0. Archived: `handover/evidence/formal/softtail_dtu_chamfer.json`.
+
+| scan | stock | SoftTail | Δ |
+|---|---:|---:|---:|
+| 24 | 1.232 | 1.332 | +8.2 % |
+| 37 | 1.284 | 1.205 | −6.1 % |
+| 40 | 1.441 | 1.405 | −2.5 % |
+| 55 | 1.458 | 1.375 | −5.7 % |
+| 63 | 1.991 | 1.809 | −9.1 % |
+| 65 | 1.710 | 1.669 | −2.4 % |
+| 69 | 1.703 | 1.588 | −6.8 % |
+| 83 | 1.877 | 1.812 | −3.5 % |
+| 97 | 1.591 | 1.556 | −2.2 % |
+| 105 | 1.240 | 1.210 | −2.5 % |
+| 106 | 1.635 | 1.505 | −8.0 % |
+| 110 | 3.025 | 2.512 | −17.0 % |
+| 114 | 1.554 | 1.377 | −11.4 % |
+| 118 | 1.627 | 1.549 | −4.7 % |
+| 122 | 1.606 | 1.492 | −7.1 % |
+
+- Mean Chamfer 1.665 → 1.560 (−6.3 %), accuracy 2.551 → 2.463, completeness 0.779 → 0.657; 14/15 scans.
+- This reverses the 2026-08-31 A40 run (opacity-only SoftTail, −2.8 % worse): the integral survival rule
+  is what moves geometry. The stock reproduction is still far from the reported 0.79 (unpublished
+  command), so the paper states the comparison is paired under one protocol.
+- Expert rule (clear win → main): one paragraph in Sec. 4.2 + intro sentence; per-scan table and
+  normals of all 15 scans in the supplement. The cost table moved to the supplement to keep 8 pages.
+
+## 2026-10-16 D2: importance scores at an equal face count (st48, RTX 4090 D)
+
+- Question (review concern C2): is the integral the right score, or would any known pruning score do?
+- Tool `sota/score_cuts.py` (new), driver `scripts/importance_scores.sh` (server `d2_scores.sh`): one
+  pass over the training views of each SoftTail pre-cleanup mesh (Bicycle, Garden, Stump, Room) computes
+  five scores, then every score cuts the mesh to 10/25/50/100 % of the published peak-rule count:
+  peak max αT (MeshSplatting, RadSplat), integral ΣαT (ours; also Mini-Splatting / 2DTS sum),
+  face opacity (3DGS), hits = pixels with α ≥ 1/255 (visibility count), LightGaussian =
+  hits·opacity·min(area/q90,1)^0.1 (area replaces volume). Same count per budget checked (all True).
+- Peak and integral at b10/b25/b50 reproduce compact_01 exactly (garden b10 20.053 / 16.351).
+- Means over the 4 scenes (PSNR / SSIM / LPIPS):
+
+| budget | opacity | peak | hits | LightGaussian | integral |
+|---|---:|---:|---:|---:|---:|
+| 10 % | 12.20 / .151 / .637 | 15.34 / .298 / .557 | 19.51 / .561 / .416 | 19.37 / .554 / .419 | **20.96 / .592 / .396** |
+| 25 % | 15.84 / .311 / .556 | 22.48 / .617 / .386 | 24.04 / .709 / .317 | 24.13 / .707 / .319 | **24.64 / .722 / .304** |
+| 50 % | 19.30 / .480 / .467 | 25.34 / .740 / .286 | 25.38 / .750 / .276 | 25.42 / .750 / .276 | **25.52 / .753 / .273** |
+| 100 % | 23.06 / .651 / .356 | 25.61 / .757 / .267 | 25.63 / .758 / .266 | 25.63 / .758 / .266 | **25.64 / .758 / .265** |
+
+- 10 %: integral beats every score on every scene and metric (+0.52 to +2.75 dB over hits, +0.92 to
+  +2.65 over LightGaussian). 25 %: SSIM and LPIPS 4/4 against all; PSNR 4/4 against LightGaussian, 3/4
+  + a tie (Bicycle −0.001) against hits. 100 %: all non-opacity scores within 0.03 dB (training already
+  chose the survivors). Archived: `handover/evidence/formal/softtail_importance_scores.json` (+SHA256SUMS).
+- Decision: clear positive → main paper (small table next to the compact paragraph, 10/25/50 %).
